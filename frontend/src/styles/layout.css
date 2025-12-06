@@ -136,6 +136,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   background: rgba(0, 0, 0, 0.55);
   padding: 0.75rem 1rem;
   border-radius: 999px;
@@ -154,4 +156,51 @@
   margin-top: 0.85rem;
   font-size: 0.85rem;
   color: var(--text-muted);
+}
+
+.turn-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(20, 255, 177, 0.1);
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+.turn-timer-track {
+  width: 120px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+.turn-timer-progress {
+  height: 100%;
+  background: linear-gradient(120deg, var(--accent-amber), var(--neon-green));
+  transition: width 120ms linear;
+}
+
+.action-pad {
+  margin-top: 1.25rem;
+  padding: 1.25rem;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 18px;
+  background: rgba(8, 18, 14, 0.75);
+}
+
+.action-pad h3 {
+  margin-top: 0;
+  font-size: 1rem;
+  color: var(--text-muted);
+}
+
+.button-grid.horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.button-grid.horizontal .neon-button {
+  flex: 1 1 200px;
 }

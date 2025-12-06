@@ -28,6 +28,7 @@ export interface PlayingSnapshot {
   creatorScore: number;
   challengerScore: number;
   commentary: string;
+  ball?: { x: number; y: number };
 }
 
 export interface TokenChip {
@@ -42,4 +43,13 @@ export interface TokenChip {
 export interface PhysicsState {
   ball: { x: number; y: number; vx: number; vy: number; radius: number };
   chips: TokenChip[];
+}
+
+export type MatchEventType = "goal-self" | "goal-rival" | "timeout";
+
+export interface MatchEvent {
+  type: MatchEventType;
+  message: string;
+  accent: string;
+  timestamp: number;
 }

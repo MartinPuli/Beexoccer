@@ -25,7 +25,8 @@ export function BotMatchScreen() {
       challengerScore: 0,
       commentary: "Practica tiros y rebotes sin gastar XO",
       ball: { x: 300, y: 360 }
-    } as any);
+    });
+    return () => setPlayingSnapshot(undefined);
   }, [setPlayingSnapshot]);
 
   return (

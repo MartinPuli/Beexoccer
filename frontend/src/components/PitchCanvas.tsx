@@ -1,15 +1,17 @@
+import { ReactNode } from "react";
 import { TokenChip } from "../types/game";
 
 interface PitchCanvasProps {
   chips: TokenChip[];
   ball: { x: number; y: number };
   highlightId?: string;
+  children?: ReactNode;
 }
 
 /**
  * SVG replica of the tabletop pitch. Animations are purposely light-weight so it can run smoothly on mobile browsers.
  */
-export function PitchCanvas({ chips, ball, highlightId }: Readonly<PitchCanvasProps>) {
+export function PitchCanvas({ chips, ball, highlightId, children }: Readonly<PitchCanvasProps>) {
   return (
     <div className="pitch-wrapper">
       <svg viewBox="0 0 600 900" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
@@ -42,6 +44,7 @@ export function PitchCanvas({ chips, ball, highlightId }: Readonly<PitchCanvasPr
         <circle cx={ball.x} cy={ball.y} r={12} fill="#ffffff" stroke="#111" strokeWidth="3" />
       </svg>
       <div className="pitch-overlay" />
+      {children}
     </div>
   );
 }

@@ -62,7 +62,11 @@ export function CreateMatchScreen() {
           <strong>Modalidad</strong>
           <div style={{ marginTop: "0.5rem" }}>
             <label style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-              <input type="checkbox" checked={form.isFree} onChange={(event) => update({ isFree: event.target.checked })} />
+              <input
+                type="checkbox"
+                checked={form.isFree}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => update({ isFree: event.target.checked })}
+              />
               <span>Partida gratis (sin escrow)</span>
             </label>
           </div>

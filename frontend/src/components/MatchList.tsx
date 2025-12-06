@@ -25,7 +25,7 @@ export function MatchList({ matches, loading, onAccept }: Readonly<MatchListProp
               {match.isFree ? "Gratis" : `${match.stakeAmount} XO stake`} • {match.goals} goles
             </p>
           </div>
-          <NeonButton label="Aceptar" onClick={() => onAccept(match.id)} disabled={loading || !match.open} />
+          <NeonButton label="Aceptar" onClick={() => void onAccept(match.id)} disabled={loading || !match.open} />
         </article>
       ))}
     </div>

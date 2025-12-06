@@ -37,3 +37,72 @@ body {
 a {
   color: var(--neon-green);
 }
+
+@keyframes goalBurst {
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes timeoutShake {
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-6px);
+  }
+  50% {
+    transform: translateX(6px);
+  }
+  75% {
+    transform: translateX(-4px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.event-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-size: 2rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  text-shadow: 0 0 25px rgba(0, 0, 0, 0.75);
+}
+
+.event-overlay span {
+  padding: 0.75rem 1.5rem;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.event-overlay.goal-self {
+  animation: goalBurst 1.6s ease forwards;
+  color: var(--neon-green);
+}
+
+.event-overlay.goal-rival {
+  animation: goalBurst 1.6s ease forwards;
+  color: var(--accent-red);
+}
+
+.event-overlay.timeout {
+  animation: timeoutShake 1s ease;
+  color: var(--accent-amber);
+}

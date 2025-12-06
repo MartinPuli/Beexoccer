@@ -45,8 +45,14 @@ class XoConnectService {
       this.alias = session.alias;
     } catch (error) {
       console.warn("XO-CONNECT unavailable, using mock identity", error);
-      // Minimal fallback provider uses the RPC from env for read-only queries.
-      this.provider = new JsonRpcProvider(env.polygonRpc);
+
+      // Attempt to reuse any injected wallet (e.g., MetaMask inside dev browsers) before falling back to RPC only mode.
+      const browserWindow = globalThis as Window & typeof globalThis;
+      if (browserWindow.ethereum) {
+        this.provider = new BrowserProvider(browserWindow.ethereum);
+      } else {
+        this.provider = new JsonRpcProvider(env.polygonRpc);
+      }
       this.alias = "Scout" + Math.floor(Math.random() * 999).toString().padStart(3, "0");
     }
   }
@@ -70,7 +76,8 @@ class XoConnectService {
     }
 
     if (!this.mockWallet) {
-      this.mockWallet = Wallet.createRandom().connect(provider);
+      const tempWallet = Wallet.createRandom();
+      this.mockWallet = new Wallet(tempWallet.privateKey, provider);
     }
 
     return this.mockWallet;

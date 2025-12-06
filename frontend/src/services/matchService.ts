@@ -1,10 +1,10 @@
-import { Abi, Contract, formatEther, parseEther } from "ethers";
+import { Contract, InterfaceAbi, formatEther, parseEther } from "ethers";
 import abi from "../abi/MatchManager.json";
 import { env } from "../config/env";
 import { MatchConfig, MatchLobby } from "../types/game";
 import { xoConnectService } from "./xoConnectService";
 
-const matchAbi = abi as Abi;
+const matchAbi = abi as InterfaceAbi;
 
 /**
  * Builds a contract instance bound to the XO-CONNECT signer. We only instantiate when needed to avoid
@@ -33,7 +33,7 @@ export async function fetchOpenMatches(): Promise<MatchLobby[]> {
             id,
             creator: data.creator,
             challenger: data.challenger === "0x0000000000000000000000000000000000000000" ? undefined : data.challenger,
-            goals: data.goalsTarget as MatchLobby["goals"],
+            goals: Number(data.goalsTarget) as MatchLobby["goals"],
             isFree: data.isFree,
             stakeAmount: formatEther(data.stakeAmount ?? 0n),
             stakeToken: data.stakeToken,
