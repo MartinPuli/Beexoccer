@@ -1,0 +1,23 @@
+# Node / Hardhat artifacts
+node_modules/
+cache/
+artifacts/
+typechain/
+coverage/
+deployments/
+.env
+.env.*
+
+# Frontend build outputs
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.production.local
+
+# IDE
+.vscode/
+.DS_Store
+Thumbs.db
