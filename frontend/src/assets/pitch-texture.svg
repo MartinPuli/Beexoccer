@@ -1,0 +1,19 @@
+<svg width="600" height="900" viewBox="0 0 600 900" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grass" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#1c7c2b" />
+      <stop offset="50%" stop-color="#1ea136" />
+      <stop offset="100%" stop-color="#11561a" />
+    </linearGradient>
+    <pattern id="bands" width="1" height="40" patternUnits="userSpaceOnUse">
+      <rect width="600" height="20" fill="#1a8a31" opacity="0.7" />
+      <rect y="20" width="600" height="20" fill="#218c34" opacity="0.95" />
+    </pattern>
+  </defs>
+  <rect width="600" height="900" fill="url(#grass)" />
+  <rect width="600" height="900" fill="url(#bands)" opacity="0.65" />
+  <rect x="40" y="40" width="520" height="820" fill="none" stroke="#ffffff" stroke-width="4" rx="40" />
+  <line x1="300" y1="40" x2="300" y2="860" stroke="#ffffff" stroke-width="3" />
+  <circle cx="300" cy="450" r="80" stroke="#ffffff" stroke-width="3" fill="none" />
+  <circle cx="300" cy="450" r="4" fill="#ffffff" />
+</svg>

@@ -1,35 +1,50 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect } from "react";
+import { TopNav } from "./components/TopNav";
+import { useGameStore } from "./hooks/useGameStore";
+import { AcceptMatchScreen, BotMatchScreen, CreateMatchScreen, HomeScreen, PlayingScreen } from "./views";
+import { xoConnectService } from "./services/xoConnectService";
 
-function App() {
-  const [count, setCount] = useState(0)
+/**
+ * Root component orchestrating navigation between screens. The store keeps the current view id so we
+ * can avoid adding a full router until V2 when deep links and sharable lobby URLs are required.
+ */
+export default function App() {
+  const view = useGameStore((state) => state.view);
+  const setView = useGameStore((state) => state.setView);
+  const setAlias = useGameStore((state) => state.setAlias);
+  const setBalance = useGameStore((state) => state.setBalance);
+
+  useEffect(() => {
+    /**
+     * On mount we initialize XO-CONNECT (or the dev fallback) and hydrate alias/balance. An actual XO balance
+     * endpoint will replace the mocked value as soon as the wallet exposes it via the SDK.
+     */
+    void (async () => {
+      await xoConnectService.init();
+      setAlias(xoConnectService.getAlias());
+      setBalance("Demo 15.2 XO"); // TODO: read from XO-CONNECT balance endpoint once published.
+    })();
+  }, [setAlias, setBalance]);
+
+  const renderView = () => {
+    switch (view) {
+      case "create":
+        return <CreateMatchScreen />;
+      case "accept":
+        return <AcceptMatchScreen />;
+      case "playing":
+        return <PlayingScreen />;
+      case "bot":
+        return <BotMatchScreen />;
+      default:
+        return <HomeScreen />;
+    }
+  };
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <div className="app-shell">
+      <TopNav onPlayBot={() => setView("bot")} />
+      {renderView()}
+    </div>
+  );
 }
-
-export default App

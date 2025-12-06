@@ -12,10 +12,6 @@ export function AcceptMatchScreen() {
   const [loading, setLoading] = useState(false);
   const [matches, setMatches] = useState<MatchLobby[]>([]);
   const setView = useGameStore((state) => state.setView);
-  const setCurrentMatchId = useGameStore((state) => state.setCurrentMatchId);
-  const setMatchStatus = useGameStore((state) => state.setMatchStatus);
-  const setPlayerSide = useGameStore((state) => state.setPlayerSide);
-  const setMatchGoalTarget = useGameStore((state) => state.setMatchGoalTarget);
 
   useEffect(() => {
     void (async () => {
@@ -32,10 +28,6 @@ export function AcceptMatchScreen() {
     try {
       await acceptMatch(matchId, chosen);
       alert("Te uniste a la partida. Saltamos directo al campo.");
-      setCurrentMatchId(String(matchId));
-      setPlayerSide("challenger");
-      setMatchGoalTarget(chosen.goals);
-      setMatchStatus("playing");
       setView("playing");
     } catch (error) {
       console.error(error);

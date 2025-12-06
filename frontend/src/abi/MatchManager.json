@@ -1,0 +1,48 @@
+[
+  {
+    "inputs": [
+      { "internalType": "uint8", "name": "goalsTarget", "type": "uint8" },
+      { "internalType": "bool", "name": "isFree", "type": "bool" },
+      { "internalType": "uint256", "name": "stakeAmount", "type": "uint256" },
+      { "internalType": "address", "name": "stakeToken", "type": "address" }
+    ],
+    "name": "createMatch",
+    "outputs": [{ "internalType": "uint256", "name": "matchId", "type": "uint256" }],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "matchId", "type": "uint256" }],
+    "name": "joinMatch",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "matchId", "type": "uint256" },
+      { "internalType": "address", "name": "winner", "type": "address" }
+    ],
+    "name": "reportResult",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "matches",
+    "outputs": [
+      { "internalType": "address", "name": "creator", "type": "address" },
+      { "internalType": "address", "name": "challenger", "type": "address" },
+      { "internalType": "address", "name": "winner", "type": "address" },
+      { "internalType": "uint8", "name": "goalsTarget", "type": "uint8" },
+      { "internalType": "bool", "name": "isFree", "type": "bool" },
+      { "internalType": "bool", "name": "isOpen", "type": "bool" },
+      { "internalType": "bool", "name": "isCompleted", "type": "bool" },
+      { "internalType": "uint256", "name": "stakeAmount", "type": "uint256" },
+      { "internalType": "address", "name": "stakeToken", "type": "address" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]
