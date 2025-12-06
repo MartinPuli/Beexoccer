@@ -1,4 +1,4 @@
-import logo from "../assets/logo-placeholder.svg";
+import logo from "../assets/logo-beexoccer.svg";
 import { NeonButton } from "./NeonButton";
 import { useGameStore } from "../hooks/useGameStore";
 
@@ -19,8 +19,8 @@ export function TopNav({ onPlayBot }: Readonly<TopNavProps>) {
       <div className="top-nav-logo">
         <img src={logo} alt="Beexoccer logo" />
         <div>
-          <strong>Beexoccer</strong>
-          <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "0.85rem" }}>Minijuego táctico 1 vs 1</p>
+          <strong style={{ letterSpacing: "0.04em" }}>Beexoccer</strong>
+          <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "0.85rem" }}>Fútbol de mesa 1 vs 1</p>
         </div>
       </div>
       <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>

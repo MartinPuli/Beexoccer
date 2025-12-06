@@ -1,21 +1,12 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Panel } from "../components/Panel";
 import { PitchCanvas } from "../components/PitchCanvas";
 import { ScoreBoard } from "../components/ScoreBoard";
 import { useGameStore } from "../hooks/useGameStore";
-import { TokenChip } from "../types/game";
 import { TurnTimer } from "../components/TurnTimer";
 import { EventOverlay } from "../components/EventOverlay";
 import { NeonButton } from "../components/NeonButton";
-
-const baseChips: TokenChip[] = [
-  { id: "br-1", x: 300, y: 140, radius: 28, fill: "#ffe45b", flagEmoji: "🇧🇷" },
-  { id: "br-2", x: 220, y: 210, radius: 28, fill: "#ffe45b", flagEmoji: "🇧🇷" },
-  { id: "br-3", x: 380, y: 210, radius: 28, fill: "#ffe45b", flagEmoji: "🇧🇷" },
-  { id: "it-1", x: 260, y: 690, radius: 28, fill: "#2dd673", flagEmoji: "🇮🇹" },
-  { id: "it-2", x: 340, y: 690, radius: 28, fill: "#2dd673", flagEmoji: "🇮🇹" },
-  { id: "it-3", x: 300, y: 760, radius: 28, fill: "#2dd673", flagEmoji: "🇮🇹" }
-];
+import { socketService } from "../services/socketService";
 
 /**
  * Field view referencing the Soccer de Plato reference. Real physics will live here in later iterations.
@@ -26,9 +17,31 @@ export function PlayingScreen() {
   const triggerGoal = useGameStore((state) => state.triggerGoal);
   const registerTimeout = useGameStore((state) => state.registerTimeout);
   const clearLastEvent = useGameStore((state) => state.clearLastEvent);
+  const applyRealtimeSnapshot = useGameStore((state) => state.applyRealtimeSnapshot);
+  const setLastEvent = useGameStore((state) => state.setLastEvent);
+  const matchId = useGameStore((state) => state.currentMatchId) ?? "demo-match";
+  const playerSide = useGameStore((state) => state.playerSide);
+  const goalTarget = useGameStore((state) => state.matchGoalTarget);
 
-  const chips = useMemo(() => baseChips, []);
-  const ball = playing?.ball ?? { x: 300, y: 450 };
+  const [aim, setAim] = useState<{ from: { x: number; y: number }; to: { x: number; y: number } } | undefined>();
+  const dragRef = useRef<{ chipId: string; start: { x: number; y: number } } | null>(null);
+  const [showEnd, setShowEnd] = useState(false);
+  const [winner, setWinner] = useState<"creator" | "challenger" | null>(null);
+  const [waitingRematchUntil, setWaitingRematchUntil] = useState<number | null>(null);
+
+  // Demo: connect to socket server with fixed match id until backend provides lobby ids.
+  useEffect(() => {
+    socketService.connect(matchId, playerSide ?? "creator");
+    socketService.onSnapshot((snapshot) => applyRealtimeSnapshot(snapshot));
+    socketService.onEvent((evt) => setLastEvent(evt));
+    return () => {
+      socketService.offAll();
+      socketService.disconnect();
+    };
+  }, [applyRealtimeSnapshot, setLastEvent, matchId, playerSide]);
+
+  const chips = playing?.chips ?? [];
+  const ball = playing?.ball ?? { x: 300, y: 450, vx: 0, vy: 0 };
   let turnPrefix: string | undefined;
   if (playing) {
     turnPrefix = playing.activePlayer === "creator" ? "Tu" : "Rival";
@@ -41,9 +54,88 @@ export function PlayingScreen() {
     return () => globalThis.clearTimeout(timeout);
   }, [lastEvent, clearLastEvent]);
 
+  useEffect(() => {
+    if (!lastEvent) return;
+    if (lastEvent.type === "rematch-confirmed") {
+      setWaitingRematchUntil(null);
+      setShowEnd(false);
+      setWinner(null);
+    }
+    if (lastEvent.type === "rematch-requested") {
+      setShowEnd(true);
+      setWaitingRematchUntil(Date.now() + 10_000);
+    }
+  }, [lastEvent]);
+
   const handleTimeout = useCallback(() => {
     registerTimeout();
   }, [registerTimeout]);
+
+  useEffect(() => {
+    if (!playing) return;
+    if (playing.creatorScore >= goalTarget) {
+      setWinner("creator");
+      setShowEnd(true);
+    } else if (playing.challengerScore >= goalTarget) {
+      setWinner("challenger");
+      setShowEnd(true);
+    }
+  }, [playing, goalTarget]);
+
+  const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!playing) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 600;
+    const y = ((e.clientY - rect.top) / rect.height) * 900;
+    const target = chips
+      .filter((c) => c.owner ? c.owner === playing.activePlayer : c.id.startsWith(playing.activePlayer))
+      .find((c) => {
+        const dx = c.x - x;
+        const dy = c.y - y;
+        return Math.hypot(dx, dy) <= c.radius + 12;
+      });
+    if (!target) return;
+    dragRef.current = { chipId: target.id, start: { x: target.x, y: target.y } };
+    setAim({ from: { x: target.x, y: target.y }, to: { x, y } });
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!dragRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 600;
+    const y = ((e.clientY - rect.top) / rect.height) * 900;
+    setAim((prev) => (prev ? { ...prev, to: { x, y } } : undefined));
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!dragRef.current || !playing) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 600;
+    const y = ((e.clientY - rect.top) / rect.height) * 900;
+    const { chipId, start } = dragRef.current;
+    const dx = (start.x - x) * 0.15;
+    const dy = (start.y - y) * 0.15;
+    socketService.sendInput(matchId, chipId, { dx, dy });
+    dragRef.current = null;
+    setAim(undefined);
+  };
+
+  const handleRematch = () => {
+    socketService.requestRematch();
+    setWaitingRematchUntil(Date.now() + 10_000);
+    setShowEnd(false);
+  };
+
+  useEffect(() => {
+    if (!waitingRematchUntil) return undefined;
+    const delay = waitingRematchUntil - Date.now();
+    if (delay <= 0) {
+      setWaitingRematchUntil(null);
+      return undefined;
+    }
+    const timeout = globalThis.setTimeout(() => setWaitingRematchUntil(null), delay);
+    return () => globalThis.clearTimeout(timeout);
+  }, [waitingRematchUntil]);
 
   return (
     <Panel title="Partida en curso" subtitle="Arrastra, apunta y suelta">
@@ -54,7 +146,15 @@ export function PlayingScreen() {
       >
         {playing && <TurnTimer expiresAt={playing.turnEndsAt} onTimeout={handleTimeout} />}
       </ScoreBoard>
-      <PitchCanvas chips={chips} ball={ball} highlightId={playing?.activePlayer === "creator" ? "it-1" : "br-1"}>
+      <PitchCanvas
+        chips={chips}
+        ball={ball}
+        highlightId={playing?.activePlayer === "creator" ? "creator-1" : "challenger-1"}
+        aimLine={aim}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      >
         <EventOverlay event={lastEvent} />
       </PitchCanvas>
       <div className="field-legend">
@@ -73,6 +173,24 @@ export function PlayingScreen() {
           <NeonButton label="Turno saltado" variant="secondary" onClick={() => registerTimeout()} />
         </div>
       </div>
+      {waitingRematchUntil && (
+        <div className="toast info">
+          Esperando aceptación de revancha (hasta 10s)
+        </div>
+      )}
+      {showEnd && (
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <h3>Fin del partido</h3>
+            <p>{winner === "creator" ? "¡Ganaste esta partida!" : "El rival se llevó la victoria."}</p>
+            <div className="button-grid horizontal">
+              <NeonButton label="Revancha" onClick={handleRematch} />
+              <NeonButton label="Salir" variant="secondary" onClick={() => setShowEnd(false)} />
+            </div>
+            <small>La revancha se activa cuando ambos aceptan (10s de gracia).</small>
+          </div>
+        </div>
+      )}
     </Panel>
   );
 }
