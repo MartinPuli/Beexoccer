@@ -25,7 +25,8 @@ export async function fetchOpenMatches(): Promise<MatchLobby[]> {
     const contract = new Contract(env.matchManagerAddress, matchAbi, provider);
     const lobbies: MatchLobby[] = [];
 
-    for (let id = 1; id <= 3; id += 1) {
+    // Query a window of recent ids; replace with indexer/TheGraph once available
+    for (let id = 1; id <= 20; id += 1) {
       try {
         const data = await contract.matches(id);
         if (!data.isCompleted && data.isOpen) {
@@ -45,33 +46,12 @@ export async function fetchOpenMatches(): Promise<MatchLobby[]> {
       }
     }
 
-    if (lobbies.length) return lobbies;
+    return lobbies;
   } catch (error) {
-    console.warn("Falling back to mock lobbies", error);
+    console.warn("fetchOpenMatches error", error);
   }
 
-  return [
-    {
-      id: 101,
-      creator: "0xCreator",
-      challenger: undefined,
-      goals: 3,
-      isFree: true,
-      stakeAmount: "0",
-      stakeToken: "0x0000000000000000000000000000000000000000",
-      open: true
-    },
-    {
-      id: 202,
-      creator: "0xCreator",
-      challenger: undefined,
-      goals: 5,
-      isFree: false,
-      stakeAmount: "5",
-      stakeToken: "0x0000000000000000000000000000000000000000",
-      open: true
-    }
-  ];
+  return [];
 }
 
 export async function createMatch(config: MatchConfig) {

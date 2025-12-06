@@ -17,7 +17,7 @@ interface PitchCanvasProps {
  */
 export function PitchCanvas({ chips, ball, highlightId, children, aimLine, onPointerDown, onPointerMove, onPointerUp }: Readonly<PitchCanvasProps>) {
   return (
-    <div className="pitch-wrapper" style={{ background: "linear-gradient(180deg, #0b3d0b 0%, #0f5a0f 100%)" }}>
+    <div className="pitch-wrapper" style={{ background: "#0f2f12" }}>
       <svg
         viewBox="0 0 600 900"
         width="100%"
@@ -27,12 +27,45 @@ export function PitchCanvas({ chips, ball, highlightId, children, aimLine, onPoi
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        <rect x="60" y="60" width="480" height="780" rx="32" stroke="#ffffff" strokeWidth="4" fill="transparent" />
-        <line x1="300" y1="60" x2="300" y2="840" stroke="#ffffff" strokeWidth="3" />
-        <circle cx="300" cy="450" r="88" stroke="#ffffff" strokeWidth="3" fill="transparent" />
-        <circle cx="300" cy="450" r="6" fill="#ffffff" />
-        <rect x="60" y="240" width="80" height="420" stroke="#ffffff" strokeWidth="3" fill="transparent" rx="24" />
-        <rect x="460" y="240" width="80" height="420" stroke="#ffffff" strokeWidth="3" fill="transparent" rx="24" />
+        <defs>
+          <linearGradient id="pitch-stripes" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#0f5a23" />
+            <stop offset="50%" stopColor="#0d501f" />
+            <stop offset="100%" stopColor="#0f5a23" />
+          </linearGradient>
+          <pattern id="pitch-bands" x="0" y="0" width="1" height="0.14">
+            <rect x="0" y="0" width="600" height="126" fill="#0f5a23" />
+            <rect x="0" y="63" width="600" height="63" fill="#0c4a1d" />
+          </pattern>
+          <linearGradient id="edge-glow" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+          </linearGradient>
+        </defs>
+
+        <rect width="600" height="900" fill="url(#pitch-bands)" />
+        <rect width="600" height="900" fill="url(#pitch-stripes)" opacity="0.28" />
+        <rect width="600" height="900" fill="url(#edge-glow)" opacity="0.6" />
+        <rect x="46" y="40" width="508" height="820" rx="32" stroke="#dfe8d6" strokeWidth="5" fill="transparent" />
+        <line x1="300" y1="40" x2="300" y2="860" stroke="#e8f0e0" strokeWidth="4" />
+        <circle cx="300" cy="450" r="90" stroke="#e8f0e0" strokeWidth="4" fill="transparent" />
+        <circle cx="300" cy="450" r="6" fill="#e8f0e0" />
+
+        {/* Top penalty box */}
+        <rect x="160" y="40" width="280" height="140" stroke="#e8f0e0" strokeWidth="4" fill="transparent" />
+        <rect x="210" y="40" width="180" height="70" stroke="#e8f0e0" strokeWidth="4" fill="transparent" />
+        <circle cx="300" cy="150" r="6" fill="#e8f0e0" />
+        <path d="M160 180 Q300 240 440 180" fill="transparent" stroke="#e8f0e0" strokeWidth="4" />
+
+        {/* Bottom penalty box */}
+        <rect x="160" y="720" width="280" height="140" stroke="#e8f0e0" strokeWidth="4" fill="transparent" />
+        <rect x="210" y="790" width="180" height="70" stroke="#e8f0e0" strokeWidth="4" fill="transparent" />
+        <circle cx="300" cy="750" r="6" fill="#e8f0e0" />
+        <path d="M160 720 Q300 660 440 720" fill="transparent" stroke="#e8f0e0" strokeWidth="4" />
+
+        {/* Goals top/bottom */}
+        <rect x="210" y="18" width="180" height="18" stroke="#dfe8d6" strokeWidth="3" fill="rgba(223,232,214,0.25)" />
+        <rect x="210" y="864" width="180" height="18" stroke="#dfe8d6" strokeWidth="3" fill="rgba(223,232,214,0.25)" />
 
         {aimLine && (
           <line

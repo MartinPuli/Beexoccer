@@ -25,22 +25,10 @@ interface GameStore {
   setPlayingSnapshot: (snapshot?: PlayingSnapshot) => void;
   applyRealtimeSnapshot: (snapshot: PlayingSnapshot) => void;
   setLastEvent: (event?: MatchEvent) => void;
-  appendMockMatch: () => void;
   triggerGoal: (scorer: "creator" | "challenger") => void;
   registerTimeout: () => void;
   clearLastEvent: () => void;
 }
-
-const demoLobby = (id: number): MatchLobby => ({
-  id,
-  creator: "0xCreator",
-  challenger: undefined,
-  goals: (id % 2 === 0 ? 3 : 5) as GoalTarget,
-  isFree: id % 2 === 0,
-  stakeAmount: id % 2 === 0 ? "0" : "5",
-  stakeToken: "0x0000000000000000000000000000000000000000",
-  open: true
-});
 
 const TURN_DURATION_MS = 15_000;
 
@@ -64,7 +52,7 @@ export const useGameStore = create<GameStore>((set) => ({
   view: "home",
   alias: "Invitado",
   balance: "0.00 XO",
-  pendingMatches: [demoLobby(1), demoLobby(2)],
+  pendingMatches: [],
   currentMatchId: undefined,
   playerSide: "creator",
   matchGoalTarget: 3,
@@ -81,8 +69,6 @@ export const useGameStore = create<GameStore>((set) => ({
   setPlayingSnapshot: (playing) => set({ playing }),
   applyRealtimeSnapshot: (playing) => set({ playing }),
   setLastEvent: (lastEvent) => set({ lastEvent }),
-  appendMockMatch: () =>
-    set((state) => ({ pendingMatches: [...state.pendingMatches, demoLobby(state.pendingMatches.length + 1)] })),
   triggerGoal: (scorer) =>
     set((state) => {
       if (!state.playing) return state;
