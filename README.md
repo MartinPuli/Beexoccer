@@ -53,17 +53,22 @@ Beexoccer
 ## Environment Setup
 
 1. **Clone and install root dependencies**
+
    ```powershell
    git clone <repo>
    cd Beexoccer
    npm install
    ```
+
 2. **Install frontend**
+
    ```powershell
    cd frontend
    npm install
    ```
+
 3. **Copy env templates**
+
    ```powershell
    Copy-Item .env.example .env
    cd frontend
@@ -71,14 +76,16 @@ Beexoccer
    ```
 
 ### Root `.env`
-```
+
+```env
 POLYGON_AMOY_RPC=
 PRIVATE_KEY=
 STABLE_TOKEN_ADDRESS=
 ```
 
 ### Frontend `.env`
-```
+
+```env
 VITE_XO_CONNECT_PROJECT_ID=
 VITE_POLYGON_AMOY_RPC=
 VITE_MATCH_MANAGER_ADDRESS=
@@ -90,16 +97,43 @@ VITE_MATCH_MANAGER_ADDRESS=
 cd frontend
 npm run dev
 ```
+
 This spins up Vite with hot reload plus mock data for aliases/balances when XO-CONNECT is not yet available.
+
+## Realtime Server + Frontend Smoke Test
+
+1. Install realtime server deps (one-time):
+   
+   ```powershell
+   cd server
+   npm install
+   ```
+
+2. Start the socket server (default :4000):
+   
+   ```powershell
+   npm run dev
+   ```
+
+3. In another terminal, start the frontend with the realtime URL set (defaults to `http://localhost:4000`):
+   
+   ```powershell
+   cd frontend
+   $Env:VITE_REALTIME_URL="http://localhost:4000"; npm run dev
+   ```
+
+4. Open the app (default Vite port 5173) and play the demo match. The server emits snapshots/events; dragging a chip will move physics on the server and stream back to the UI. Use two browser tabs to see synchronized state.
 
 ## Deploying the Smart Contract
 
 1. Fund the deploying address with Amoy test MATIC.
 2. Set RPC + private key inside `.env`.
 3. Run Hardhat deploy script:
+
    ```powershell
    npx hardhat run scripts/deploy.ts --network polygonAmoy
    ```
+
 4. Copy the emitted contract address into `frontend/.env` as `VITE_MATCH_MANAGER_ADDRESS`.
 
 ## XO-CONNECT Integration Overview
@@ -111,6 +145,7 @@ This spins up Vite with hot reload plus mock data for aliases/balances when XO-C
 ## Smart Contract Summary
 
 `MatchManager.sol` handles creation, escrow, and settlement:
+
 - `createMatch(goals, isFree, stakeAmount, stakeToken)` registers lobbies.
 - `joinMatch(matchId)` lets challengers lock stakes if required.
 - `reportResult(matchId, winner)` distributes escrow and marks match ended.

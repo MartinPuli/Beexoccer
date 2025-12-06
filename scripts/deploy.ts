@@ -12,6 +12,10 @@ dotenv.config();
  */
 async function main() {
   const [deployer] = await ethers.getSigners();
+  if (!deployer) {
+    throw new Error("No deployer signer available. Set PRIVATE_KEY in .env or configure accounts for this network.");
+  }
+
   console.log(`Deploying with ${deployer.address}`);
 
   const factory = await ethers.getContractFactory("MatchManager");
@@ -38,9 +42,7 @@ async function main() {
   console.log(`Saved deployment info to ${outputPath}`);
 }
 
-try {
-  await main();
-} catch (error) {
+main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
-}
+});
