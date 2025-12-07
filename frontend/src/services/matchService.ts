@@ -146,28 +146,44 @@ export async function createMatch(config: MatchConfig): Promise<{ matchId: numbe
     console.log("⏳ TX enviada:", tx.hash);
     
     const receipt = await tx.wait();
-  console.log("✅ TX confirmada en bloque:", receipt.blockNumber);
-  
-  // Extract matchId from MatchCreated event
-  let matchId = 0;
-  for (const log of receipt.logs) {
-    try {
-      const parsed = contract.interface.parseLog({ topics: log.topics as string[], data: log.data });
-      if (parsed?.name === "MatchCreated") {
-        matchId = Number(parsed.args.matchId);
-        console.log("🆔 Match ID creado:", matchId);
-        break;
+    console.log("✅ TX confirmada en bloque:", receipt.blockNumber);
+    
+    // Extract matchId from MatchCreated event
+    let matchId = 0;
+    
+    // Método 1: Buscar en los logs parseados
+    for (const log of receipt.logs) {
+      try {
+        const parsed = contract.interface.parseLog({ topics: log.topics as string[], data: log.data });
+        if (parsed?.name === "MatchCreated") {
+          matchId = Number(parsed.args.matchId);
+          console.log("🆔 Match ID creado (desde evento):", matchId);
+          break;
+        }
+      } catch {
+        // Not our event, skip
       }
-    } catch {
-      // Not our event, skip
     }
-  }
-  
-  if (matchId === 0) {
-    console.warn("⚠️ No se pudo extraer matchId del evento");
-  }
-  
-  return { matchId };
+    
+    // Método 2: Si no encontramos el evento, obtener el matchCount actual
+    // (menos seguro pero funciona como fallback)
+    if (matchId === 0) {
+      console.warn("⚠️ No se pudo extraer matchId del evento, usando matchCount como fallback");
+      try {
+        const count = await contract.matchCount();
+        matchId = Number(count);
+        console.log("🆔 Match ID obtenido de matchCount:", matchId);
+      } catch (countError) {
+        console.error("❌ Error obteniendo matchCount:", countError);
+      }
+    }
+    
+    // Validar que tenemos un matchId válido
+    if (matchId <= 0) {
+      throw new Error("No se pudo obtener el ID de la partida creada. Revisa la transacción en el explorador.");
+    }
+    
+    return { matchId };
   } catch (error: unknown) {
     console.error("❌ Error en createMatch:", error);
     
@@ -223,11 +239,74 @@ function handleRpcError(error: unknown): never {
 }
 
 export async function cancelMatch(matchId: number): Promise<void> {
+  console.log("🚫 Cancelando partida #", matchId);
+  
+  // Validar que el matchId es válido
+  if (!matchId || matchId <= 0) {
+    throw new Error("ID de partida inválido. No se puede cancelar.");
+  }
+  
   try {
     const contract = await getContract();
+    
+    // Primero verificar el estado de la partida
+    try {
+      const matchData = await contract.matches(matchId);
+      console.log("📊 Estado de la partida antes de cancelar:", {
+        creator: matchData.creator,
+        challenger: matchData.challenger,
+        isOpen: matchData.isOpen,
+        isCompleted: matchData.isCompleted
+      });
+      
+      // Verificaciones previas para dar mensajes claros
+      const userAddress = await (await contract.runner?.provider?.getSigner())?.getAddress();
+      
+      if (matchData.creator.toLowerCase() !== userAddress?.toLowerCase()) {
+        throw new Error("No sos el creador de esta partida. Solo el creador puede cancelarla.");
+      }
+      
+      if (!matchData.isOpen) {
+        throw new Error("La partida ya no está abierta. No se puede cancelar.");
+      }
+      
+      if (matchData.challenger !== "0x0000000000000000000000000000000000000000") {
+        throw new Error("La partida ya tiene un rival. No se puede cancelar una vez que alguien se unió.");
+      }
+    } catch (checkError) {
+      // Si el error ya tiene un mensaje claro, re-lanzarlo
+      if (checkError instanceof Error && !checkError.message.includes("call revert")) {
+        throw checkError;
+      }
+      console.warn("⚠️ No se pudo verificar estado previo:", checkError);
+    }
+    
     const tx = await contract.cancelMatch(matchId);
+    console.log("⏳ TX de cancelación enviada:", tx.hash);
     await tx.wait();
+    console.log("✅ Partida cancelada exitosamente");
   } catch (error) {
+    // Si ya es un error con mensaje claro, no procesarlo más
+    if (error instanceof Error && 
+        (error.message.includes("creador") || 
+         error.message.includes("abierta") || 
+         error.message.includes("rival") ||
+         error.message.includes("inválido"))) {
+      throw error;
+    }
+    
+    // Intentar detectar el error específico del contrato
+    const errorStr = String(error);
+    if (errorStr.includes("NotCreator")) {
+      throw new Error("No sos el creador de esta partida.");
+    }
+    if (errorStr.includes("MatchNotOpen")) {
+      throw new Error("La partida ya no está abierta.");
+    }
+    if (errorStr.includes("ChallengerAlreadySet")) {
+      throw new Error("Ya hay un rival en esta partida.");
+    }
+    
     handleRpcError(error);
   }
 }

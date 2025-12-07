@@ -529,6 +529,10 @@ export function BotMatchScreen() {
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     if (active !== "creator" || turnTakenRef.current || isMoving()) return;
 
+    // Prevenir comportamientos del navegador y capturar el pointer
+    e.preventDefault();
+    (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
+
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * FIELD_WIDTH;
     const y = ((e.clientY - rect.top) / rect.height) * FIELD_HEIGHT;
@@ -542,11 +546,15 @@ export function BotMatchScreen() {
       setAim({ from: { x: touched.x, y: touched.y }, to: { x, y } });
       setShowPowerMeter({ x: touched.x, y: touched.y });
       setShotPower(0);
+      (globalThis as Record<string, unknown>).shotPower = 0;
     }
   };
 
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!dragRef.current) return;
+    
+    e.preventDefault();
+    
     const rect = e.currentTarget.getBoundingClientRect();
     let x = ((e.clientX - rect.left) / rect.width) * FIELD_WIDTH;
     let y = ((e.clientY - rect.top) / rect.height) * FIELD_HEIGHT;
@@ -562,6 +570,7 @@ export function BotMatchScreen() {
 
     const powerScale = Math.min(1, dist / (MAX_DRAG_DISTANCE * 0.7));
     setShotPower(powerScale);
+    (globalThis as Record<string, unknown>).shotPower = powerScale;
     setAim((prev) => (prev ? { ...prev, to: { x, y } } : undefined));
 
     if (showPowerMeter) setShowPowerMeter({ x: start.x, y: start.y });
@@ -572,8 +581,12 @@ export function BotMatchScreen() {
       dragRef.current = null;
       setAim(undefined);
       setShowPowerMeter(null);
+      setShotPower(0);
+      (globalThis as Record<string, unknown>).shotPower = 0;
       return;
     }
+
+    (e.currentTarget as SVGSVGElement).releasePointerCapture(e.pointerId);
 
     const rect = e.currentTarget.getBoundingClientRect();
     let x = ((e.clientX - rect.left) / rect.width) * FIELD_WIDTH;
@@ -603,6 +616,15 @@ export function BotMatchScreen() {
     setAim(undefined);
     setShowPowerMeter(null);
     setShotPower(0);
+    (globalThis as Record<string, unknown>).shotPower = 0;
+  };
+
+  const handlePointerCancel = () => {
+    dragRef.current = null;
+    setAim(undefined);
+    setShowPowerMeter(null);
+    setShotPower(0);
+    (globalThis as Record<string, unknown>).shotPower = 0;
   };
 
   const turnLabel = active === "creator" ? "TU TURNO" : "TURNO BOT";
@@ -662,6 +684,7 @@ export function BotMatchScreen() {
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
         />
       </div>
 
