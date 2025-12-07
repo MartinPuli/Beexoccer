@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGameStore } from "./hooks/useGameStore";
 import { AcceptMatchScreen, BotMatchScreen, CreateBotMatchScreen, CreateMatchScreen, HomeScreen, PlayingScreen, WaitingScreen, ConnectWalletScreen } from "./views";
+import { NeedBeexoScreen } from "./views/NeedBeexoScreen";
 import { xoConnectService } from "./services/xoConnectService";
 import { ToastContainer, useToast, toast } from "./components/Toast";
 import { cancelMatch, checkMatchStatus } from "./services/matchService";
@@ -23,51 +24,59 @@ export default function App() {
   const { toasts, dismissToast } = useToast();
   
   const initRef = useRef(false);
-  const toastShownRef = useRef(false); // Evitar toasts dobles
+  const toastShownRef = useRef(false);
+  
+  // Estado para saber si necesita Beexo Wallet
+  const [needsBeexo, setNeedsBeexo] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Verificar si tiene wallet conectada
   const isWalletConnected = userAddress && userAddress !== "0x" + "0".repeat(40) && userAddress !== "";
 
-  // Inicialización - intentar recuperar sesión existente
+  // Inicialización - SOLO con XO Connect / Beexo Wallet
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
     
     void (async () => {
-      console.log("🚀 Inicializando app...");
+      console.log("🚀 Inicializando app (SOLO BEEXO)...");
       try {
-        // Verificar si hay wallet instalada
-        const hasWallet = !!(globalThis as Window & typeof globalThis).ethereum;
-        if (!hasWallet) {
-          console.log("⚠️ No hay wallet detectada");
-          setView("connect");
+        // Detectar si estamos en Beexo Wallet
+        const isBeexo = xoConnectService.detectBeexoWallet();
+        console.log("🐝 ¿Es Beexo Wallet?:", isBeexo);
+        
+        if (!isBeexo) {
+          // NO hay Beexo Wallet - mostrar pantalla de descarga
+          console.log("❌ No es Beexo Wallet - mostrando pantalla de descarga");
+          setNeedsBeexo(true);
+          setIsLoading(false);
           return;
         }
 
-        // Verificar si ya hay conexión existente SIN pedir permiso
-        const existingAddress = await xoConnectService.checkExistingConnection();
-        console.log("🔍 Conexión existente:", existingAddress);
+        // Es Beexo Wallet - inicializar XO Connect
+        const success = await xoConnectService.init();
         
-        if (!existingAddress) {
-          // No hay conexión previa - mostrar pantalla de conexión
-          console.log("📱 No hay conexión previa, mostrando pantalla de conexión");
-          setView("connect");
+        if (!success || xoConnectService.needsBeexoWallet()) {
+          console.log("❌ Error inicializando XO Connect - mostrando pantalla de descarga");
+          setNeedsBeexo(true);
+          setIsLoading(false);
           return;
         }
         
-        // Hay conexión existente - inicializar completamente
-        await xoConnectService.init();
+        // Conexión exitosa con Beexo
         const address = xoConnectService.getUserAddress();
-        console.log("📍 Dirección obtenida:", address);
+        console.log("📍 Conectado con Beexo:", address);
         
         setAlias(xoConnectService.getAlias());
-        setBalance("Demo 15.2 XO");
+        setBalance(xoConnectService.getTokenBalance("POL") + " POL");
         setUserAddress(address);
+        setNeedsBeexo(false);
+        setIsLoading(false);
         
         // Mostrar toast de conexión solo una vez
         if (!toastShownRef.current) {
           toastShownRef.current = true;
-          toast.success("Wallet conectada", `${address.slice(0, 6)}...${address.slice(-4)}`);
+          toast.success("Beexo Wallet conectada", `${address.slice(0, 6)}...${address.slice(-4)}`);
         }
         
         // Restaurar sesión si hay partida pendiente
@@ -102,8 +111,9 @@ export default function App() {
           setView("playing");
         }
       } catch (error) {
-        console.error("Error inicializando:", error);
-        setView("connect");
+        console.error("❌ Error inicializando:", error);
+        setNeedsBeexo(true);
+        setIsLoading(false);
       }
     })();
   }, [setAlias, setBalance, setUserAddress, waitingMatch, activeMatch, setView, setCurrentMatchId, setPlayerSide, setMatchGoalTarget, setMatchStatus, setWaitingMatch, setActiveMatch]);
@@ -140,14 +150,40 @@ export default function App() {
   }, [waitingMatch]);
 
   const renderView = () => {
-    // Si no hay wallet y no está en bot/createBot, forzar conexión
+    // Si está cargando, mostrar loading
+    if (isLoading) {
+      return (
+        <div className="loading-screen" style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'linear-gradient(135deg, #0a0a12 0%, #1a1a2e 50%, #0f0f23 100%)',
+          color: '#FFD700',
+          fontSize: '1.5rem'
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🐝</div>
+            <div>Conectando con Beexo...</div>
+          </div>
+        </div>
+      );
+    }
+    
+    // Si necesita Beexo Wallet, mostrar pantalla de descarga
+    if (needsBeexo) {
+      return <NeedBeexoScreen />;
+    }
+    
+    // Si no hay wallet conectada y no está en bot/createBot, forzar conexión
     if (!isWalletConnected && view !== "bot" && view !== "createBot" && view !== "connect") {
-      return <ConnectWalletScreen />;
+      return <NeedBeexoScreen />;
     }
     
     switch (view) {
       case "connect":
-        return <ConnectWalletScreen />;
+        // En vez de ConnectWalletScreen, mostrar NeedBeexo si no hay Beexo
+        return needsBeexo ? <NeedBeexoScreen /> : <HomeScreen />;
       case "create":
         return <CreateMatchScreen />;
       case "createBot":
