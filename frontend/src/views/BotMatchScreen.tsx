@@ -3,7 +3,17 @@ import { PitchCanvas } from "../components/PitchCanvas";
 import { useGameStore } from "../hooks/useGameStore";
 import { TokenChip } from "../types/game";
 
-// Constantes del campo
+/**
+ * BotMatchScreen (refactor compatible)
+ * - Física mejorada (masa basada en área, impulso estable)
+ * - Colisiones más robustas y sin "explosiones"
+ * - Mejor uso de refs para evitar re-renders innecesarios
+ * - Conserva la API para PitchCanvas, useGameStore y tipos
+ */
+
+/* =========================
+   CONSTANTES DEL CAMPO
+   ========================= */
 const FIELD_WIDTH = 600;
 const FIELD_HEIGHT = 900;
 const BOUNDARY_LEFT = 50;
@@ -13,14 +23,19 @@ const BOUNDARY_BOTTOM = 850;
 const GOAL_LEFT = 220;
 const GOAL_RIGHT = 380;
 
-// Física
+/* =========================
+   FÍSICA / TUNING
+   ========================= */
 const FRICTION = 0.97;
-const EPSILON = 0.15;
-const POWER = 0.18;
-const MAX_SPEED = 8;
-const MAX_DRAG_DISTANCE = 350; // Límite máximo de arrastre
+const EPSILON = 0.12;
+const POWER = 0.25;
+const MAX_SPEED = 12;
+const MAX_DRAG_DISTANCE = 350;
 const TURN_TIME = 10000;
 
+/* =========================
+   TIPOS LOCALES
+   ========================= */
 type MovingChip = TokenChip & { vx: number; vy: number };
 interface BallState {
   x: number;
@@ -30,6 +45,9 @@ interface BallState {
   radius: number;
 }
 
+/* =========================
+   INITS
+   ========================= */
 const initPlayerChips = (): MovingChip[] => [
   { id: "you-1", x: 300, y: 750, radius: 28, fill: "#00a8ff", flagEmoji: "", owner: "creator", vx: 0, vy: 0 },
   { id: "you-2", x: 150, y: 650, radius: 28, fill: "#00a8ff", flagEmoji: "", owner: "creator", vx: 0, vy: 0 },
@@ -44,10 +62,26 @@ const initBotChips = (): MovingChip[] => [
 
 const initBall = (): BallState => ({ x: 300, y: 450, vx: 0, vy: 0, radius: 14 });
 
-function magnitude(vx: number, vy: number) {
+/* =========================
+   UTILS VECTORIALES
+   ========================= */
+function clamp(v: number, a: number, b: number) {
+  return Math.max(a, Math.min(b, v));
+}
+function mag(vx: number, vy: number) {
   return Math.hypot(vx, vy);
 }
+function normalize(vx: number, vy: number) {
+  const m = Math.hypot(vx, vy) || 1;
+  return { nx: vx / m, ny: vy / m, m };
+}
+function safeNumber(n: number, fallback = 0) {
+  return Number.isFinite(n) ? n : fallback;
+}
 
+/* =========================
+   REFLECT EN BORDES (GOLES)
+   ========================= */
 function reflectInBounds(entity: { x: number; y: number; vx: number; vy: number; radius: number }, isBall: boolean) {
   const r = entity.radius;
   
@@ -77,37 +111,132 @@ function reflectInBounds(entity: { x: number; y: number; vx: number; vy: number;
   }
 }
 
-function handleCollision(a: MovingChip | BallState, b: MovingChip | BallState) {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const dist = Math.hypot(dx, dy);
-  const minDist = a.radius + b.radius;
-  if (dist === 0 || dist >= minDist) return;
-  
-  const overlap = minDist - dist;
-  const nx = dx / dist;
-  const ny = dy / dist;
-  
-  a.x -= (overlap / 2) * nx;
-  a.y -= (overlap / 2) * ny;
-  b.x += (overlap / 2) * nx;
-  b.y += (overlap / 2) * ny;
-  
-  const va = a.vx * nx + a.vy * ny;
-  const vb = b.vx * nx + b.vy * ny;
-  a.vx += (vb - va) * nx * 0.9;
-  a.vy += (vb - va) * ny * 0.9;
-  b.vx += (va - vb) * nx * 0.9;
-  b.vy += (va - vb) * ny * 0.9;
+/* =========================
+   COLISIONES
+   - Masa proporcional al área -> evita "saltos" raros
+   - Resolución de solapamiento estable
+   ========================= */
+function massFromRadius(radius: number) {
+  // Proporcional a área (pi r^2) pero sin la constante pi para mantener relative scales
+  return Math.max(1, radius * radius);
 }
 
+function handleCollision(a: MovingChip | BallState, b: MovingChip | BallState) {
+  // Evitar NaNs
+  a.vx = safeNumber(a.vx);
+  a.vy = safeNumber(a.vy);
+  b.vx = safeNumber(b.vx);
+  b.vy = safeNumber(b.vy);
+
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const dist = Math.hypot(dx, dy) || 0.0001;
+  const minDist = (a.radius || 7) + (b.radius || 7);
+  
+  if (dist >= minDist) return; // no colision
+
+  // Normal y tangente
+  const nx = dx / dist;
+  const ny = dy / dist;
+
+  // Mover fuera de superposición (proporcional a masas)
+  const overlap = minDist - dist;
+  const ma = massFromRadius(a.radius || 7);
+  const mb = massFromRadius(b.radius || 7);
+  const total = ma + mb || 1;
+
+  // Separación más estable: mover según la proporción de masas
+  const sepA = (overlap * (mb / total)) + 0.001;
+  const sepB = (overlap * (ma / total)) + 0.001;
+
+  a.x -= nx * sepA;
+  a.y -= ny * sepA;
+  b.x += nx * sepB;
+  b.y += ny * sepB;
+
+  // Resolución de velocidades: impulso en la normal
+  const rvx = b.vx - a.vx;
+  const rvy = b.vy - a.vy;
+  const velAlongNormal = rvx * nx + rvy * ny;
+
+  // Si ya se separan, no aplicar impulso
+  if (velAlongNormal > 0) return;
+
+  // Restitución: pequeño rebote conservando energía parcial
+  const restitution = 0.8;
+
+  // Impulso escalar
+  let j = -(1 + restitution) * velAlongNormal;
+  j = j / (1 / ma + 1 / mb);
+
+  // Aplicar impulso
+  const impulseX = j * nx;
+  const impulseY = j * ny;
+
+  a.vx -= (impulseX / ma);
+  a.vy -= (impulseY / ma);
+  b.vx += (impulseX / mb);
+  b.vy += (impulseY / mb);
+
+  // Limitar velocidades para evitar "explosiones"
+  const sa = mag(a.vx, a.vy);
+  if (sa > MAX_SPEED) {
+    const scale = MAX_SPEED / sa;
+    a.vx *= scale;
+    a.vy *= scale;
+  }
+  const sb = mag(b.vx, b.vy);
+  if (sb > MAX_SPEED) {
+    const scale = MAX_SPEED / sb;
+    b.vx *= scale;
+    b.vy *= scale;
+  }
+}
+
+/* =========================
+   STEP ENTITY (universal)
+   ========================= */
+function stepEntity<T extends { x: number; y: number; vx: number; vy: number; radius: number }>(entity: T, isBall: boolean) {
+  // Copia por seguridad (llamado desde loop donde se mutan copias)
+  const next = { ...entity };
+
+  // Fricción (aplicada exponencialmente)
+  next.vx *= FRICTION;
+  next.vy *= FRICTION;
+
+  // Normalizar pequeños valores a 0
+  if (Math.abs(next.vx) < EPSILON) next.vx = 0;
+  if (Math.abs(next.vy) < EPSILON) next.vy = 0;
+
+  // Limitar velocidad
+  const speed = mag(next.vx, next.vy);
+  if (speed > MAX_SPEED) {
+    const s = MAX_SPEED / speed;
+    next.vx *= s;
+    next.vy *= s;
+  }
+
+  // Mover
+  next.x += next.vx;
+  next.y += next.vy;
+
+  // Seguridad anti-tunneling muy básica: si se salió mucho, clamp a bordes
+  reflectInBounds(next, isBall);
+
+  return next;
+}
+
+/* =========================
+   COMPONENTE PRINCIPAL
+   (compatible con API anterior)
+   ========================= */
 export function BotMatchScreen() {
   const goalTarget = useGameStore((s) => s.matchGoalTarget);
   const setView = useGameStore((s) => s.setView);
 
   const chipsRef = useRef<MovingChip[]>([...initPlayerChips(), ...initBotChips()]);
   const ballRef = useRef<BallState>(initBall());
-  
+
   const [chips, setChips] = useState<MovingChip[]>(chipsRef.current);
   const [ball, setBall] = useState<BallState>(ballRef.current);
   const [aim, setAim] = useState<{ from: { x: number; y: number }; to: { x: number; y: number } } | undefined>();
@@ -121,6 +250,8 @@ export function BotMatchScreen() {
   const [turnLostAnimation, setTurnLostAnimation] = useState(false);
   const [timerPercent, setTimerPercent] = useState(100);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [shotPower, setShotPower] = useState<number>(0);
+  const [showPowerMeter, setShowPowerMeter] = useState<{ x: number; y: number } | null>(null);
 
   const dragRef = useRef<{ chipId: string; start: { x: number; y: number } } | null>(null);
   const simRef = useRef<number | null>(null);
@@ -128,24 +259,15 @@ export function BotMatchScreen() {
   const turnStartTimeRef = useRef<number>(Date.now());
   const goalScoredRef = useRef(false);
 
-  // Handler para salir
-  const handleExitRequest = () => {
-    setShowExitConfirm(true);
-  };
+  // EXIT handlers
+  const handleExitRequest = () => setShowExitConfirm(true);
+  const handleExitConfirm = () => { setShowExitConfirm(false); setView("home"); };
+  const handleExitCancel = () => setShowExitConfirm(false);
 
-  const handleExitConfirm = () => {
-    setShowExitConfirm(false);
-    setView("home");
-  };
-
-  const handleExitCancel = () => {
-    setShowExitConfirm(false);
-  };
-
-  // Calcular momentum (quién va ganando)
   const momentum = myScore - botScore;
-  const momentumPercent = 50 + (momentum / goalTarget) * 50;
+  const momentumPercent = 50 + (momentum / Math.max(1, goalTarget)) * 50;
 
+  // RESET campo (compatible)
   const resetField = useCallback((scorer: "you" | "bot") => {
     chipsRef.current = [...initPlayerChips(), ...initBotChips()];
     ballRef.current = initBall();
@@ -172,141 +294,117 @@ export function BotMatchScreen() {
     setTimeout(() => setTurnLostAnimation(false), 1200);
   }, []);
 
-  // Timer separado para actualización fluida cada 50ms
-  useEffect(() => {
-    const timerInterval = setInterval(() => {
-      if (goalAnimation || showEnd || turnLostAnimation) return;
-      
-      const elapsed = Date.now() - turnStartTimeRef.current;
-      const remaining = Math.max(0, TURN_TIME - elapsed);
-      setTimerPercent((remaining / TURN_TIME) * 100);
-    }, 50);
-    
-    return () => clearInterval(timerInterval);
-  }, [goalAnimation, showEnd, turnLostAnimation]);
-
-  const stepEntity = <T extends { x: number; y: number; vx: number; vy: number; radius: number }>(entity: T, isBall: boolean): T => {
-    const next = { ...entity };
-    next.x += next.vx;
-    next.y += next.vy;
-    const speed = magnitude(next.vx, next.vy);
-    if (speed > MAX_SPEED) {
-      next.vx = (next.vx / speed) * MAX_SPEED;
-      next.vy = (next.vy / speed) * MAX_SPEED;
-    }
-    next.vx *= FRICTION;
-    next.vy *= FRICTION;
-    if (magnitude(next.vx, next.vy) < EPSILON) {
-      next.vx = 0;
-      next.vy = 0;
-    }
-    reflectInBounds(next, isBall);
-    return next;
-  };
-
+  // Helper: ¿hay movimiento?
   const isMoving = useCallback(() => {
-    return chipsRef.current.some((c) => magnitude(c.vx, c.vy) > EPSILON) || 
-           magnitude(ballRef.current.vx, ballRef.current.vy) > EPSILON;
+    return chipsRef.current.some((c) => mag(c.vx, c.vy) > EPSILON) ||
+           mag(ballRef.current.vx, ballRef.current.vy) > EPSILON;
   }, []);
 
+  /* =========================
+     BOT AI (no muta el array directamente)
+     ========================= */
   const botShoot = useCallback(() => {
     const botChips = chipsRef.current.filter((c) => c.owner === "challenger");
-    const ballPos = ballRef.current;
-    
-    let bestChip: MovingChip | null = null;
-    let minDist = Infinity;
-    for (const chip of botChips) {
-      const dist = Math.hypot(ballPos.x - chip.x, ballPos.y - chip.y);
-      if (dist < minDist) {
-        minDist = dist;
-        bestChip = chip;
-      }
+    const ballPos = { ...ballRef.current };
+
+    if (botChips.length === 0) return;
+
+    // Elegir la ficha más cercana al balón
+    let best = botChips[0];
+    let bestDist = Math.hypot(ballPos.x - best.x, ballPos.y - best.y);
+    for (const c of botChips) {
+      const d = Math.hypot(ballPos.x - c.x, ballPos.y - c.y);
+      if (d < bestDist) { best = c; bestDist = d; }
     }
-    
-    if (bestChip) {
-      const dx = ballPos.x - bestChip.x;
-      const dy = ballPos.y - bestChip.y;
-      const mag = Math.hypot(dx, dy) || 1;
-      const speed = 5 + Math.random() * 2;
-      bestChip.vx = (dx / mag) * speed;
-      bestChip.vy = (dy / mag) * speed;
-    }
-    
+
+    // Calcular tiro hacia portería rival (hacia abajo)
+    const targetX = FIELD_WIDTH / 2 + (Math.random() - 0.5) * 60;
+    const targetY = BOUNDARY_BOTTOM - 40; // hacia portería contraria
+
+    const dx = targetX - best.x;
+    const dy = targetY - best.y;
+    const nm = Math.hypot(dx, dy) || 1;
+    const speed = 5 + Math.random() * 2;
+
+    // Crear nueva lista con la ficha actualizada (no mutamos la referencia original)
+    chipsRef.current = chipsRef.current.map((c) => c.id === best.id ? { ...c, vx: (dx / nm) * speed, vy: (dy / nm) * speed } : c);
+
     turnTakenRef.current = true;
   }, []);
 
+  /* =========================
+     SIM LOOP
+     ========================= */
   useEffect(() => {
-    let lastTime = performance.now();
-    
+    let last = performance.now();
+
     const loop = () => {
       const now = performance.now();
-      const delta = (now - lastTime) / 16.67;
-      lastTime = now;
-      
+      const dt = (now - last) / 16.6667; // ~frames ratio
+      last = now;
+
+      // Si animación de goal o end, no simular (pero mantener loop)
       if (goalAnimation || showEnd || turnLostAnimation) {
         simRef.current = requestAnimationFrame(loop);
         return;
       }
-      
-      for (let i = 0; i < Math.min(delta, 3); i++) {
-        chipsRef.current = chipsRef.current.map((c) => stepEntity(c, false));
-        ballRef.current = stepEntity(ballRef.current, true);
-        
-        const cl = chipsRef.current;
-        const bl = ballRef.current;
-        for (let j = 0; j < cl.length; j++) {
-          for (let k = j + 1; k < cl.length; k++) handleCollision(cl[j], cl[k]);
-          handleCollision(cl[j], bl);
+
+      // Ejecutar pasos físicos (sub-step hasta 3 para estabilidad)
+      for (let step = 0; step < Math.min(3, Math.ceil(dt)); step++) {
+        const currentChips = chipsRef.current.map(c => ({ ...c }));
+        const currentBall = { ...ballRef.current };
+
+        // Mover entidades
+        const movedChips = currentChips.map(c => stepEntity(c, false));
+        const movedBall = stepEntity(currentBall, true);
+
+        // Colisiones entre fichas
+        for (let i = 0; i < movedChips.length; i++) {
+          for (let j = i + 1; j < movedChips.length; j++) {
+            handleCollision(movedChips[i], movedChips[j]);
+          }
+          // con la pelota
+          handleCollision(movedChips[i], movedBall);
         }
+
+        // Actualizar refs (copia)
+        chipsRef.current = movedChips;
+        ballRef.current = movedBall;
       }
-      
+
+      // Comprobar goles (con debouncing via goalScoredRef)
       const b = ballRef.current;
       if (!goalScoredRef.current) {
         if (b.y < BOUNDARY_TOP - 10 && b.x > GOAL_LEFT && b.x < GOAL_RIGHT) {
           goalScoredRef.current = true;
           const newScore = myScore + 1;
           setMyScore(newScore);
-          if (newScore >= goalTarget) {
-            setWinner("you");
-            setShowEnd(true);
-          } else {
-            showGoalAnim("you");
-          }
-        }
-        if (b.y > BOUNDARY_BOTTOM + 10 && b.x > GOAL_LEFT && b.x < GOAL_RIGHT) {
+          if (newScore >= goalTarget) { setWinner("you"); setShowEnd(true); }
+          else { showGoalAnim("you"); }
+        } else if (b.y > BOUNDARY_BOTTOM + 10 && b.x > GOAL_LEFT && b.x < GOAL_RIGHT) {
           goalScoredRef.current = true;
           const newScore = botScore + 1;
           setBotScore(newScore);
-          if (newScore >= goalTarget) {
-            setWinner("bot");
-            setShowEnd(true);
-          } else {
-            showGoalAnim("bot");
-          }
+          if (newScore >= goalTarget) { setWinner("bot"); setShowEnd(true); }
+          else { showGoalAnim("bot"); }
         }
       }
-      
-      // Check timeout para perder turno
-      const elapsed = Date.now() - turnStartTimeRef.current;
-      const remaining = Math.max(0, TURN_TIME - elapsed);
-      
-      // Timeout - perdió turno
-      if (remaining <= 0 && !turnTakenRef.current && !isMoving() && !goalScoredRef.current) {
-        if (active === "creator") {
-          showTurnLost();
-        }
+
+      // Timeout - pierde turno si no movió y no hay movimiento
+      if (turnTimeLeft <= 0 && !turnTakenRef.current && !isMoving() && !goalScoredRef.current) {
+        if (active === "creator") showTurnLost();
         turnTakenRef.current = true;
       }
-      
+
+      // Cambiar turno si no hay movimiento y ya se tomó turno
       if (!isMoving() && turnTakenRef.current && !goalScoredRef.current) {
         if (active === "creator") {
           setActive("challenger");
           setSelectedChipId("bot-1");
           turnTakenRef.current = false;
           turnStartTimeRef.current = Date.now();
-          setTimeout(() => {
-            if (!goalScoredRef.current) botShoot();
-          }, 600);
+          // Bot dispara luego de un pequeño delay
+          setTimeout(() => { if (!goalScoredRef.current) botShoot(); }, 600);
         } else {
           setActive("creator");
           setSelectedChipId("you-1");
@@ -314,33 +412,76 @@ export function BotMatchScreen() {
           turnStartTimeRef.current = Date.now();
         }
       }
-      
-      setChips(chipsRef.current.map((c) => ({ ...c })));
+
+      // Propagar estado a React (solo shallow copies para evitar re-renders innecesarios)
+      setChips(chipsRef.current.map(c => ({ ...c })));
       setBall({ ...ballRef.current });
-      
+
       simRef.current = requestAnimationFrame(loop);
     };
-    
+
     simRef.current = requestAnimationFrame(loop);
-    return () => {
-      if (simRef.current) cancelAnimationFrame(simRef.current);
-    };
+    return () => { if (simRef.current) cancelAnimationFrame(simRef.current); };
   }, [active, goalAnimation, showEnd, turnLostAnimation, myScore, botScore, goalTarget, isMoving, botShoot, showGoalAnim, showTurnLost]);
 
+  /* =========================
+     TEMPORIZADOR DE TURNO
+     ========================= */
+  const [turnTimeLeft, setTurnTimeLeft] = useState(TURN_TIME);
+  const turnTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Efecto para el temporizador
+  useEffect(() => {
+    // Limpiar temporizador anterior si existe
+    if (turnTimerRef.current) {
+      clearInterval(turnTimerRef.current);
+    }
+
+    // Solo iniciar el temporizador si es el turno del jugador y no hay animaciones
+    if (active === "creator" && !goalAnimation && !showEnd && !turnLostAnimation) {
+      const startTime = Date.now();
+      setTurnTimeLeft(TURN_TIME);
+      
+      turnTimerRef.current = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, TURN_TIME - elapsed);
+        setTurnTimeLeft(remaining);
+        
+        if (remaining <= 0) {
+          clearInterval(turnTimerRef.current!);
+          showTurnLost();
+        }
+      }, 50);
+    }
+
+    // Limpieza al desmontar o cuando cambien las dependencias
+    return () => {
+      if (turnTimerRef.current) {
+        clearInterval(turnTimerRef.current);
+      }
+    };
+  }, [active, goalAnimation, showEnd, turnLostAnimation, showTurnLost]);
+
+  /* =========================
+     INPUT HANDLERS (pointer)
+     - compatibles con PitchCanvas handlers previos
+     ========================= */
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     if (active !== "creator" || turnTakenRef.current || isMoving()) return;
-    
+
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * FIELD_WIDTH;
     const y = ((e.clientY - rect.top) / rect.height) * FIELD_HEIGHT;
-    
+
     const playerChips = chipsRef.current.filter((c) => c.owner === "creator");
     const touched = playerChips.find((c) => Math.hypot(c.x - x, c.y - y) <= c.radius + 15);
-    
+
     if (touched) {
       setSelectedChipId(touched.id);
       dragRef.current = { chipId: touched.id, start: { x: touched.x, y: touched.y } };
       setAim({ from: { x: touched.x, y: touched.y }, to: { x, y } });
+      setShowPowerMeter({ x: touched.x, y: touched.y });
+      setShotPower(0);
     }
   };
 
@@ -349,72 +490,81 @@ export function BotMatchScreen() {
     const rect = e.currentTarget.getBoundingClientRect();
     let x = ((e.clientX - rect.left) / rect.width) * FIELD_WIDTH;
     let y = ((e.clientY - rect.top) / rect.height) * FIELD_HEIGHT;
-    
-    // Limitar distancia de arrastre
     const { start } = dragRef.current;
-    const dist = Math.hypot(x - start.x, y - start.y);
+
+    let dist = Math.hypot(x - start.x, y - start.y);
     if (dist > MAX_DRAG_DISTANCE) {
-      const angle = Math.atan2(y - start.y, x - start.x);
-      x = start.x + Math.cos(angle) * MAX_DRAG_DISTANCE;
-      y = start.y + Math.sin(angle) * MAX_DRAG_DISTANCE;
+      const a = Math.atan2(y - start.y, x - start.x);
+      x = start.x + Math.cos(a) * MAX_DRAG_DISTANCE;
+      y = start.y + Math.sin(a) * MAX_DRAG_DISTANCE;
+      dist = MAX_DRAG_DISTANCE;
     }
-    
+
+    const powerScale = Math.min(1, dist / (MAX_DRAG_DISTANCE * 0.7));
+    setShotPower(powerScale);
     setAim((prev) => (prev ? { ...prev, to: { x, y } } : undefined));
+
+    if (showPowerMeter) setShowPowerMeter({ x: start.x, y: start.y });
   };
 
   const handlePointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!dragRef.current || active !== "creator" || turnTakenRef.current) {
       dragRef.current = null;
       setAim(undefined);
+      setShowPowerMeter(null);
       return;
     }
-    
+
     const rect = e.currentTarget.getBoundingClientRect();
     let x = ((e.clientX - rect.left) / rect.width) * FIELD_WIDTH;
     let y = ((e.clientY - rect.top) / rect.height) * FIELD_HEIGHT;
     const { chipId, start } = dragRef.current;
-    
-    // Limitar distancia
-    const dist = Math.hypot(x - start.x, y - start.y);
+
+    let dist = Math.hypot(x - start.x, y - start.y);
     if (dist > MAX_DRAG_DISTANCE) {
-      const angle = Math.atan2(y - start.y, x - start.x);
-      x = start.x + Math.cos(angle) * MAX_DRAG_DISTANCE;
-      y = start.y + Math.sin(angle) * MAX_DRAG_DISTANCE;
+      const a = Math.atan2(y - start.y, x - start.x);
+      x = start.x + Math.cos(a) * MAX_DRAG_DISTANCE;
+      y = start.y + Math.sin(a) * MAX_DRAG_DISTANCE;
+      dist = MAX_DRAG_DISTANCE;
     }
-    
-    const dx = (start.x - x) * POWER;
-    const dy = (start.y - y) * POWER;
-    
-    if (Math.hypot(dx, dy) > 0.5) {
-      chipsRef.current = chipsRef.current.map((c) => 
-        c.id === chipId ? { ...c, vx: dx, vy: dy } : c
-      );
+
+    const power = POWER * (0.5 + shotPower * 1.5);
+    const dx = (start.x - x) * power;
+    const dy = (start.y - y) * power;
+
+    if (Math.hypot(dx, dy) > 0.45) {
+      // Actualizar solo la ficha objetivo de forma inmutable
+      chipsRef.current = chipsRef.current.map((c) => c.id === chipId ? { ...c, vx: dx, vy: dy } : c);
       turnTakenRef.current = true;
     }
-    
+
+    // limpiar estados
     dragRef.current = null;
     setAim(undefined);
+    setShowPowerMeter(null);
+    setShotPower(0);
   };
 
   const turnLabel = active === "creator" ? "TU TURNO" : "TURNO BOT";
   const isPlayerTurn = active === "creator";
 
+  /* =========================
+     RENDER
+     ========================= */
   return (
     <div className="playing-screen">
       <div className="playing-hud">
-        {/* Header con botón de salir */}
         <div className="hud-header">
           <button className="exit-btn" onClick={handleExitRequest}>✕</button>
           <span className="hud-title">VS BOT</span>
           <span style={{ width: 32 }} />
         </div>
-        
-        {/* Barra de momentum - indicador de quién va ganando */}
+
         <div className="momentum-bar">
           <div className="momentum-fill" style={{ left: `calc(${momentumPercent}% - 3px)` }} />
           <div className="momentum-center" />
         </div>
-        
+
         <div className="hud-scores">
           <span className="hud-player you">TU</span>
           <div className="hud-score-center">
@@ -424,18 +574,20 @@ export function BotMatchScreen() {
           </div>
           <span className="hud-player rival">BOT</span>
         </div>
-        
+
         <div className="hud-timer">
           <div className="timer-bar">
             <div 
               className="timer-fill" 
               style={{ 
-                width: `${timerPercent}%`,
-                backgroundColor: timerPercent < 30 ? 'var(--accent-red)' : 'var(--neon-green)'
+                width: `${(turnTimeLeft / TURN_TIME) * 100}%`,
+                backgroundColor: turnTimeLeft < 3000 ? 'var(--accent-red)' : 'var(--neon-green)'
               }} 
             />
           </div>
-          <span className="timer-label">{turnLabel}</span>
+          <span className="timer-label">
+            {active === "creator" ? 'TU TURNO' : 'TURNO BOT'}
+          </span>
         </div>
       </div>
 
@@ -479,7 +631,6 @@ export function BotMatchScreen() {
         </div>
       )}
 
-      {/* Modal de confirmación para salir */}
       {showExitConfirm && (
         <div className="confirm-overlay">
           <div className="confirm-modal">
@@ -502,5 +653,3 @@ export function BotMatchScreen() {
     </div>
   );
 }
-
-

@@ -15,6 +15,29 @@ interface PitchCanvasProps {
 }
 
 export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTurn, children, aimLine, onPointerDown, onPointerMove, onPointerUp }: Readonly<PitchCanvasProps>) {
+  // Obtener la potencia del tiro desde las props
+  const shotPower = (window as any).shotPower || 0;
+  
+  // Calcular el color de la línea de tiro basado en la potencia
+  const getAimLineColor = (power: number) => {
+    if (power < 0.3) return '#4CAF50'; // Verde para tiros suaves
+    if (power < 0.7) return '#FFC107'; // Amarillo para tiros medios
+    return '#F44336'; // Rojo para tiros potentes
+  };
+  
+  // Calcular el ancho de la línea basado en la potencia
+  const getAimLineWidth = (power: number) => {
+    return 2 + (power * 6); // Ancho entre 2 y 8
+  };
+  
+  // Calcular la opacidad basada en la potencia
+  const getAimLineOpacity = (power: number) => {
+    return 0.5 + (power * 0.5); // Opacidad entre 0.5 y 1
+  };
+  
+  // Verificar si estamos en BotMatchScreen
+  const isBotMatch = (window as any).isBotMatchScreen === true;
+  
   return (
     <>
       <svg
@@ -95,19 +118,40 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
         {/* Arco inferior - portería */}
         <rect x="220" y="850" width="160" height="35" fill="rgba(0,255,106,0.15)" stroke="var(--neon-green, #00ff6a)" strokeWidth="3" rx="2" filter="url(#neonGlow)" />
 
-        {/* Línea de tiro (aiming) - con límite visual */}
+        {/* Línea de tiro (aiming) con indicador de potencia */}
         {aimLine && (
-          <line
-            x1={aimLine.from.x}
-            y1={aimLine.from.y}
-            x2={aimLine.to.x}
-            y2={aimLine.to.y}
-            stroke="var(--accent-gold, #ffc85c)"
-            strokeWidth={6}
-            strokeLinecap="round"
-            strokeDasharray="12 8"
-            filter="url(#neonGlow)"
-          />
+          <>
+            {/* Línea de fondo (sombra) */}
+            <line
+              x1={aimLine.from.x}
+              y1={aimLine.from.y}
+              x2={aimLine.to.x}
+              y2={aimLine.to.y}
+              stroke="rgba(0,0,0,0.3)"
+              strokeWidth={getAimLineWidth(shotPower) + 4}
+              strokeLinecap="round"
+            />
+            {/* Línea principal con efecto de potencia */}
+            <line
+              x1={aimLine.from.x}
+              y1={aimLine.from.y}
+              x2={aimLine.to.x}
+              y2={aimLine.to.y}
+              stroke={getAimLineColor(shotPower)}
+              strokeWidth={getAimLineWidth(shotPower)}
+              strokeLinecap="round"
+              opacity={getAimLineOpacity(shotPower)}
+              filter="url(#neonGlow)"
+            />
+            {/* Indicador de potencia (círculo al final) */}
+            <circle
+              cx={aimLine.to.x}
+              cy={aimLine.to.y}
+              r={4 + (shotPower * 6)}
+              fill={getAimLineColor(shotPower)}
+              opacity={getAimLineOpacity(shotPower)}
+            />
+          </>
         )}
 
         {/* Fichas */}
