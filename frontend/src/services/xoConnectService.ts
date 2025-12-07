@@ -53,14 +53,24 @@ const POLYGON_AMOY_CHAIN_ID = 80002;
 const POLYGON_AMOY_CHAIN_ID_HEX = "0x13882"; // 80002 in hex
 const POLYGON_AMOY_RPC = "https://polygon-amoy.drpc.org";
 
-// URL for Beexo Wallet download/connection
-const BEEXO_WALLET_URL = "https://beexo.com/wallet";
+// XO Connect Provider config (rpcs is required)
+const XO_CONNECT_CONFIG = {
+  defaultChainId: POLYGON_AMOY_CHAIN_ID_HEX,
+  rpcs: {
+    [POLYGON_AMOY_CHAIN_ID]: POLYGON_AMOY_RPC,
+    137: "https://polygon.drpc.org",
+    1: "https://eth.drpc.org"
+  }
+};
 
 // Check if running inside Beexo WebView
 function isInBeexoWebView(): boolean {
   const ua = navigator.userAgent || "";
-  return ua.includes("BeexoWallet") || ua.includes("XOConnect") || 
-         typeof (window as unknown as { xoConnect?: unknown }).xoConnect !== "undefined";
+  // Check various indicators of being in Beexo WebView
+  if (ua.includes("BeexoWallet") || ua.includes("XOConnect")) return true;
+  if (typeof (window as unknown as { xoConnect?: unknown }).xoConnect !== "undefined") return true;
+  if (typeof (window as unknown as { ethereum?: { isBeexo?: boolean } }).ethereum?.isBeexo) return true;
+  return false;
 }
 
 // Check if on mobile device
@@ -117,12 +127,35 @@ class XoConnectService {
   }
 
   /**
+   * Check if we're inside Beexo WebView
+   */
+  isInWebView(): boolean {
+    return isInBeexoWebView();
+  }
+
+  /**
+   * Get the URL for opening in Beexo WebView (for QR code)
+   */
+  getBeexoDeepLink(): string {
+    // beexo:// deep link format to open a URL in Beexo's browser
+    const currentUrl = window.location.href;
+    return `beexo://browser?url=${encodeURIComponent(currentUrl)}`;
+  }
+
+  /**
    * Connect with XO Connect - this will trigger Beexo connection flow
-   * (QR code scan or deep link on mobile)
+   * Only works inside Beexo WebView
    */
   async connect(): Promise<boolean> {
     if (this._isConnecting) {
       console.log("⏳ Ya hay una conexión en progreso...");
+      return false;
+    }
+
+    // Check if we're in WebView first
+    if (!isInBeexoWebView()) {
+      console.log("⚠️ No estamos en WebView de Beexo - necesita escanear QR");
+      this._connectionError = "SHOW_QR"; // Special flag to show QR
       return false;
     }
 
@@ -131,18 +164,17 @@ class XoConnectService {
     
     console.log("🔌 Iniciando conexión con XO Connect...");
     console.log("📱 WebView de Beexo:", isInBeexoWebView());
-    console.log("📱 Dispositivo móvil:", isMobileDevice());
     
     try {
-      // Create XO Connect Provider - it will handle showing QR code or connecting in WebView
-      console.log("📡 Creando XOConnectProvider...");
-      this.xoProvider = new XOConnectProvider();
+      // Create XO Connect Provider with required config
+      console.log("📡 Creando XOConnectProvider con config:", XO_CONNECT_CONFIG);
+      this.xoProvider = new XOConnectProvider(XO_CONNECT_CONFIG);
       
       // Wrap in ethers BrowserProvider
       this.ethersProvider = new BrowserProvider(this.xoProvider, POLYGON_AMOY_CHAIN_ID);
       
-      // Request accounts - XO Connect will show QR if not in WebView
-      console.log("🔑 Solicitando conexión con Beexo Wallet (esto mostrará QR si es necesario)...");
+      // Request accounts
+      console.log("🔑 Solicitando conexión con Beexo Wallet...");
       const accounts = await this.ethersProvider.send("eth_requestAccounts", []) as string[];
       console.log("✅ Cuentas conectadas:", accounts);
       

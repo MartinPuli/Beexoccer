@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { xoConnectService } from "../services/xoConnectService";
 import { useGameStore } from "../hooks/useGameStore";
 import { checkMatchStatus } from "../services/matchService";
@@ -11,6 +12,10 @@ const BEEXO_DOWNLOAD_URL = "https://share.beexo.com/?type=download";
 export function ConnectWalletScreen() {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showQR, setShowQR] = useState(false);
+  const [deepLink, setDeepLink] = useState("");
+  const [isInWebView, setIsInWebView] = useState(false);
+  
   const setAlias = useGameStore((state) => state.setAlias);
   const setBalance = useGameStore((state) => state.setBalance);
   const setUserAddress = useGameStore((state) => state.setUserAddress);
@@ -26,7 +31,25 @@ export function ConnectWalletScreen() {
   const setMatchGoalTarget = useGameStore((state) => state.setMatchGoalTarget);
   const setMatchStatus = useGameStore((state) => state.setMatchStatus);
 
+  // Check if we're in WebView on mount
+  useEffect(() => {
+    const inWebView = xoConnectService.isInWebView();
+    setIsInWebView(inWebView);
+    if (!inWebView) {
+      // Not in WebView - prepare QR code
+      setDeepLink(xoConnectService.getBeexoDeepLink());
+      setShowQR(true);
+    }
+  }, []);
+
   const handleConnect = async () => {
+    // If not in WebView, show QR instead
+    if (!isInWebView) {
+      setDeepLink(xoConnectService.getBeexoDeepLink());
+      setShowQR(true);
+      return;
+    }
+
     setConnecting(true);
     setError(null);
     
@@ -37,7 +60,13 @@ export function ConnectWalletScreen() {
       const success = await xoConnectService.connect();
       
       if (!success) {
-        setError(xoConnectService.getConnectionError() || "No se pudo conectar con Beexo Wallet");
+        const err = xoConnectService.getConnectionError();
+        if (err === "SHOW_QR") {
+          setDeepLink(xoConnectService.getBeexoDeepLink());
+          setShowQR(true);
+          return;
+        }
+        setError(err || "No se pudo conectar con Beexo Wallet");
         return;
       }
       
@@ -120,23 +149,62 @@ export function ConnectWalletScreen() {
           Necesitas una wallet para jugar partidas online y apostar cripto.
         </p>
 
-        {/* Botón de conexión con Beexo */}
-        <button 
-          className="connect-btn primary"
-          onClick={handleConnect}
-          disabled={connecting}
-        >
-          {connecting ? (
-            <>
-              <span className="connect-spinner">⏳</span>
-              Conectando...
-            </>
-          ) : (
-            <>
-              🐝 Conectar con Beexo
-            </>
-          )}
-        </button>
+        {/* QR Code para escanear desde Beexo - solo si NO estamos en WebView */}
+        {showQR && !isInWebView && (
+          <div className="connect-qr-section">
+            <p style={{ marginBottom: 16, fontSize: 14 }}>
+              📱 <strong>Escaneá este QR desde Beexo Wallet</strong>
+            </p>
+            <div className="connect-qr-container" style={{
+              background: "white",
+              padding: 16,
+              borderRadius: 12,
+              display: "inline-block",
+              marginBottom: 16
+            }}>
+              <QRCodeSVG 
+                value={deepLink} 
+                size={200}
+                level="M"
+                includeMargin={false}
+              />
+            </div>
+            <p style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
+              O abrí este link en el navegador de Beexo:
+            </p>
+            <code style={{ 
+              fontSize: 10, 
+              background: "rgba(255,255,255,0.1)", 
+              padding: "4px 8px", 
+              borderRadius: 4,
+              wordBreak: "break-all",
+              display: "block",
+              maxWidth: 280
+            }}>
+              {window.location.href}
+            </code>
+          </div>
+        )}
+
+        {/* Botón de conexión - solo visible en WebView */}
+        {isInWebView && (
+          <button 
+            className="connect-btn primary"
+            onClick={handleConnect}
+            disabled={connecting}
+          >
+            {connecting ? (
+              <>
+                <span className="connect-spinner">⏳</span>
+                Conectando...
+              </>
+            ) : (
+              <>
+                🐝 Conectar con Beexo
+              </>
+            )}
+          </button>
+        )}
 
         {/* Error */}
         {error && (
@@ -148,20 +216,23 @@ export function ConnectWalletScreen() {
 
         {/* Info adicional */}
         <div className="connect-info">
-          <p><strong>¿Cómo conectar?</strong></p>
-          <p style={{ marginTop: 8, fontSize: 13 }}>
-            📱 <strong>Celular:</strong> Abre este link desde la app Beexo Wallet<br />
-            💻 <strong>PC:</strong> Copia el link y ábrelo en Beexo móvil
-          </p>
-          <a 
-            href={BEEXO_DOWNLOAD_URL}
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="connect-link"
-            style={{ marginTop: 12, display: "inline-block" }}
-          >
-            Descargar Beexo Wallet →
-          </a>
+          {!isInWebView ? (
+            <>
+              <p>¿No tenés Beexo Wallet?</p>
+              <a 
+                href={BEEXO_DOWNLOAD_URL}
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="connect-link"
+              >
+                Descargar Beexo Wallet →
+              </a>
+            </>
+          ) : (
+            <p style={{ fontSize: 13, opacity: 0.8 }}>
+              Conectá tu wallet para empezar a jugar
+            </p>
+          )}
         </div>
 
         {/* Botón para jugar sin wallet (solo bot) */}
