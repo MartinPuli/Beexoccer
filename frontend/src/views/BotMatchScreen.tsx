@@ -266,28 +266,116 @@ export function BotMatchScreen() {
 
   const momentum = myScore - botScore;
   const momentumPercent = 50 + (momentum / Math.max(1, goalTarget)) * 50;
+  
+  // Función para el disparo del bot
+  const botShoot = useCallback(() => {
+    console.log("Intentando ejecutar botShoot...");
+    
+    // Obtener fichas del bot y la pelota
+    const botChips = chipsRef.current.filter(c => c.owner === "challenger");
+    const ballPos = { ...ballRef.current };
+    
+    if (botChips.length === 0) {
+      console.log("No hay fichas del bot disponibles");
+      return;
+    }
+
+    // Elegir la ficha más cercana al balón
+    let bestChip = botChips[0];
+    let minDistance = Math.hypot(ballPos.x - bestChip.x, ballPos.y - bestChip.y);
+    
+    botChips.forEach(chip => {
+      const distance = Math.hypot(ballPos.x - chip.x, ballPos.y - chip.y);
+      if (distance < minDistance) {
+        bestChip = chip;
+        minDistance = distance;
+      }
+    });
+
+    // Calcular dirección del tiro (hacia la portería del jugador)
+    const targetX = FIELD_WIDTH / 2 + (Math.random() - 0.5) * 100; // Un poco de aleatoriedad
+    const targetY = BOUNDARY_BOTTOM - 50; // Hacia la portería del jugador
+
+    const dx = targetX - bestChip.x;
+    const dy = targetY - bestChip.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    const speed = 8 + Math.random() * 4; // Velocidad más consistente
+
+    // Actualizar la velocidad de la ficha
+    chipsRef.current = chipsRef.current.map(chip => 
+      chip.id === bestChip.id 
+        ? { ...chip, vx: (dx / distance) * speed, vy: (dy / distance) * speed }
+        : chip
+    );
+
+    // Forzar actualización del estado
+    setChips([...chipsRef.current]);
+    turnTakenRef.current = true;
+    
+    console.log("Bot ha realizado un tiro exitosamente");
+  }, []);
 
   // RESET campo (compatible)
   const resetField = useCallback((scorer: "you" | "bot") => {
+    console.log(`Reseteando campo. Último gol: ${scorer}`);
+    
+    // 1. Resetear fichas y pelota
     chipsRef.current = [...initPlayerChips(), ...initBotChips()];
     ballRef.current = initBall();
-    setChips(chipsRef.current);
-    setBall(ballRef.current);
-    setActive(scorer === "you" ? "challenger" : "creator");
-    setSelectedChipId(scorer === "you" ? "bot-1" : "you-1");
+    
+    // 2. Actualizar estados
+    setChips([...chipsRef.current]);
+    setBall({...ballRef.current});
+    
+    // 3. Resetear estado del juego
     turnTakenRef.current = false;
     turnStartTimeRef.current = Date.now();
-    setTimerPercent(100);
     goalScoredRef.current = false;
+    setGoalAnimation(null);
+    setTurnLostAnimation(false);
+    setTurnTimeLeft(TURN_TIME);
+    
+    // 4. Establecer el jugador activo
+    if (scorer === "you") {
+      console.log("Configurando turno del bot...");
+      // No establecer el turno aquí, lo haremos después en showGoalAnim
+    } else {
+      console.log("Configurando turno del jugador...");
+      setActive("creator");
+      setSelectedChipId("you-1");
+    }
   }, []);
 
   const showGoalAnim = useCallback((scorer: "you" | "bot") => {
+    console.log(`Gol de: ${scorer}`);
     setGoalAnimation(scorer);
+    
     setTimeout(() => {
       setGoalAnimation(null);
+      
+      // 1. Primero reiniciamos el campo
       resetField(scorer);
+      
+      // 2. Si el jugador anotó, el bot debe tirar
+      if (scorer === "you") {
+        console.log("Preparando turno del bot...");
+        
+        // Pequeño retraso para asegurar que el estado se actualice
+        setTimeout(() => {
+          console.log("Es el turno del bot, disparando...");
+          // Asegurarse de que el turno esté configurado para el bot
+          setActive("challenger");
+          setSelectedChipId("bot-1");
+          turnTakenRef.current = false;
+          
+          // Pequeño retraso antes de disparar
+          setTimeout(() => {
+            botShoot();
+          }, 100);
+        }, 300);
+      }
     }, 1500);
-  }, [resetField]);
+  }, [resetField, botShoot]);
 
   const showTurnLost = useCallback(() => {
     setTurnLostAnimation(true);
@@ -301,36 +389,8 @@ export function BotMatchScreen() {
   }, []);
 
   /* =========================
-     BOT AI (no muta el array directamente)
+     BOT AI (moved to the top to avoid reference issues)
      ========================= */
-  const botShoot = useCallback(() => {
-    const botChips = chipsRef.current.filter((c) => c.owner === "challenger");
-    const ballPos = { ...ballRef.current };
-
-    if (botChips.length === 0) return;
-
-    // Elegir la ficha más cercana al balón
-    let best = botChips[0];
-    let bestDist = Math.hypot(ballPos.x - best.x, ballPos.y - best.y);
-    for (const c of botChips) {
-      const d = Math.hypot(ballPos.x - c.x, ballPos.y - c.y);
-      if (d < bestDist) { best = c; bestDist = d; }
-    }
-
-    // Calcular tiro hacia portería rival (hacia abajo)
-    const targetX = FIELD_WIDTH / 2 + (Math.random() - 0.5) * 60;
-    const targetY = BOUNDARY_BOTTOM - 40; // hacia portería contraria
-
-    const dx = targetX - best.x;
-    const dy = targetY - best.y;
-    const nm = Math.hypot(dx, dy) || 1;
-    const speed = 5 + Math.random() * 2;
-
-    // Crear nueva lista con la ficha actualizada (no mutamos la referencia original)
-    chipsRef.current = chipsRef.current.map((c) => c.id === best.id ? { ...c, vx: (dx / nm) * speed, vy: (dy / nm) * speed } : c);
-
-    turnTakenRef.current = true;
-  }, []);
 
   /* =========================
      SIM LOOP
