@@ -534,6 +534,11 @@ body {
   transition: border-color 0.2s;
 }
 
+.stake-input.full-width {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
 .stake-input:focus {
   outline: none;
   border-color: var(--neon-green);
@@ -541,6 +546,54 @@ body {
 
 .stake-input::placeholder {
   color: var(--text-muted);
+}
+
+/* Token selector como botones */
+.token-selector-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.token-btn {
+  flex: 1;
+  min-width: 70px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 2px solid var(--border-green);
+  background: var(--dark-panel-alt);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.token-btn:hover {
+  border-color: var(--border-green-bright);
+  background: var(--dark-panel-hover);
+}
+
+.token-btn.active {
+  border-color: var(--neon-green);
+  background: rgba(0, 255, 106, 0.1);
+  color: var(--neon-green);
+  box-shadow: 0 0 12px rgba(0, 255, 106, 0.2);
+}
+
+.token-icon {
+  font-size: 20px;
+}
+
+.token-name {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .stake-token {

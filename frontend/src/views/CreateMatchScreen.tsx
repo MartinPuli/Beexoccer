@@ -16,8 +16,25 @@ export function CreateMatchScreen() {
   // Cargar tokens disponibles
   useEffect(() => {
     const loadTokens = async () => {
-      await xoConnectService.fetchTokenBalances();
-      setTokens(xoConnectService.getTokens());
+      try {
+        // Primero inicializar el servicio
+        await xoConnectService.init();
+        // Luego obtener tokens
+        const tokenList = xoConnectService.getTokens();
+        if (tokenList.length === 0) {
+          // Si no hay tokens, hacer fetch
+          await xoConnectService.fetchTokenBalances();
+          setTokens(xoConnectService.getTokens());
+        } else {
+          setTokens(tokenList);
+        }
+      } catch (error) {
+        console.warn("Error loading tokens:", error);
+        // Usar tokens mock en caso de error
+        setTokens([
+          { symbol: "MATIC", name: "Polygon", address: "native", decimals: 18, type: "native", balance: "0", icon: "🟣" }
+        ]);
+      }
     };
     loadTokens();
   }, []);
@@ -30,11 +47,17 @@ export function CreateMatchScreen() {
     setLoading(true);
     try {
       const token = tokens.find(t => t.symbol === selectedToken);
+      // Para tokens nativos (MATIC), usar address zero
+      // Para ERC20, usar la dirección del contrato
+      const tokenAddress = token?.type === "native" || token?.address === "native"
+        ? "0x0000000000000000000000000000000000000000"
+        : token?.address || "0x0000000000000000000000000000000000000000";
+      
       await createMatch({
         goals,
         isFree: !isBet,
         stakeAmount: isBet ? stakeAmount : "0",
-        stakeToken: token?.address || "0x0000000000000000000000000000000000000000"
+        stakeToken: tokenAddress
       });
       alert("Partida creada. Esperando rival...");
       setView("accept");
@@ -91,30 +114,33 @@ export function CreateMatchScreen() {
         {isBet && (
           <div className="create-section">
             <span className="create-label">Apuesta</span>
-            <div className="stake-row">
-              <input
-                type="number"
-                className="stake-input"
-                value={stakeAmount}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setStakeAmount(e.target.value)}
-                placeholder="10"
-                min="0"
-                step="0.1"
-              />
-              <div className="token-selector">
-                <select 
-                  className="token-select"
-                  value={selectedToken}
-                  onChange={(e) => setSelectedToken(e.target.value)}
+            
+            {/* Input de cantidad */}
+            <input
+              type="number"
+              className="stake-input full-width"
+              value={stakeAmount}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setStakeAmount(e.target.value)}
+              placeholder="Cantidad"
+              min="0"
+              step="0.1"
+            />
+            
+            {/* Selector de token debajo */}
+            <div className="token-selector-row">
+              {tokens.map(token => (
+                <button
+                  key={token.symbol}
+                  type="button"
+                  className={`token-btn ${selectedToken === token.symbol ? "active" : ""}`}
+                  onClick={() => setSelectedToken(token.symbol)}
                 >
-                  {tokens.map(token => (
-                    <option key={token.symbol} value={token.symbol}>
-                      {token.icon} {token.symbol}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <span className="token-icon">{token.icon}</span>
+                  <span className="token-name">{token.symbol}</span>
+                </button>
+              ))}
             </div>
+            
             <div className="stake-balance">
               Balance: {currentBalance} {selectedToken}
             </div>

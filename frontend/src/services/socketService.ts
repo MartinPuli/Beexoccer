@@ -24,9 +24,10 @@ class SocketService {
   private lobbiesCallbacks: ((lobbies: MatchLobby[]) => void)[] = [];
   private lobbyCreatedCallbacks: ((lobby: MatchLobby) => void)[] = [];
   private connectionFailed = false;
+  private disabled = !env.enableRealtime; // Deshabilitar si VITE_ENABLE_REALTIME != "true"
 
   connect(matchId: string, side: "creator" | "challenger") {
-    if (this.connectionFailed) return; // Skip if server unavailable
+    if (this.disabled || this.connectionFailed) return; // Skip if disabled or server unavailable
     if (this.socket) {
       this.socket.disconnect();
     }
@@ -49,7 +50,7 @@ class SocketService {
   }
 
   connectLobbies() {
-    if (this.connectionFailed) return; // Skip if server unavailable
+    if (this.disabled || this.connectionFailed) return; // Skip if disabled or server unavailable
     if (this.socket) return;
     try {
       this.socket = io(env.realtimeUrl, { 

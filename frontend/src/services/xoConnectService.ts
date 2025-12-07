@@ -103,9 +103,27 @@ class XoConnectService {
       if (browserWindow.ethereum) {
         this.provider = new BrowserProvider(browserWindow.ethereum);
         try {
-          const signer = await this.provider.getSigner();
-          this.userAddress = await signer.getAddress();
-        } catch {
+          // Intentar obtener cuentas ya conectadas primero
+          const accounts = await this.provider.send("eth_accounts", []);
+          if (accounts.length > 0) {
+            this.userAddress = accounts[0];
+          } else {
+            // Solo pedir conexión si no hay cuentas
+            try {
+              const signer = await this.provider.getSigner();
+              this.userAddress = await signer.getAddress();
+            } catch (signerError: unknown) {
+              // Error -32002: ya hay una solicitud pendiente en MetaMask
+              const err = signerError as { code?: number };
+              if (err.code === -32002) {
+                console.warn("MetaMask tiene una solicitud pendiente. Abre MetaMask y aprueba/rechaza la solicitud.");
+                throw new Error("Por favor abre MetaMask y aprueba la solicitud de conexión pendiente");
+              }
+              this.userAddress = "0x" + "0".repeat(40);
+            }
+          }
+        } catch (accountsError) {
+          console.warn("Error getting accounts:", accountsError);
           this.userAddress = "0x" + "0".repeat(40);
         }
       } else {
