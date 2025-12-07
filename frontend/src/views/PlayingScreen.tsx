@@ -5,6 +5,12 @@ import { EventOverlay } from "../components/EventOverlay";
 import { socketService } from "../services/socketService";
 import { toast } from "../components/Toast";
 
+// Constantes para unificar con BotMatchScreen
+const FIELD_WIDTH = 600;
+const FIELD_HEIGHT = 900;
+const MAX_DRAG_DISTANCE = 350;
+const POWER = 0.25;
+
 export function PlayingScreen() {
   const playing = useGameStore((state) => state.playing);
   const lastEvent = useGameStore((state) => state.lastEvent);
@@ -139,40 +145,102 @@ export function PlayingScreen() {
     }
   }, [playing, creatorScore, challengerScore, goalTarget, clearSession]);
 
+  // Estado para potencia del tiro (unificado con BotMatchScreen)
+  const [shotPower, setShotPower] = useState(0);
+
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!playing) return;
+    if (!playing || !isMyTurn) return;
+    
+    // Prevenir comportamientos del navegador
+    e.preventDefault();
+    (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
+    
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 600;
-    const y = ((e.clientY - rect.top) / rect.height) * 900;
+    const x = ((e.clientX - rect.left) / rect.width) * FIELD_WIDTH;
+    const y = ((e.clientY - rect.top) / rect.height) * FIELD_HEIGHT;
+    
     const target = chips
       .filter((c) => c.owner ? c.owner === playing.activePlayer : c.id.startsWith(playing.activePlayer))
-      .find((c) => Math.hypot(c.x - x, c.y - y) <= c.radius + 12);
+      .find((c) => Math.hypot(c.x - x, c.y - y) <= c.radius + 15); // Radio más grande para facilitar touch
     if (!target) return;
+    
     dragRef.current = { chipId: target.id, start: { x: target.x, y: target.y } };
     setAim({ from: { x: target.x, y: target.y }, to: { x, y } });
+    setShotPower(0);
   };
 
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!dragRef.current) return;
+    
+    e.preventDefault();
+    
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 600;
-    const y = ((e.clientY - rect.top) / rect.height) * 900;
+    let x = ((e.clientX - rect.left) / rect.width) * FIELD_WIDTH;
+    let y = ((e.clientY - rect.top) / rect.height) * FIELD_HEIGHT;
+    const { start } = dragRef.current;
+    
+    // Limitar distancia máxima de arrastre
+    let dist = Math.hypot(x - start.x, y - start.y);
+    if (dist > MAX_DRAG_DISTANCE) {
+      const a = Math.atan2(y - start.y, x - start.x);
+      x = start.x + Math.cos(a) * MAX_DRAG_DISTANCE;
+      y = start.y + Math.sin(a) * MAX_DRAG_DISTANCE;
+      dist = MAX_DRAG_DISTANCE;
+    }
+    
+    // Calcular potencia visual
+    const powerScale = Math.min(1, dist / (MAX_DRAG_DISTANCE * 0.7));
+    setShotPower(powerScale);
+    (globalThis as Record<string, unknown>).shotPower = powerScale;
+    
     setAim((prev) => (prev ? { ...prev, to: { x, y } } : undefined));
   };
 
   const handlePointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!dragRef.current || !playing) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 600;
-    const y = ((e.clientY - rect.top) / rect.height) * 900;
-    const { chipId, start } = dragRef.current;
-    const dx = (start.x - x) * 0.15;
-    const dy = (start.y - y) * 0.15;
-    socketService.sendInput(matchId, chipId, { dx, dy });
-    // Resetear contador de timeouts cuando el jugador hace una jugada
-    resetTimeoutCounter();
+    if (!dragRef.current || !playing) {
     dragRef.current = null;
     setAim(undefined);
+    setShotPower(0);
+    (globalThis as Record<string, unknown>).shotPower = 0;
+    return;
+  }    (e.currentTarget as SVGSVGElement).releasePointerCapture(e.pointerId);
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    let x = ((e.clientX - rect.left) / rect.width) * FIELD_WIDTH;
+    let y = ((e.clientY - rect.top) / rect.height) * FIELD_HEIGHT;
+    const { chipId, start } = dragRef.current;
+    
+    // Limitar distancia
+    let dist = Math.hypot(x - start.x, y - start.y);
+    if (dist > MAX_DRAG_DISTANCE) {
+      const a = Math.atan2(y - start.y, x - start.x);
+      x = start.x + Math.cos(a) * MAX_DRAG_DISTANCE;
+      y = start.y + Math.sin(a) * MAX_DRAG_DISTANCE;
+    }
+    
+    // Calcular velocidad con potencia variable (igual que BotMatchScreen)
+    const power = POWER * (0.5 + shotPower * 1.5);
+    const dx = (start.x - x) * power;
+    const dy = (start.y - y) * power;
+    
+    // Solo enviar si hay movimiento significativo
+    if (Math.hypot(dx, dy) > 0.3) {
+      socketService.sendInput(matchId, chipId, { dx, dy });
+      // Resetear contador de timeouts cuando el jugador hace una jugada
+      resetTimeoutCounter();
+    }
+    
+    dragRef.current = null;
+    setAim(undefined);
+    setShotPower(0);
+    (globalThis as Record<string, unknown>).shotPower = 0;
+  };
+
+  const handlePointerCancel = () => {
+    dragRef.current = null;
+    setAim(undefined);
+    setShotPower(0);
+    (globalThis as Record<string, unknown>).shotPower = 0;
   };
 
   return (
@@ -207,10 +275,13 @@ export function PlayingScreen() {
           chips={chips}
           ball={ball}
           highlightId={isMyTurn ? "creator-1" : "challenger-1"}
+          activePlayer={playing?.activePlayer}
+          isPlayerTurn={isMyTurn}
           aimLine={aim}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
         >
           <EventOverlay event={lastEvent} />
         </PitchCanvas>

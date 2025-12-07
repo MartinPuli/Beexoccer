@@ -12,11 +12,12 @@ interface PitchCanvasProps {
   onPointerDown?: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerMove?: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerUp?: (event: React.PointerEvent<SVGSVGElement>) => void;
+  onPointerCancel?: (event: React.PointerEvent<SVGSVGElement>) => void;
 }
 
-export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTurn, children, aimLine, onPointerDown, onPointerMove, onPointerUp }: Readonly<PitchCanvasProps>) {
-  // Obtener la potencia del tiro desde las props
-  const shotPower = (window as any).shotPower || 0;
+export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTurn, children, aimLine, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }: Readonly<PitchCanvasProps>) {
+  // Obtener la potencia del tiro desde props globales
+  const shotPower = (globalThis as Record<string, unknown>).shotPower as number || 0;
   
   // Calcular el color de la línea de tiro basado en la potencia
   const getAimLineColor = (power: number) => {
@@ -35,18 +36,17 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
     return 0.5 + (power * 0.5); // Opacidad entre 0.5 y 1
   };
   
-  // Verificar si estamos en BotMatchScreen
-  const isBotMatch = (window as any).isBotMatchScreen === true;
-  
   return (
     <>
       <svg
         className="pitch-svg"
         viewBox="0 0 600 900"
         preserveAspectRatio="xMidYMid meet"
+        style={{ touchAction: 'none' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel ?? onPointerUp}
       >
         <defs>
           <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
