@@ -1885,57 +1885,58 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  padding: 24px;
+  min-height: 100dvh;
+  padding: 20px;
   background: linear-gradient(180deg, #0a1a10 0%, #050a07 100%);
   text-align: center;
 }
 
 .connect-logo {
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 
 .connect-logo-img {
-  width: 160px;
+  width: 120px;
   height: auto;
   filter: drop-shadow(0 0 20px rgba(0, 255, 106, 0.4));
 }
 
 .connect-content {
-  max-width: 360px;
+  max-width: 320px;
   width: 100%;
 }
 
 .connect-title {
   font-family: "Chakra Petch", sans-serif;
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 800;
   color: var(--text-white);
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .connect-subtitle {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--text-muted);
   line-height: 1.5;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 
 .connect-btn {
   width: 100%;
-  padding: 16px 24px;
-  border-radius: 16px;
+  padding: 14px 20px;
+  border-radius: 14px;
   font-family: "Chakra Petch", sans-serif;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: 8px;
+  margin-bottom: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -1996,21 +1997,21 @@ body {
 }
 
 .connect-info {
-  margin-top: 24px;
-  margin-bottom: 24px;
+  margin-top: 20px;
+  margin-bottom: 20px;
 }
 
 .connect-info p {
   color: var(--text-muted);
-  font-size: 14px;
-  margin-bottom: 8px;
+  font-size: 13px;
+  margin-bottom: 6px;
 }
 
 .connect-link {
   color: var(--neon-green);
   text-decoration: none;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   transition: opacity 0.2s;
 }
 
@@ -2020,11 +2021,153 @@ body {
 }
 
 .connect-footer {
-  margin-top: 40px;
+  margin-top: 32px;
 }
 
 .connect-footer p {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 11px;
   opacity: 0.6;
+}
+
+/* Mobile responsive para connect screen */
+@media (max-width: 400px) {
+  .connect-screen {
+    padding: 16px;
+  }
+  
+  .connect-logo-img {
+    width: 100px;
+  }
+  
+  .connect-title {
+    font-size: 20px;
+  }
+  
+  .connect-subtitle {
+    font-size: 13px;
+  }
+  
+  .connect-btn {
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+}
+
+/* ===== RESPONSIVE GENERAL PARA MÓVIL ===== */
+@media (max-width: 480px) {
+  /* Home screen */
+  .home-screen {
+    padding: 24px 16px 20px;
+    gap: 14px;
+  }
+  
+  .home-logo-img {
+    width: 120px;
+  }
+  
+  .home-btn {
+    padding: 16px 18px;
+    font-size: 15px;
+    border-radius: 20px;
+  }
+  
+  .torneos-box {
+    padding: 20px 16px;
+    border-radius: 16px;
+  }
+  
+  .torneos-icon {
+    font-size: 28px;
+  }
+  
+  .torneos-title {
+    font-size: 16px;
+  }
+  
+  /* Create screen */
+  .create-screen {
+    padding: 16px;
+  }
+  
+  .create-header {
+    padding: 12px 0;
+  }
+  
+  .create-title {
+    font-size: 18px;
+  }
+  
+  .create-body {
+    padding: 16px;
+    gap: 16px;
+  }
+  
+  .section-title {
+    font-size: 13px;
+  }
+  
+  .goal-option,
+  .bet-toggle {
+    padding: 12px 16px;
+  }
+  
+  .goal-number {
+    font-size: 22px;
+  }
+  
+  /* Lobbies screen */
+  .lobbies-screen {
+    padding: 16px;
+  }
+  
+  .lobbies-title {
+    font-size: 16px;
+  }
+  
+  .match-row {
+    padding: 12px;
+  }
+  
+  .match-goals {
+    font-size: 18px;
+  }
+  
+  /* Playing screen */
+  .playing-screen {
+    padding: 8px;
+  }
+  
+  .score-wrapper {
+    font-size: 12px;
+  }
+  
+  .score-number {
+    font-size: 28px;
+  }
+  
+  /* General text reduction */
+  body {
+    font-size: 14px;
+  }
+}
+
+/* Extra small phones */
+@media (max-width: 360px) {
+  .home-logo-img {
+    width: 100px;
+  }
+  
+  .home-btn {
+    padding: 14px 14px;
+    font-size: 14px;
+  }
+  
+  .connect-logo-img {
+    width: 80px;
+  }
+  
+  .connect-title {
+    font-size: 18px;
+  }
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { xoConnectService } from "../services/xoConnectService";
 import { useGameStore } from "../hooks/useGameStore";
 import { checkMatchStatus } from "../services/matchService";
@@ -8,6 +8,7 @@ import logoSvg from "../assets/logo.svg";
 export function ConnectWalletScreen() {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasWallet, setHasWallet] = useState<boolean | null>(null);
   const setAlias = useGameStore((state) => state.setAlias);
   const setBalance = useGameStore((state) => state.setBalance);
   const setUserAddress = useGameStore((state) => state.setUserAddress);
@@ -23,7 +24,34 @@ export function ConnectWalletScreen() {
   const setMatchGoalTarget = useGameStore((state) => state.setMatchGoalTarget);
   const setMatchStatus = useGameStore((state) => state.setMatchStatus);
 
+  // Detectar si hay wallet disponible
+  useEffect(() => {
+    const checkWallet = () => {
+      const ethereum = (window as Window & { ethereum?: unknown }).ethereum;
+      setHasWallet(!!ethereum);
+    };
+    checkWallet();
+    // Re-check cuando la página vuelva a tener foco (por si el usuario instala MetaMask)
+    window.addEventListener("focus", checkWallet);
+    return () => window.removeEventListener("focus", checkWallet);
+  }, []);
+
+  // Generar URL para abrir en MetaMask Mobile
+  const getMetaMaskDeepLink = () => {
+    const currentUrl = window.location.href;
+    return `https://metamask.app.link/dapp/${currentUrl.replace(/^https?:\/\//, "")}`;
+  };
+
   const handleConnect = async () => {
+    // Si no hay wallet, abrir MetaMask deep link en móvil
+    if (!hasWallet) {
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (isMobile) {
+        window.location.href = getMetaMaskDeepLink();
+        return;
+      }
+    }
+    
     setConnecting(true);
     setError(null);
     
@@ -128,9 +156,13 @@ export function ConnectWalletScreen() {
               <span className="connect-spinner">⏳</span>
               Conectando...
             </>
-          ) : (
+          ) : hasWallet ? (
             <>
               🦊 Conectar MetaMask
+            </>
+          ) : (
+            <>
+              📱 Abrir en MetaMask
             </>
           )}
         </button>
@@ -143,17 +175,37 @@ export function ConnectWalletScreen() {
           </div>
         )}
 
-        {/* Info adicional */}
+        {/* Info adicional - diferente para móvil/desktop */}
         <div className="connect-info">
-          <p>¿No tienes wallet?</p>
-          <a 
-            href="https://metamask.io/download/" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="connect-link"
-          >
-            Descargar MetaMask →
-          </a>
+          {hasWallet === false ? (
+            <>
+              <p>No detectamos una wallet en este navegador.</p>
+              <p style={{ marginTop: 8, fontSize: 13 }}>
+                Si estás en celular, haz clic arriba para abrir en la app de MetaMask.
+              </p>
+              <a 
+                href="https://metamask.io/download/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="connect-link"
+                style={{ marginTop: 12, display: "inline-block" }}
+              >
+                Instalar MetaMask →
+              </a>
+            </>
+          ) : (
+            <>
+              <p>¿No tienes wallet?</p>
+              <a 
+                href="https://metamask.io/download/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="connect-link"
+              >
+                Descargar MetaMask →
+              </a>
+            </>
+          )}
         </div>
 
         {/* Botón para jugar sin wallet (solo bot) */}
