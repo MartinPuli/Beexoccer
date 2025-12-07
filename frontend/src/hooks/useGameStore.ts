@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { MatchLobby, GoalTarget, PlayingSnapshot, MatchEvent } from "../types/game";
 
-type ViewId = "home" | "create" | "accept" | "playing" | "bot";
+type ViewId = "home" | "create" | "createBot" | "accept" | "playing" | "bot";
 
 interface GameStore {
   view: ViewId;

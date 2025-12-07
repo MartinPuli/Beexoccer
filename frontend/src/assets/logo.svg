@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" role="img" aria-label="Beexoccer logo">
+  <defs>
+    <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="ballGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00ff6a"/>
+      <stop offset="50%" stop-color="#00cc55"/>
+      <stop offset="100%" stop-color="#009944"/>
+    </linearGradient>
+    <radialGradient id="ballShine" cx="30%" cy="30%" r="50%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.4)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+  </defs>
+  
+  <!-- Pelota neón -->
+  <g transform="translate(100, 75)" filter="url(#neonGlow)">
+    <!-- Círculo base -->
+    <circle cx="0" cy="0" r="55" fill="url(#ballGrad)" stroke="#00ff6a" stroke-width="3"/>
+    
+    <!-- Patrón hexagonal de pelota -->
+    <polygon points="0,-25 22,-12 22,12 0,25 -22,12 -22,-12" fill="none" stroke="#043114" stroke-width="3"/>
+    <line x1="0" y1="-25" x2="0" y2="-55" stroke="#043114" stroke-width="3"/>
+    <line x1="22" y1="-12" x2="48" y2="-28" stroke="#043114" stroke-width="3"/>
+    <line x1="22" y1="12" x2="48" y2="28" stroke="#043114" stroke-width="3"/>
+    <line x1="0" y1="25" x2="0" y2="55" stroke="#043114" stroke-width="3"/>
+    <line x1="-22" y1="12" x2="-48" y2="28" stroke="#043114" stroke-width="3"/>
+    <line x1="-22" y1="-12" x2="-48" y2="-28" stroke="#043114" stroke-width="3"/>
+    
+    <!-- Brillo -->
+    <circle cx="-15" cy="-18" r="35" fill="url(#ballShine)"/>
+  </g>
+  
+  <!-- Texto BEEX -->
+  <text x="100" y="165" text-anchor="middle" font-family="Chakra Petch, sans-serif" font-size="36" font-weight="800" fill="#ffffff" letter-spacing="0.08em">
+    <tspan fill="#00ff6a">BEEX</tspan><tspan fill="#ffffff">OCCER</tspan>
+  </text>
+</svg>

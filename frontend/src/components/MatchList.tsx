@@ -26,15 +26,16 @@ export function MatchList({ matches, loading, onAccept }: Readonly<MatchListProp
         <article
           key={match.id}
           style={{
-            border: "2px solid var(--ui-border)",
-            borderRadius: "16px",
-            padding: "1.25rem",
-            background: "linear-gradient(135deg, rgba(10, 24, 12, 0.85) 0%, rgba(6, 48, 18, 0.7) 100%)",
+            border: "2px solid rgba(109, 179, 138, 0.5)",
+            borderRadius: "18px",
+            padding: "1rem",
+            background: "linear-gradient(135deg, rgba(5, 12, 8, 0.95) 0%, rgba(10, 26, 16, 0.85) 100%)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
             gap: "1rem",
             transition: "all 0.2s ease",
+            boxShadow: "0 12px 28px rgba(0,0,0,0.45)",
             cursor: "pointer"
           }}
           onMouseEnter={(e) => {
@@ -42,29 +43,21 @@ export function MatchList({ matches, loading, onAccept }: Readonly<MatchListProp
             e.currentTarget.style.transform = "translateY(-2px)";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = "var(--ui-border)";
+            e.currentTarget.style.borderColor = "rgba(109, 179, 138, 0.5)";
             e.currentTarget.style.transform = "translateY(0)";
           }}
         >
           <div style={{ flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
-              <span style={{ fontSize: "1.2rem" }}>⚽</span>
-              <strong style={{ fontSize: "1.05rem" }}>Partida #{match.id}</strong>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+              <span style={{ fontSize: "1rem", color: "#f7c14d" }}>⛁ Stake</span>
+              <span style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>👥 2</span>
+              <span style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>🏆 Modo</span>
             </div>
-            <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--text-muted)" }}>
-              {match.isFree ? (
-                <span style={{ color: "var(--neon-green)" }}>🎮 Gratis</span>
-              ) : (
-                <span style={{ color: "var(--accent-amber)" }}>💎 {match.stakeAmount} XO escrow</span>
-              )} • 🎯 {match.goals} goles
+            <p style={{ margin: 0, fontSize: "1rem", color: "var(--text-white)", fontWeight: 700 }}>
+              Stake: {match.isFree ? "Gratis" : `${match.stakeAmount} MATIC`} <span style={{ color: "var(--text-muted)", marginLeft: "0.35rem" }}>Goles: {match.goals}</span>
             </p>
-            {!match.isFree && (
-              <p style={{ margin: "0.25rem 0 0", fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "monospace" }}>
-                Token: {match.stakeToken.slice(0, 6)}...{match.stakeToken.slice(-4)}
-              </p>
-            )}
           </div>
-          <NeonButton label="⚔️ Unirse" onClick={() => void onAccept(match.id)} disabled={loading || !match.open} />
+          <NeonButton label="Unirse" onClick={() => void onAccept(match.id)} disabled={loading || !match.open} style={{ minWidth: "120px" }} />
         </article>
       ))}
     </div>

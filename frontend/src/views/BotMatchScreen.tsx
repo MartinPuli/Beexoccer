@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Panel } from "../components/Panel";
 import { PitchCanvas } from "../components/PitchCanvas";
+import { useGameStore } from "../hooks/useGameStore";
 import { TokenChip } from "../types/game";
 
 const FIELD_WIDTH = 600;
 const FIELD_HEIGHT = 900;
-// Softer physics to reduce chaos and slow pieces faster
 const FRICTION = 0.97;
-const EPSILON = 0.12; // stop sooner to end turns
+const EPSILON = 0.12;
 const POWER = 0.14;
 const MAX_SPEED = 7.5;
 
@@ -20,30 +19,31 @@ interface BallState {
   radius: number;
 }
 
-const playerChip: MovingChip = { id: "you-1", x: 300, y: 720, radius: 30, fill: "#2dd673", flagEmoji: "👟", owner: "creator", vx: 0, vy: 0 };
-const botChip: MovingChip = { id: "bot-1", x: 300, y: 180, radius: 30, fill: "#00b870", flagEmoji: "🤖", owner: "challenger", vx: 0, vy: 0 };
+// 3 fichas para el jugador (azules) - portería arriba
+const initPlayerChips = (): MovingChip[] => [
+  { id: "you-1", x: 300, y: 680, radius: 30, fill: "#00a8ff", flagEmoji: "⚽", owner: "creator", vx: 0, vy: 0 },
+  { id: "you-2", x: 180, y: 600, radius: 30, fill: "#00a8ff", flagEmoji: "⚽", owner: "creator", vx: 0, vy: 0 },
+  { id: "you-3", x: 420, y: 600, radius: 30, fill: "#00a8ff", flagEmoji: "⚽", owner: "creator", vx: 0, vy: 0 },
+];
+
+// 3 fichas para el bot (rojas) - portería abajo
+const initBotChips = (): MovingChip[] => [
+  { id: "bot-1", x: 300, y: 220, radius: 30, fill: "#ff4d5a", flagEmoji: "🤖", owner: "challenger", vx: 0, vy: 0 },
+  { id: "bot-2", x: 180, y: 300, radius: 30, fill: "#ff4d5a", flagEmoji: "🤖", owner: "challenger", vx: 0, vy: 0 },
+  { id: "bot-3", x: 420, y: 300, radius: 30, fill: "#ff4d5a", flagEmoji: "🤖", owner: "challenger", vx: 0, vy: 0 },
+];
+
+const initBall = (): BallState => ({ x: 300, y: 450, vx: 0, vy: 0, radius: 12 });
 
 function magnitude(vx: number, vy: number) {
   return Math.hypot(vx, vy);
 }
 
 function reflect(entity: { x: number; y: number; vx: number; vy: number; radius: number }) {
-  if (entity.x - entity.radius < 0) {
-    entity.x = entity.radius;
-    entity.vx = Math.abs(entity.vx);
-  }
-  if (entity.x + entity.radius > FIELD_WIDTH) {
-    entity.x = FIELD_WIDTH - entity.radius;
-    entity.vx = -Math.abs(entity.vx);
-  }
-  if (entity.y - entity.radius < 0) {
-    entity.y = entity.radius;
-    entity.vy = Math.abs(entity.vy);
-  }
-  if (entity.y + entity.radius > FIELD_HEIGHT) {
-    entity.y = FIELD_HEIGHT - entity.radius;
-    entity.vy = -Math.abs(entity.vy);
-  }
+  if (entity.x - entity.radius < 0) { entity.x = entity.radius; entity.vx = Math.abs(entity.vx); }
+  if (entity.x + entity.radius > FIELD_WIDTH) { entity.x = FIELD_WIDTH - entity.radius; entity.vx = -Math.abs(entity.vx); }
+  if (entity.y - entity.radius < 0) { entity.y = entity.radius; entity.vy = Math.abs(entity.vy); }
+  if (entity.y + entity.radius > FIELD_HEIGHT) { entity.y = FIELD_HEIGHT - entity.radius; entity.vy = -Math.abs(entity.vy); }
 }
 
 function handleCollision(a: MovingChip | BallState, b: MovingChip | BallState) {
@@ -61,39 +61,55 @@ function handleCollision(a: MovingChip | BallState, b: MovingChip | BallState) {
   b.y += (overlap / 2) * ny;
   const va = a.vx * nx + a.vy * ny;
   const vb = b.vx * nx + b.vy * ny;
-  const newVa = vb;
-  const newVb = va;
-  a.vx += (newVa - va) * nx;
-  a.vy += (newVa - va) * ny;
-  b.vx += (newVb - vb) * nx;
-  b.vy += (newVb - vb) * ny;
+  a.vx += (vb - va) * nx;
+  a.vy += (vb - va) * ny;
+  b.vx += (va - vb) * nx;
+  b.vy += (va - vb) * ny;
 }
 
 export function BotMatchScreen() {
-  const chipsRef = useRef<MovingChip[]>([playerChip, botChip]);
-  const ballRef = useRef<BallState>({ x: 300, y: 450, vx: 0, vy: 0, radius: 12 });
+  const goalTarget = useGameStore((s) => s.matchGoalTarget);
+  const setView = useGameStore((s) => s.setView);
+
+  const chipsRef = useRef<MovingChip[]>([...initPlayerChips(), ...initBotChips()]);
+  const ballRef = useRef<BallState>(initBall());
   const [chips, setChips] = useState<MovingChip[]>(chipsRef.current);
   const [ball, setBall] = useState<BallState>(ballRef.current);
   const [aim, setAim] = useState<{ from: { x: number; y: number }; to: { x: number; y: number } } | undefined>();
   const [active, setActive] = useState<"creator" | "challenger">("creator");
+  const [selectedChipId, setSelectedChipId] = useState<string>("you-1");
+  const [myScore, setMyScore] = useState(0);
+  const [botScore, setBotScore] = useState(0);
+  const [showEnd, setShowEnd] = useState(false);
+  const [winner, setWinner] = useState<"you" | "bot" | null>(null);
+
   const dragRef = useRef<{ chipId: string; start: { x: number; y: number } } | null>(null);
   const simRef = useRef<number | null>(null);
   const awaitingBotRef = useRef(false);
-  const turnTakenRef = useRef(false); // true after current side has shot; resets when turn hands off
+  const turnTakenRef = useRef(false);
+
+  const resetField = () => {
+    chipsRef.current = [...initPlayerChips(), ...initBotChips()];
+    ballRef.current = initBall();
+    setChips(chipsRef.current);
+    setBall(ballRef.current);
+    setActive("creator");
+    setSelectedChipId("you-1");
+    turnTakenRef.current = false;
+    awaitingBotRef.current = false;
+  };
 
   useEffect(() => {
     const loop = () => {
       stepEntities();
       resolveCollisions();
+      checkGoals();
       publishFrame();
       maybeAdvanceTurn();
       simRef.current = requestAnimationFrame(loop);
     };
     simRef.current = requestAnimationFrame(loop);
-    return () => {
-      if (simRef.current) cancelAnimationFrame(simRef.current);
-      simRef.current = null;
-    };
+    return () => { if (simRef.current) cancelAnimationFrame(simRef.current); };
   }, []);
 
   const stepEntities = () => {
@@ -105,30 +121,35 @@ export function BotMatchScreen() {
     const next = { ...entity };
     next.x += next.vx;
     next.y += next.vy;
-    // Clamp speed to avoid explosive collisions
     const speed = magnitude(next.vx, next.vy);
-    if (speed > MAX_SPEED) {
-      next.vx = (next.vx / speed) * MAX_SPEED;
-      next.vy = (next.vy / speed) * MAX_SPEED;
-    }
+    if (speed > MAX_SPEED) { next.vx = (next.vx / speed) * MAX_SPEED; next.vy = (next.vy / speed) * MAX_SPEED; }
     next.vx *= FRICTION;
     next.vy *= FRICTION;
-    if (magnitude(next.vx, next.vy) < EPSILON) {
-      next.vx = 0;
-      next.vy = 0;
-    }
+    if (magnitude(next.vx, next.vy) < EPSILON) { next.vx = 0; next.vy = 0; }
     reflect(next);
     return next;
   };
 
   const resolveCollisions = () => {
-    const chipsList = chipsRef.current;
-    const ballState = ballRef.current;
-    for (let i = 0; i < chipsList.length; i += 1) {
-      for (let j = i + 1; j < chipsList.length; j += 1) {
-        handleCollision(chipsList[i], chipsList[j]);
-      }
-      handleCollision(chipsList[i], ballState);
+    const cl = chipsRef.current;
+    const bl = ballRef.current;
+    for (let i = 0; i < cl.length; i++) {
+      for (let j = i + 1; j < cl.length; j++) handleCollision(cl[i], cl[j]);
+      handleCollision(cl[i], bl);
+    }
+  };
+
+  const checkGoals = () => {
+    const b = ballRef.current;
+    // Gol en arco superior (gol mío)
+    if (b.y - b.radius < 40 && b.x > 220 && b.x < 380) {
+      setMyScore((s) => { const ns = s + 1; if (ns >= goalTarget) { setWinner("you"); setShowEnd(true); } return ns; });
+      resetField();
+    }
+    // Gol en arco inferior (gol del bot)
+    if (b.y + b.radius > 860 && b.x > 220 && b.x < 380) {
+      setBotScore((s) => { const ns = s + 1; if (ns >= goalTarget) { setWinner("bot"); setShowEnd(true); } return ns; });
+      resetField();
     }
   };
 
@@ -137,76 +158,91 @@ export function BotMatchScreen() {
     setBall({ ...ballRef.current });
   };
 
-  const moving = () =>
-    chipsRef.current.some((c) => magnitude(c.vx, c.vy) > EPSILON) || magnitude(ballRef.current.vx, ballRef.current.vy) > EPSILON;
+  const moving = () => chipsRef.current.some((c) => magnitude(c.vx, c.vy) > EPSILON) || magnitude(ballRef.current.vx, ballRef.current.vy) > EPSILON;
 
   const maybeAdvanceTurn = () => {
-    if (moving()) return;
-    if (!turnTakenRef.current) return; // wait until a shot was taken for this side
-
+    if (moving() || !turnTakenRef.current) return;
     if (active === "creator") {
       if (awaitingBotRef.current) return;
       awaitingBotRef.current = true;
-      turnTakenRef.current = false; // reset for bot turn
+      turnTakenRef.current = false;
       setActive("challenger");
-      setTimeout(() => {
-        botShoot();
-        turnTakenRef.current = true;
-        awaitingBotRef.current = false;
-      }, 420);
+      setTimeout(() => { botShoot(); turnTakenRef.current = true; awaitingBotRef.current = false; }, 400);
       return;
     }
-
-    // Bot finished its motion; give turn back to player
     turnTakenRef.current = false;
     setActive("creator");
   };
 
+  // Bot IA competitivo - elige la mejor ficha y estrategia
   const botShoot = () => {
-    const bot = chipsRef.current.find((c) => c.owner === "challenger");
-    if (!bot) return;
-
-    // Simple aggressive shot: always hit the ball hard toward the player's goal (bottom)
-    const goalTarget = { x: FIELD_WIDTH / 2, y: FIELD_HEIGHT - 10 };
+    const botChips = chipsRef.current.filter((c) => c.owner === "challenger");
     const ballPos = ballRef.current;
-    const unitToGoal = normalize(goalTarget.x - ballPos.x, goalTarget.y - ballPos.y);
-    const contactPoint = {
-      x: ballPos.x - unitToGoal.x * (ballPos.radius + bot.radius + 6),
-      y: ballPos.y - unitToGoal.y * (ballPos.radius + bot.radius + 6),
-    };
+    const goalY = FIELD_HEIGHT - 40; // Portería del jugador (abajo)
+    const goalX = 300; // Centro de la portería
 
-    const dirX = contactPoint.x - bot.x;
-    const dirY = contactPoint.y - bot.y;
-    const mag = Math.hypot(dirX, dirY) || 1;
-    // Bot kicks hard toward goal; clamp will cap excessive speed
-    const boost = POWER * 1.6;
-    bot.vx = (dirX / mag) * boost;
-    bot.vy = (dirY / mag) * boost;
-    turnTakenRef.current = true; // ensure turn will advance after motion stops
-  };
+    // Evaluar cada ficha del bot
+    let bestChip: MovingChip | null = null;
+    let bestScore = -Infinity;
+    let bestDx = 0, bestDy = 0;
 
-  const normalize = (x: number, y: number) => {
-    const m = Math.hypot(x, y) || 1;
-    return { x: x / m, y: y / m };
-  };
+    for (const chip of botChips) {
+      // Estrategia 1: Golpear la pelota hacia la portería
+      const angleToGoal = Math.atan2(goalY - ballPos.y, goalX - ballPos.x);
+      const behindBallX = ballPos.x - Math.cos(angleToGoal) * 60;
+      const behindBallY = ballPos.y - Math.sin(angleToGoal) * 60;
+      const distToBehind = Math.hypot(behindBallX - chip.x, behindBallY - chip.y);
+      
+      // Score basado en cercanía a la posición ideal
+      let score = 1000 - distToBehind;
+      
+      // Bonus si la pelota está en campo rival (más cerca de su portería)
+      if (ballPos.y > FIELD_HEIGHT / 2) score += 200;
+      
+      // Bonus si podemos golpear directamente hacia la portería
+      if (chip.y < ballPos.y) score += 150;
 
-  const stopMotion = () => {
-    chipsRef.current = chipsRef.current.map((c) => ({ ...c, vx: 0, vy: 0 }));
-    ballRef.current = { ...ballRef.current, vx: 0, vy: 0 };
-    publishFrame();
+      if (score > bestScore) {
+        bestScore = score;
+        bestChip = chip;
+        
+        // Calcular dirección hacia la pelota con componente hacia portería
+        const dx = ballPos.x - chip.x;
+        const dy = ballPos.y - chip.y;
+        const mag = Math.hypot(dx, dy) || 1;
+        
+        // Agregar bias hacia la portería
+        const goalBiasX = (goalX - ballPos.x) * 0.3;
+        const goalBiasY = (goalY - ballPos.y) * 0.3;
+        
+        bestDx = (dx / mag + goalBiasX / 300) * POWER * 2;
+        bestDy = (dy / mag + goalBiasY / 300) * POWER * 2;
+      }
+    }
+
+    if (bestChip) {
+      // Agregar un poco de variabilidad
+      const randomFactor = 0.9 + Math.random() * 0.2;
+      bestChip.vx = bestDx * randomFactor;
+      bestChip.vy = bestDy * randomFactor;
+    }
   };
 
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (active !== "creator" || turnTakenRef.current) return; // only one chip per turn
+    if (active !== "creator" || turnTakenRef.current) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * FIELD_WIDTH;
     const y = ((e.clientY - rect.top) / rect.height) * FIELD_HEIGHT;
-    const you = chipsRef.current.find((c) => c.owner === "creator");
-    if (!you) return;
-    const dist = Math.hypot(you.x - x, you.y - y);
-    if (dist > you.radius + 12) return;
-    dragRef.current = { chipId: you.id, start: { x: you.x, y: you.y } };
-    setAim({ from: { x: you.x, y: you.y }, to: { x, y } });
+    
+    // Buscar si tocamos alguna ficha nuestra
+    const playerChips = chipsRef.current.filter((c) => c.owner === "creator");
+    const touched = playerChips.find((c) => Math.hypot(c.x - x, c.y - y) <= c.radius + 12);
+    
+    if (touched) {
+      setSelectedChipId(touched.id);
+      dragRef.current = { chipId: touched.id, start: { x: touched.x, y: touched.y } };
+      setAim({ from: { x: touched.x, y: touched.y }, to: { x, y } });
+    }
   };
 
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -228,36 +264,50 @@ export function BotMatchScreen() {
     chipsRef.current = chipsRef.current.map((c) => (c.id === chipId ? { ...c, vx: dx, vy: dy } : c));
     dragRef.current = null;
     setAim(undefined);
-    turnTakenRef.current = true; // lock until motion stops and turn advances
+    turnTakenRef.current = true;
   };
 
-  const turnBadge = active === "creator" ? "Tu turno" : "Turno bot";
-  const highlightId = active === "creator" ? "you-1" : "bot-1";
+  const turnLabel = active === "creator" ? "Tu turno" : "Turno bot";
 
   return (
-    <Panel title="Modo Bot" subtitle="1 vs 1 con física local">
-      <div style={{ marginBottom: "0.5rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
-        <span className="badge" style={{ background: active === "creator" ? "#123821" : "#123043" }}>{turnBadge}</span>
-        <span style={{ color: "var(--text-muted)" }}>Arrastra tu ficha verde, suelta para disparar. El bot responde en su turno.</span>
+    <div className="playing-screen">
+      <div className="playing-hud">
+        <div className="hud-scores">
+          <span className="hud-player you">TU</span>
+          <div className="hud-score-center">
+            <span className="hud-score-num">{myScore}</span>
+            <span className="hud-sep">-</span>
+            <span className="hud-score-num rival">{botScore}</span>
+          </div>
+          <span className="hud-player rival">BOT</span>
+        </div>
+        <div className="hud-timer">
+          <div className="timer-bar"><div className="timer-fill" style={{ width: "100%" }} /></div>
+          <span className="timer-label">{turnLabel}</span>
+        </div>
       </div>
-      <PitchCanvas
-        chips={chips}
-        ball={ball}
-        highlightId={highlightId}
-        aimLine={aim}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-      />
-      <ul style={{ marginTop: "1rem", color: "var(--text-muted)" }}>
-        <li>1 vs 1: verde (tú) vs bot (azul).</li>
-        <li>Física simple local: rebotes, fricción y colisiones con la pelota.</li>
-        <li>El bot siempre intenta golpear la pelota hacia su frente.</li>
-      </ul>
-      <div className="button-grid" style={{ marginTop: "0.75rem" }}>
-        <button className="ghost" type="button" onClick={stopMotion}>Detener movimiento</button>
+
+      <div className="playing-pitch">
+        <PitchCanvas
+          chips={chips}
+          ball={ball}
+          highlightId={selectedChipId}
+          aimLine={aim}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+        />
       </div>
-    </Panel>
+
+      {showEnd && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+          <div style={{ background: "var(--dark-panel)", border: "3px solid var(--border-green)", borderRadius: 24, padding: 32, textAlign: "center", color: "var(--text-white)" }}>
+            <h2 style={{ marginBottom: 16 }}>{winner === "you" ? "¡GANASTE!" : "Perdiste"}</h2>
+            <button className="home-btn primary" onClick={() => setView("home")}>Volver al inicio</button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

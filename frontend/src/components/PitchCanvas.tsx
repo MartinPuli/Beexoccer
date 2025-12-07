@@ -12,97 +12,138 @@ interface PitchCanvasProps {
   onPointerUp?: (event: React.PointerEvent<SVGSVGElement>) => void;
 }
 
-/**
- * SVG replica of the tabletop pitch. Animations are purposely light-weight so it can run smoothly on mobile browsers.
- */
 export function PitchCanvas({ chips, ball, highlightId, children, aimLine, onPointerDown, onPointerMove, onPointerUp }: Readonly<PitchCanvasProps>) {
   return (
-    <div className="pitch-wrapper" style={{ background: "#0f2f12" }}>
+    <>
       <svg
+        className="pitch-svg"
         viewBox="0 0 600 900"
-        width="100%"
-        height="100%"
         preserveAspectRatio="xMidYMid slice"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
         <defs>
-          <linearGradient id="pitch-stripes" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#0f5a23" />
-            <stop offset="50%" stopColor="#0d501f" />
-            <stop offset="100%" stopColor="#0f5a23" />
-          </linearGradient>
-          <pattern id="pitch-bands" x="0" y="0" width="1" height="0.14">
-            <rect x="0" y="0" width="600" height="126" fill="#0f5a23" />
-            <rect x="0" y="63" width="600" height="63" fill="#0c4a1d" />
-          </pattern>
-          <linearGradient id="edge-glow" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
-            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-          </linearGradient>
+          <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+          <filter id="chipGlow">
+            <feGaussianBlur stdDeviation="4" result="blur"/>
+            <feMerge>
+              <feMergeNode in="blur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
         </defs>
 
-        <rect width="600" height="900" fill="url(#pitch-bands)" />
-        <rect width="600" height="900" fill="url(#pitch-stripes)" opacity="0.28" />
-        <rect width="600" height="900" fill="url(#edge-glow)" opacity="0.6" />
-        <rect x="46" y="40" width="508" height="820" rx="32" stroke="#dfe8d6" strokeWidth="5" fill="transparent" />
-        <line x1="300" y1="40" x2="300" y2="860" stroke="#e8f0e0" strokeWidth="4" />
-        <circle cx="300" cy="450" r="90" stroke="#e8f0e0" strokeWidth="4" fill="transparent" />
-        <circle cx="300" cy="450" r="6" fill="#e8f0e0" />
+        {/* Fondo negro sólido */}
+        <rect width="600" height="900" fill="#050808" />
 
-        {/* Top penalty box */}
-        <rect x="160" y="40" width="280" height="140" stroke="#e8f0e0" strokeWidth="4" fill="transparent" />
-        <rect x="210" y="40" width="180" height="70" stroke="#e8f0e0" strokeWidth="4" fill="transparent" />
-        <circle cx="300" cy="150" r="6" fill="#e8f0e0" />
-        <path d="M160 180 Q300 240 440 180" fill="transparent" stroke="#e8f0e0" strokeWidth="4" />
+        {/* Líneas exteriores del campo con glow neón */}
+        <rect x="50" y="50" width="500" height="800" rx="0" stroke="#00ff6a" strokeWidth="4" fill="none" filter="url(#neonGlow)" />
+        
+        {/* Línea del medio */}
+        <line x1="50" y1="450" x2="550" y2="450" stroke="#00ff6a" strokeWidth="3" filter="url(#neonGlow)" />
+        
+        {/* Círculo central */}
+        <circle cx="300" cy="450" r="70" stroke="#00ff6a" strokeWidth="3" fill="none" filter="url(#neonGlow)" />
+        <circle cx="300" cy="450" r="6" fill="#00ff6a" filter="url(#neonGlow)" />
 
-        {/* Bottom penalty box */}
-        <rect x="160" y="720" width="280" height="140" stroke="#e8f0e0" strokeWidth="4" fill="transparent" />
-        <rect x="210" y="790" width="180" height="70" stroke="#e8f0e0" strokeWidth="4" fill="transparent" />
-        <circle cx="300" cy="750" r="6" fill="#e8f0e0" />
-        <path d="M160 720 Q300 660 440 720" fill="transparent" stroke="#e8f0e0" strokeWidth="4" />
+        {/* Área grande superior */}
+        <rect x="150" y="50" width="300" height="120" stroke="#00ff6a" strokeWidth="3" fill="none" filter="url(#neonGlow)" />
+        {/* Área chica superior */}
+        <rect x="200" y="50" width="200" height="50" stroke="#00ff6a" strokeWidth="3" fill="none" filter="url(#neonGlow)" />
+        {/* Punto penal superior */}
+        <circle cx="300" cy="130" r="5" fill="#00ff6a" filter="url(#neonGlow)" />
 
-        {/* Goals top/bottom */}
-        <rect x="210" y="18" width="180" height="18" stroke="#dfe8d6" strokeWidth="3" fill="rgba(223,232,214,0.25)" />
-        <rect x="210" y="864" width="180" height="18" stroke="#dfe8d6" strokeWidth="3" fill="rgba(223,232,214,0.25)" />
+        {/* Área grande inferior */}
+        <rect x="150" y="730" width="300" height="120" stroke="#00ff6a" strokeWidth="3" fill="none" filter="url(#neonGlow)" />
+        {/* Área chica inferior */}
+        <rect x="200" y="800" width="200" height="50" stroke="#00ff6a" strokeWidth="3" fill="none" filter="url(#neonGlow)" />
+        {/* Punto penal inferior */}
+        <circle cx="300" cy="770" r="5" fill="#00ff6a" filter="url(#neonGlow)" />
 
+        {/* Arco superior - portería */}
+        <rect x="220" y="15" width="160" height="35" fill="rgba(0,255,106,0.12)" stroke="#00ff6a" strokeWidth="3" rx="2" filter="url(#neonGlow)" />
+        
+        {/* Arco inferior - portería */}
+        <rect x="220" y="850" width="160" height="35" fill="rgba(0,255,106,0.12)" stroke="#00ff6a" strokeWidth="3" rx="2" filter="url(#neonGlow)" />
+
+        {/* Línea de tiro (aiming) */}
         {aimLine && (
           <line
             x1={aimLine.from.x}
             y1={aimLine.from.y}
             x2={aimLine.to.x}
             y2={aimLine.to.y}
-            stroke="#ffb347"
-            strokeWidth={4}
+            stroke="#ffc85c"
+            strokeWidth={5}
             strokeLinecap="round"
-            strokeDasharray="8 6"
+            strokeDasharray="10 8"
           />
         )}
 
-        {chips.map((chip) => (
-          <g key={chip.id}>
-            <circle cx={chip.x} cy={chip.y} r={chip.radius + 8} fill="rgba(255,179,71,0.35)" opacity={highlightId === chip.id ? 1 : 0}>
-              <animate attributeName="opacity" values="0;1;0" dur="1.2s" repeatCount="indefinite" />
-            </circle>
-            <circle cx={chip.x} cy={chip.y} r={chip.radius} fill={chip.fill} stroke="#ffffff" strokeWidth="3" />
-            <text
-              x={chip.x}
-              y={chip.y + 6}
-              textAnchor="middle"
-              fontSize="18"
-              fill="#ffffff"
-              style={{ fontFamily: "Chakra Petch, sans-serif" }}
-            >
-              {chip.flagEmoji}
-            </text>
-          </g>
-        ))}
+        {/* Fichas */}
+        {chips.map((chip) => {
+          const isPlayer = chip.owner === "creator";
+          const chipColor = isPlayer ? "#00a8ff" : "#ff4d5a";
+          const borderColor = isPlayer ? "#0066cc" : "#cc0022";
+          
+          return (
+            <g key={chip.id}>
+              {/* Highlight de selección */}
+              {highlightId === chip.id && (
+                <circle 
+                  cx={chip.x} 
+                  cy={chip.y} 
+                  r={chip.radius + 12} 
+                  fill="none" 
+                  stroke="#ffc85c" 
+                  strokeWidth="4"
+                  opacity="0.9"
+                >
+                  <animate attributeName="r" values={`${chip.radius + 8};${chip.radius + 16};${chip.radius + 8}`} dur="0.8s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.6;1;0.6" dur="0.8s" repeatCount="indefinite" />
+                </circle>
+              )}
+              {/* Ficha principal */}
+              <circle 
+                cx={chip.x} 
+                cy={chip.y} 
+                r={chip.radius} 
+                fill={chipColor}
+                stroke={borderColor}
+                strokeWidth="4"
+                filter="url(#chipGlow)"
+              />
+              {/* Icono */}
+              <text
+                x={chip.x}
+                y={chip.y + 7}
+                textAnchor="middle"
+                fontSize="20"
+                fill="#fff"
+                fontWeight="bold"
+              >
+                {chip.flagEmoji}
+              </text>
+            </g>
+          );
+        })}
 
-        <circle cx={ball.x} cy={ball.y} r={12} fill="#ffffff" stroke="#111" strokeWidth="3" />
+        {/* Pelota neón */}
+        <g filter="url(#neonGlow)">
+          <circle cx={ball.x} cy={ball.y} r={16} fill="#ffffff" stroke="#cccccc" strokeWidth="2" />
+          <circle cx={ball.x} cy={ball.y} r={6} fill="#333333" />
+          {/* Brillo */}
+          <circle cx={ball.x - 4} cy={ball.y - 4} r={4} fill="rgba(255,255,255,0.6)" />
+        </g>
       </svg>
-      <div className="pitch-overlay" />
       {children}
-    </div>
+    </>
   );
 }
