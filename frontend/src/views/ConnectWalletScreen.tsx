@@ -148,19 +148,20 @@ export function ConnectWalletScreen() {
 
         {/* Info adicional */}
         <div className="connect-info">
-          <p>¿No tienes Beexo Wallet?</p>
+          <p><strong>¿Cómo conectar?</strong></p>
+          <p style={{ marginTop: 8, fontSize: 13 }}>
+            📱 <strong>Celular:</strong> Abre este link desde la app Beexo Wallet<br />
+            💻 <strong>PC:</strong> Copia el link y ábrelo en Beexo móvil
+          </p>
           <a 
             href={BEEXO_DOWNLOAD_URL}
             target="_blank" 
             rel="noopener noreferrer"
             className="connect-link"
+            style={{ marginTop: 12, display: "inline-block" }}
           >
             Descargar Beexo Wallet →
           </a>
-          <p style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>
-            📱 Celular: abre Beexo automáticamente<br />
-            💻 PC: escaneá QR con tu Beexo Wallet
-          </p>
         </div>
 
         {/* Botón para jugar sin wallet (solo bot) */}
