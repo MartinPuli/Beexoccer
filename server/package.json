@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --loader ts-node/esm src/index.ts"
+    "dev": "node --loader ts-node/esm src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "socket.io": "^4.8.1"
@@ -13,5 +15,8 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5",
     "@types/node": "^20.12.12"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
