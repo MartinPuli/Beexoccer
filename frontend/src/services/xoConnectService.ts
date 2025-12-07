@@ -50,15 +50,16 @@ const ERC20_ABI = [
 
 // Polygon Amoy chain config
 const POLYGON_AMOY_CHAIN_ID = 80002;
+const POLYGON_AMOY_CHAIN_ID_HEX = "0x13882"; // 80002 in hex
 const POLYGON_AMOY_RPC = "https://polygon-amoy.drpc.org";
 
-// XOConnectProvider configuration with REQUIRED rpcs and defaultChainId
+// XOConnectProvider configuration - defaultChainId must be hex string
 const XO_CONNECT_CONFIG = {
-  defaultChainId: POLYGON_AMOY_CHAIN_ID,
+  defaultChainId: POLYGON_AMOY_CHAIN_ID_HEX,
   rpcs: {
-    80002: POLYGON_AMOY_RPC,
-    137: "https://polygon.drpc.org",
-    1: "https://eth.drpc.org"
+    "0x13882": POLYGON_AMOY_RPC,  // Polygon Amoy
+    "0x89": "https://polygon.drpc.org",  // Polygon Mainnet
+    "0x1": "https://eth.drpc.org"  // Ethereum Mainnet
   }
 };
 

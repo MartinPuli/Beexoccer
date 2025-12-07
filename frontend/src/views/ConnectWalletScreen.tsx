@@ -1,14 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { xoConnectService } from "../services/xoConnectService";
 import { useGameStore } from "../hooks/useGameStore";
 import { checkMatchStatus } from "../services/matchService";
 import { toast } from "../components/Toast";
 import logoSvg from "../assets/logo.svg";
 
+// URL de descarga de Beexo
+const BEEXO_DOWNLOAD_URL = "https://share.beexo.com/?type=download";
+
 export function ConnectWalletScreen() {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasWallet, setHasWallet] = useState<boolean | null>(null);
   const setAlias = useGameStore((state) => state.setAlias);
   const setBalance = useGameStore((state) => state.setBalance);
   const setUserAddress = useGameStore((state) => state.setUserAddress);
@@ -24,48 +26,28 @@ export function ConnectWalletScreen() {
   const setMatchGoalTarget = useGameStore((state) => state.setMatchGoalTarget);
   const setMatchStatus = useGameStore((state) => state.setMatchStatus);
 
-  // Detectar si hay wallet disponible
-  useEffect(() => {
-    const checkWallet = () => {
-      const ethereum = (window as Window & { ethereum?: unknown }).ethereum;
-      setHasWallet(!!ethereum);
-    };
-    checkWallet();
-    // Re-check cuando la página vuelva a tener foco (por si el usuario instala MetaMask)
-    window.addEventListener("focus", checkWallet);
-    return () => window.removeEventListener("focus", checkWallet);
-  }, []);
-
-  // Generar URL para abrir en MetaMask Mobile
-  const getMetaMaskDeepLink = () => {
-    const currentUrl = window.location.href;
-    return `https://metamask.app.link/dapp/${currentUrl.replace(/^https?:\/\//, "")}`;
-  };
-
   const handleConnect = async () => {
-    // Si no hay wallet, abrir MetaMask deep link en móvil
-    if (!hasWallet) {
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      if (isMobile) {
-        window.location.href = getMetaMaskDeepLink();
-        return;
-      }
-    }
-    
     setConnecting(true);
     setError(null);
     
     try {
-      // Reset service in case of previous failed attempts
-      xoConnectService.reset();
-      await xoConnectService.init();
+      console.log("🐝 Iniciando conexión con Beexo via XO Connect...");
+      
+      // Conectar usando XO Connect
+      const success = await xoConnectService.connect();
+      
+      if (!success) {
+        setError(xoConnectService.getConnectionError() || "No se pudo conectar con Beexo Wallet");
+        return;
+      }
+      
       const address = xoConnectService.getUserAddress();
       
       if (address && address !== "0x" + "0".repeat(40)) {
         setAlias(xoConnectService.getAlias());
-        setBalance("Demo 15.2 XO");
+        setBalance(xoConnectService.getTokenBalance("POL") + " POL");
         setUserAddress(address);
-        toast.success("Wallet conectada", `${address.slice(0, 6)}...${address.slice(-4)}`);
+        toast.success("Beexo conectada", `${address.slice(0, 6)}...${address.slice(-4)}`);
         
         // Verificar si hay partida PENDIENTE para esta wallet
         if (waitingMatch && waitingMatch.creatorAddress?.toLowerCase() === address.toLowerCase()) {
@@ -94,7 +76,7 @@ export function ConnectWalletScreen() {
             }
           } catch (err) {
             console.warn("Error verificando partida pendiente:", err);
-            setWaitingMatch(undefined); // Limpiar partida inválida
+            setWaitingMatch(undefined);
           }
         }
         
@@ -116,16 +98,9 @@ export function ConnectWalletScreen() {
         setError("No se pudo obtener la dirección de la wallet");
       }
     } catch (err) {
-      console.error("Error conectando wallet:", err);
+      console.error("❌ Error conectando wallet:", err);
       const message = err instanceof Error ? err.message : "Error desconocido";
-      
-      if (message.includes("-32002")) {
-        setError("Abre MetaMask y aprueba la solicitud pendiente");
-      } else if (message.includes("User rejected")) {
-        setError("Rechazaste la conexión. Intenta de nuevo.");
-      } else {
-        setError("No se detectó wallet. Instala MetaMask o usa Beexo Wallet.");
-      }
+      setError(message);
     } finally {
       setConnecting(false);
     }
@@ -145,7 +120,7 @@ export function ConnectWalletScreen() {
           Necesitas una wallet para jugar partidas online y apostar cripto.
         </p>
 
-        {/* Botón de conexión */}
+        {/* Botón de conexión con Beexo */}
         <button 
           className="connect-btn primary"
           onClick={handleConnect}
@@ -156,13 +131,9 @@ export function ConnectWalletScreen() {
               <span className="connect-spinner">⏳</span>
               Conectando...
             </>
-          ) : hasWallet ? (
-            <>
-              🦊 Conectar MetaMask
-            </>
           ) : (
             <>
-              📱 Abrir en MetaMask
+              🐝 Conectar con Beexo
             </>
           )}
         </button>
@@ -175,37 +146,21 @@ export function ConnectWalletScreen() {
           </div>
         )}
 
-        {/* Info adicional - diferente para móvil/desktop */}
+        {/* Info adicional */}
         <div className="connect-info">
-          {hasWallet === false ? (
-            <>
-              <p>No detectamos una wallet en este navegador.</p>
-              <p style={{ marginTop: 8, fontSize: 13 }}>
-                Si estás en celular, haz clic arriba para abrir en la app de MetaMask.
-              </p>
-              <a 
-                href="https://metamask.io/download/" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="connect-link"
-                style={{ marginTop: 12, display: "inline-block" }}
-              >
-                Instalar MetaMask →
-              </a>
-            </>
-          ) : (
-            <>
-              <p>¿No tienes wallet?</p>
-              <a 
-                href="https://metamask.io/download/" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="connect-link"
-              >
-                Descargar MetaMask →
-              </a>
-            </>
-          )}
+          <p>¿No tienes Beexo Wallet?</p>
+          <a 
+            href={BEEXO_DOWNLOAD_URL}
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="connect-link"
+          >
+            Descargar Beexo Wallet →
+          </a>
+          <p style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>
+            📱 Celular: abre Beexo automáticamente<br />
+            💻 PC: escaneá QR con tu Beexo Wallet
+          </p>
         </div>
 
         {/* Botón para jugar sin wallet (solo bot) */}
@@ -219,7 +174,7 @@ export function ConnectWalletScreen() {
 
       {/* Footer */}
       <div className="connect-footer">
-        <p>Red: Polygon Amoy Testnet</p>
+        <p>Red: Polygon Amoy Testnet • Powered by XO Connect</p>
       </div>
     </div>
   );
