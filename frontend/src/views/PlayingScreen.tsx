@@ -21,6 +21,23 @@ export function PlayingScreen() {
   const [showEnd, setShowEnd] = useState(false);
   const [winner, setWinner] = useState<"creator" | "challenger" | null>(null);
   const [timerPercent, setTimerPercent] = useState(100);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+  const handleExitClick = () => {
+    setShowExitConfirm(true);
+  };
+
+  const handleExitConfirm = () => {
+    // Cleanup sockets
+    socketService.offAll();
+    socketService.disconnect();
+    // TODO: Notify server about forfeit
+    setView("home");
+  };
+
+  const handleExitCancel = () => {
+    setShowExitConfirm(false);
+  };
 
   useEffect(() => {
     socketService.connect(matchId, playerSide ?? "creator");
@@ -110,6 +127,11 @@ export function PlayingScreen() {
     <div className="playing-screen">
       {/* HUD */}
       <div className="playing-hud">
+        <div className="hud-header">
+          <button className="exit-btn-icon" onClick={handleExitClick}>←</button>
+          <span className="hud-title">VS ONLINE</span>
+          <span className="hud-placeholder" />
+        </div>
         <div className="hud-scores">
           <span className="hud-player you">TU</span>
           <div className="hud-score-center">
@@ -165,6 +187,26 @@ export function PlayingScreen() {
             <button className="home-btn primary" style={{ marginTop: 20 }} onClick={() => setView("home")}>
               Volver al inicio
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal salir con advertencia de apuesta */}
+      {showExitConfirm && (
+        <div className="exit-confirm-overlay">
+          <div className="exit-modal">
+            <h3>⚠️ ¿Abandonar partida?</h3>
+            <p className="exit-warning-bet">
+              Si abandonas ahora, <strong>perderás tu apuesta activa</strong> y la partida contará como derrota.
+            </p>
+            <div className="exit-btn-row">
+              <button className="exit-btn cancel" onClick={handleExitCancel}>
+                Seguir jugando
+              </button>
+              <button className="exit-btn confirm" onClick={handleExitConfirm}>
+                Abandonar
+              </button>
+            </div>
           </div>
         </div>
       )}

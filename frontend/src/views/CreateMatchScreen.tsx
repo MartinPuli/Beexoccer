@@ -1,24 +1,40 @@
-import { ChangeEvent, FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useState, useEffect } from "react";
 import { createMatch } from "../services/matchService";
 import { useGameStore } from "../hooks/useGameStore";
 import { GoalTarget } from "../types/game";
+import { xoConnectService, TokenInfo } from "../services/xoConnectService";
 
 export function CreateMatchScreen() {
   const [goals, setGoals] = useState<GoalTarget>(3);
   const [isBet, setIsBet] = useState(false);
   const [stakeAmount, setStakeAmount] = useState("10");
+  const [selectedToken, setSelectedToken] = useState("MATIC");
+  const [tokens, setTokens] = useState<TokenInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const setView = useGameStore((state) => state.setView);
+
+  // Cargar tokens disponibles
+  useEffect(() => {
+    const loadTokens = async () => {
+      await xoConnectService.fetchTokenBalances();
+      setTokens(xoConnectService.getTokens());
+    };
+    loadTokens();
+  }, []);
+
+  const currentToken = tokens.find(t => t.symbol === selectedToken);
+  const currentBalance = currentToken?.balance || "0";
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setLoading(true);
     try {
+      const token = tokens.find(t => t.symbol === selectedToken);
       await createMatch({
         goals,
         isFree: !isBet,
         stakeAmount: isBet ? stakeAmount : "0",
-        stakeToken: "0x0000000000000000000000000000000000000000"
+        stakeToken: token?.address || "0x0000000000000000000000000000000000000000"
       });
       alert("Partida creada. Esperando rival...");
       setView("accept");
@@ -71,10 +87,10 @@ export function CreateMatchScreen() {
           </div>
         </div>
 
-        {/* Input apuesta */}
+        {/* Selector de token y cantidad */}
         {isBet && (
           <div className="create-section">
-            <span className="create-label">Cantidad</span>
+            <span className="create-label">Apuesta</span>
             <div className="stake-row">
               <input
                 type="number"
@@ -85,7 +101,22 @@ export function CreateMatchScreen() {
                 min="0"
                 step="0.1"
               />
-              <span className="stake-token">MATIC</span>
+              <div className="token-selector">
+                <select 
+                  className="token-select"
+                  value={selectedToken}
+                  onChange={(e) => setSelectedToken(e.target.value)}
+                >
+                  {tokens.map(token => (
+                    <option key={token.symbol} value={token.symbol}>
+                      {token.icon} {token.symbol}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="stake-balance">
+              Balance: {currentBalance} {selectedToken}
             </div>
           </div>
         )}

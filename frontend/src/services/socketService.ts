@@ -23,26 +23,62 @@ class SocketService {
   private socket?: Socket<ServerToClientEvents, ClientToServerEvents>;
   private lobbiesCallbacks: ((lobbies: MatchLobby[]) => void)[] = [];
   private lobbyCreatedCallbacks: ((lobby: MatchLobby) => void)[] = [];
+  private connectionFailed = false;
 
   connect(matchId: string, side: "creator" | "challenger") {
+    if (this.connectionFailed) return; // Skip if server unavailable
     if (this.socket) {
       this.socket.disconnect();
     }
-    this.socket = io(env.realtimeUrl, { transports: ["websocket"], query: { matchId, side } });
+    try {
+      this.socket = io(env.realtimeUrl, { 
+        transports: ["websocket"], 
+        query: { matchId, side },
+        timeout: 5000,
+        reconnectionAttempts: 2
+      });
+      this.socket.on("connect_error", () => {
+        console.warn("Realtime server unavailable - running in offline mode");
+        this.connectionFailed = true;
+        this.socket?.disconnect();
+      });
+    } catch {
+      console.warn("Socket connection failed");
+      this.connectionFailed = true;
+    }
   }
 
   connectLobbies() {
+    if (this.connectionFailed) return; // Skip if server unavailable
     if (this.socket) return;
-    this.socket = io(env.realtimeUrl, { transports: ["websocket"] });
-    this.socket.emit("subscribeLobbies");
+    try {
+      this.socket = io(env.realtimeUrl, { 
+        transports: ["websocket"],
+        timeout: 5000,
+        reconnectionAttempts: 2
+      });
+      
+      this.socket.on("connect_error", () => {
+        console.warn("Realtime server unavailable - lobbies will use blockchain only");
+        this.connectionFailed = true;
+        this.socket?.disconnect();
+      });
+      
+      this.socket.on("connect", () => {
+        this.socket?.emit("subscribeLobbies");
+      });
     
-    this.socket.on("lobbiesUpdate", (lobbies) => {
-      for (const cb of this.lobbiesCallbacks) cb(lobbies);
-    });
-    
-    this.socket.on("lobbyCreated", (lobby) => {
-      for (const cb of this.lobbyCreatedCallbacks) cb(lobby);
-    });
+      this.socket.on("lobbiesUpdate", (lobbies) => {
+        for (const cb of this.lobbiesCallbacks) cb(lobbies);
+      });
+      
+      this.socket.on("lobbyCreated", (lobby) => {
+        for (const cb of this.lobbyCreatedCallbacks) cb(lobby);
+      });
+    } catch (error) {
+      console.warn("Socket lobbies connection failed", error);
+      this.connectionFailed = true;
+    }
   }
 
   onLobbiesUpdate(cb: (lobbies: MatchLobby[]) => void) {
