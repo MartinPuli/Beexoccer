@@ -126,19 +126,60 @@ export async function createMatch(config: MatchConfig): Promise<{ matchId: numbe
   
   try {
     const contract = await getContract();
-    const stakeWei = config.isFree ? 0n : parseEther(config.stakeAmount || "0");
-    const stakeToken = config.isFree ? "0x0000000000000000000000000000000000000000" : config.stakeToken;
     
-    console.log("📝 Parámetros de transacción:", {
+    // Normalizar el stakeToken - asegurarse que sea address(0) para partidas gratis o MATIC nativo
+    const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+    
+    // Calcular stakeAmount en wei
+    let stakeWei: bigint;
+    let stakeToken: string;
+    let txValue: bigint;
+    
+    if (config.isFree) {
+      // Partida GRATUITA: todo en 0
+      stakeWei = 0n;
+      stakeToken = ZERO_ADDRESS;
+      txValue = 0n;
+      console.log("🆓 Modo: Partida GRATUITA");
+    } else {
+      // Partida CON APUESTA
+      stakeWei = parseEther(config.stakeAmount || "0");
+      
+      // Verificar que hay un monto válido
+      if (stakeWei === 0n) {
+        throw new Error("El monto de apuesta debe ser mayor a 0");
+      }
+      
+      // Normalizar stakeToken
+      const configToken = config.stakeToken?.toLowerCase() || "";
+      const isNativeToken = !configToken || 
+                            configToken === ZERO_ADDRESS.toLowerCase() || 
+                            configToken === "native" ||
+                            configToken === "pol" ||
+                            configToken === "matic";
+      
+      if (isNativeToken) {
+        // Apuesta en POL/MATIC nativo → stakeToken = 0, value = stakeAmount
+        stakeToken = ZERO_ADDRESS;
+        txValue = stakeWei;
+        console.log("💰 Modo: Apuesta en POL/MATIC nativo, value =", txValue.toString());
+      } else {
+        // Apuesta en token ERC-20 → stakeToken = dirección, value = 0
+        stakeToken = config.stakeToken!;
+        txValue = 0n;
+        console.log("🪙 Modo: Apuesta en token ERC-20:", stakeToken);
+        // TODO: Verificar allowance antes de llamar
+      }
+    }
+    
+    console.log("📝 Parámetros de transacción FINALES:", {
       goals: config.goals,
       isFree: config.isFree,
       stakeWei: stakeWei.toString(),
       stakeToken,
+      txValue: txValue.toString(),
       contractAddress: env.matchManagerAddress
     });
-    
-    // Para partidas gratuitas no enviar valor
-    const txValue = config.isFree ? 0n : (stakeToken === "0x0000000000000000000000000000000000000000" ? stakeWei : 0n);
     
     const tx = await contract.createMatch(config.goals, config.isFree, stakeWei, stakeToken, {
       value: txValue
