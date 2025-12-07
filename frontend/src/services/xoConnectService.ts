@@ -134,46 +134,15 @@ class XoConnectService {
     console.log("📱 Dispositivo móvil:", isMobileDevice());
     
     try {
-      // Check if we're inside Beexo WebView or have XO Connect available
-      if (!isInBeexoWebView()) {
-        // Not in WebView - need to open Beexo Wallet
-        console.log("⚠️ No estamos en WebView de Beexo");
-        
-        if (isMobileDevice()) {
-          // On mobile - try to open Beexo deep link
-          console.log("📱 Abriendo deep link de Beexo...");
-          const currentUrl = encodeURIComponent(window.location.href);
-          window.location.href = `beexo://connect?redirect=${currentUrl}`;
-          
-          // Give time for redirect, then show error if we're still here
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          this._connectionError = "Abre el link en la app Beexo Wallet";
-          this._isConnecting = false;
-          return false;
-        } else {
-          // On desktop - show instructions to use Beexo
-          console.log("💻 Desktop: necesita escanear QR con Beexo");
-          this._connectionError = "Abre beexo.com/wallet en tu celular y escanea el código QR";
-          this._isConnecting = false;
-          
-          // Open Beexo wallet page in new tab
-          window.open(BEEXO_WALLET_URL, "_blank");
-          return false;
-        }
-      }
-      
-      // We're in Beexo WebView - proceed with XO Connect
-      console.log("✅ Dentro de WebView de Beexo, conectando...");
-      
-      // Create XO Connect Provider (no config needed when in WebView)
+      // Create XO Connect Provider - it will handle showing QR code or connecting in WebView
+      console.log("📡 Creando XOConnectProvider...");
       this.xoProvider = new XOConnectProvider();
       
       // Wrap in ethers BrowserProvider
       this.ethersProvider = new BrowserProvider(this.xoProvider, POLYGON_AMOY_CHAIN_ID);
       
-      // Request accounts - this triggers the XO Connect flow
-      console.log("🔑 Solicitando conexión con Beexo Wallet...");
+      // Request accounts - XO Connect will show QR if not in WebView
+      console.log("🔑 Solicitando conexión con Beexo Wallet (esto mostrará QR si es necesario)...");
       const accounts = await this.ethersProvider.send("eth_requestAccounts", []) as string[];
       console.log("✅ Cuentas conectadas:", accounts);
       
