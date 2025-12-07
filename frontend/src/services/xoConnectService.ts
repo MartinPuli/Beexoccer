@@ -1,197 +1,313 @@
-import { BrowserProvider, Eip1193Provider, JsonRpcProvider, Wallet, Contract, parseUnits, formatUnits } from "ethers";
+/**
+ * XO Connect Service - Integración con Beexo Wallet
+ * 
+ * Este servicio maneja la conexión con Beexo Wallet a través de XO Connect,
+ * permitiendo firmar mensajes, enviar transacciones e interactuar con smart contracts.
+ */
+
+import { BrowserProvider, JsonRpcProvider, Contract, parseUnits, formatUnits, Signer } from "ethers";
 import { env } from "../config/env";
 
-// xo-connect does not ship TypeScript definitions publicly yet (placeholder).
-// The following type declarations keep the compiler satisfied while documenting
-// the minimal API surface the UI consumes.
+// Importar XO Connect
+// @ts-expect-error - XO Connect types may not be fully available
+import { XOConnectProvider, XOConnect } from "xo-connect";
 
 // Token types supported by Beexo Wallet
 export interface TokenInfo {
   symbol: string;
   name: string;
-  address: string; // "native" for ETH/MATIC, "custodial" for XO points
+  address: string;
   decimals: number;
   balance: string;
   type: "native" | "erc20" | "custodial";
   icon?: string;
+  chainId?: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
-type XoConnectInstance = {
-  connect: () => Promise<{ alias: string; provider: BrowserProvider }>;
-  disconnect: () => Promise<void>;
-  // Extended XO Connect API for tokens
-  getBalances?: () => Promise<TokenInfo[]>;
-  personalSign?: (message: string) => Promise<string>;
-  transactionSign?: (tx: TransactionRequest) => Promise<string>;
-};
-
-interface TransactionRequest {
-  to: string;
-  value?: string;
-  data?: string;
-  gasLimit?: string;
+// Client info from XO Connect
+interface XOClient {
+  alias: string;
+  currencies: Array<{
+    id: string;
+    symbol: string;
+    address: string;
+    image: string;
+    chainId: string;
+    decimals?: number;
+  }>;
 }
 
-declare const XOConnect: {
-  new (config: { projectId: string }): XoConnectInstance;
-};
-
-// ERC20 ABI mínimo para consultar balances y aprobar transfers
+// ERC20 ABI mínimo para consultar balances
 const ERC20_ABI = [
   "function balanceOf(address owner) view returns (uint256)",
   "function decimals() view returns (uint8)",
   "function symbol() view returns (string)",
   "function name() view returns (string)",
   "function approve(address spender, uint256 amount) returns (bool)",
-  "function allowance(address owner, address spender) view returns (uint256)",
-  "function transfer(address to, uint256 amount) returns (bool)"
+  "function allowance(address owner, address spender) view returns (uint256)"
 ];
 
-// Tokens soportados - Solo nativos para testnet (USDT/USDC no existen en Amoy)
-const DEFAULT_TOKENS: Omit<TokenInfo, "balance">[] = [
-  { symbol: "POL", name: "Polygon", address: "native", decimals: 18, type: "native", icon: "🟣" },
-  { symbol: "XO", name: "XO Points", address: "custodial", decimals: 2, type: "custodial", icon: "⭐" },
-];
-
-/**
- * XO-CONNECT wrapper. Responsible for bootstrapping wallet identity, resolving the
- * user alias, and exposing signer/provider objects used by the match service.
- * Extended to support multiple tokens for betting.
- */
-type AnyProvider = BrowserProvider | JsonRpcProvider;
-
-declare global {
-  interface Window {
-    ethereum?: Eip1193Provider;
-  }
-}
+// Polygon Amoy chain config
+const POLYGON_AMOY_CHAIN_ID = "0x13882"; // 80002 in hex
+const POLYGON_AMOY_CONFIG = {
+  chainId: POLYGON_AMOY_CHAIN_ID,
+  chainName: "Polygon Amoy Testnet",
+  nativeCurrency: {
+    name: "POL",
+    symbol: "POL",
+    decimals: 18
+  },
+  rpcUrls: [
+    "https://polygon-amoy.drpc.org",
+    "https://rpc-amoy.polygon.technology"
+  ],
+  blockExplorerUrls: ["https://amoy.polygonscan.com"]
+};
 
 class XoConnectService {
-  private instance?: XoConnectInstance;
-  private provider?: AnyProvider;
-  private mockWallet?: Wallet;
+  private xoProvider?: typeof XOConnectProvider;
+  private ethersProvider?: BrowserProvider;
+  private signer?: Signer;
   private alias = "";
   private userAddress = "";
   private tokenBalances: TokenInfo[] = [];
   private initialized = false;
+  private isBeexoWallet = false;
 
   /**
-   * Check if there's an existing wallet connection WITHOUT asking for permission.
-   * Returns the connected address or null if not connected.
+   * Detect if we're running inside Beexo Wallet WebView
+   */
+  private detectBeexoWallet(): boolean {
+    const browserWindow = globalThis as Window & typeof globalThis;
+    
+    // Check for XO Connect specific markers
+    if (typeof XOConnectProvider !== 'undefined') {
+      console.log("🐝 XOConnectProvider disponible");
+      return true;
+    }
+    
+    // Check user agent for Beexo
+    if (navigator.userAgent.includes('Beexo') || navigator.userAgent.includes('XOConnect')) {
+      console.log("🐝 Beexo Wallet detectada por User-Agent");
+      return true;
+    }
+    
+    // Check for injected XO Connect
+    if ((browserWindow as unknown as Record<string, unknown>).XOConnect) {
+      console.log("🐝 XOConnect inyectado en window");
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Check if there's an existing wallet connection
    */
   async checkExistingConnection(): Promise<string | null> {
     const browserWindow = globalThis as Window & typeof globalThis;
-    if (!browserWindow.ethereum) {
-      console.log("⚠️ No wallet detected");
-      return null;
-    }
-
-    try {
-      // eth_accounts doesn't trigger a popup - just checks existing connections
-      const provider = new BrowserProvider(browserWindow.ethereum);
-      const accounts = await provider.send("eth_accounts", []) as string[];
-      console.log("🔍 Cuentas existentes:", accounts);
-      
-      if (accounts.length > 0 && accounts[0] !== "0x" + "0".repeat(40)) {
-        return accounts[0];
+    
+    // Try XO Connect first
+    if (this.detectBeexoWallet()) {
+      try {
+        const client = await XOConnect.getClient();
+        if (client?.alias) {
+          console.log("🐝 Sesión existente de Beexo:", client.alias);
+          return client.alias;
+        }
+      } catch {
+        console.log("No hay sesión XO Connect existente");
       }
-      return null;
+    }
+    
+    // Fallback to MetaMask
+    if (browserWindow.ethereum) {
+      try {
+        const provider = new BrowserProvider(browserWindow.ethereum);
+        const accounts = await provider.send("eth_accounts", []) as string[];
+        if (accounts.length > 0 && accounts[0] !== "0x" + "0".repeat(40)) {
+          return accounts[0];
+        }
+      } catch (error) {
+        console.error("Error checking MetaMask connection:", error);
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Initialize connection - prefers XO Connect, falls back to MetaMask
+   */
+  async init() {
+    if (this.initialized) return;
+    
+    console.log("🔌 Inicializando XO Connect Service...");
+    
+    this.isBeexoWallet = this.detectBeexoWallet();
+    
+    if (this.isBeexoWallet) {
+      await this.initWithXOConnect();
+    } else {
+      await this.initWithMetaMask();
+    }
+    
+    this.initialized = true;
+    
+    // Fetch token balances after connection
+    await this.fetchTokenBalances();
+    
+    console.log("✅ XO Connect Service inicializado:", {
+      alias: this.alias,
+      address: this.userAddress,
+      isBeexo: this.isBeexoWallet,
+      tokens: this.tokenBalances.length
+    });
+  }
+
+  /**
+   * Initialize with XO Connect (Beexo Wallet)
+   */
+  private async initWithXOConnect() {
+    console.log("🐝 Conectando con Beexo Wallet via XO Connect...");
+    
+    try {
+      // Create XO Connect Provider
+      this.xoProvider = new XOConnectProvider();
+      
+      // Wrap in ethers BrowserProvider
+      // Note: ethers v6 uses BrowserProvider instead of Web3Provider
+      this.ethersProvider = new BrowserProvider(this.xoProvider, "any");
+      
+      // Request accounts
+      await this.ethersProvider.send("eth_requestAccounts", []);
+      
+      // Get signer
+      this.signer = await this.ethersProvider.getSigner();
+      this.userAddress = await this.signer.getAddress();
+      
+      // Get client info from XO Connect
+      try {
+        const client: XOClient = await XOConnect.getClient();
+        this.alias = client.alias || this.formatAddress(this.userAddress);
+        
+        // Convert currencies to our TokenInfo format
+        if (client.currencies && client.currencies.length > 0) {
+          this.tokenBalances = client.currencies.map(c => ({
+            symbol: c.symbol,
+            name: c.symbol,
+            address: c.address,
+            decimals: c.decimals || 18,
+            balance: "0",
+            type: c.address === "0x0000000000000000000000000000000000000000" ? "native" : "erc20",
+            icon: c.image,
+            chainId: c.chainId
+          }));
+        }
+        
+        console.log("🐝 Cliente Beexo:", {
+          alias: client.alias,
+          currencies: client.currencies?.length || 0
+        });
+      } catch (clientError) {
+        console.warn("No se pudo obtener info del cliente XO:", clientError);
+        this.alias = this.formatAddress(this.userAddress);
+      }
+      
     } catch (error) {
-      console.error("Error checking existing connection:", error);
-      return null;
+      console.error("❌ Error conectando con XO Connect:", error);
+      // Fall back to MetaMask if XO Connect fails
+      await this.initWithMetaMask();
     }
   }
 
-  async init() {
-    if (this.initialized) return;
-    this.initialized = true;
-
-    // Ir directo a MetaMask/wallet del navegador
+  /**
+   * Initialize with MetaMask (fallback for browser testing)
+   */
+  private async initWithMetaMask() {
     const browserWindow = globalThis as Window & typeof globalThis;
-    if (browserWindow.ethereum) {
-      console.log("🦊 MetaMask detectado, conectando...");
-      this.provider = new BrowserProvider(browserWindow.ethereum);
-      
-      try {
-        // Pedir conexión explícitamente
-        const accounts = await this.provider.send("eth_requestAccounts", []) as string[];
-        console.log("✅ Cuentas conectadas:", accounts);
-        
-        // Intentar cambiar a Polygon Amoy automáticamente
-        await this.switchToPolygonAmoy(browserWindow.ethereum);
-        
-        // Recrear provider después de cambio de red
-        this.provider = new BrowserProvider(browserWindow.ethereum);
-        
-        if (accounts.length > 0) {
-          this.userAddress = accounts[0];
-          const signer = await this.provider.getSigner();
-          this.userAddress = await signer.getAddress();
-          console.log("👛 Dirección del usuario:", this.userAddress);
-        }
-      } catch (connectError: unknown) {
-        console.error("❌ Error conectando wallet:", connectError);
-        const err = connectError as { code?: number };
-        if (err.code === -32002) {
-          alert("Por favor abre MetaMask y aprueba la solicitud de conexión pendiente");
-        }
-        this.userAddress = "0x" + "0".repeat(40);
-      }
-      
-      // Crear alias desde la dirección
-      this.alias = this.userAddress 
-        ? `${this.userAddress.slice(0, 6)}...${this.userAddress.slice(-4)}`
-        : "Sin conectar";
-      
-    } else {
+    
+    if (!browserWindow.ethereum) {
       console.warn("⚠️ No hay wallet detectada, usando RPC público");
-      this.provider = new JsonRpcProvider(env.polygonRpc);
+      this.ethersProvider = undefined;
       this.userAddress = "0x" + "0".repeat(40);
       this.alias = "Sin wallet";
+      
+      // Set default token for display
+      this.tokenBalances = [{
+        symbol: "POL",
+        name: "Polygon",
+        address: "native",
+        decimals: 18,
+        balance: "0",
+        type: "native",
+        icon: "🟣"
+      }];
+      return;
     }
+
+    console.log("🦊 MetaMask detectado, conectando...");
+    this.ethersProvider = new BrowserProvider(browserWindow.ethereum);
     
-    // Fetch balances from chain (skip ERC20 tokens on testnet)
-    // await this.fetchTokenBalances();
+    try {
+      // Request accounts
+      const accounts = await this.ethersProvider.send("eth_requestAccounts", []) as string[];
+      console.log("✅ Cuentas conectadas:", accounts);
+      
+      // Switch to Polygon Amoy
+      await this.switchToPolygonAmoy(browserWindow.ethereum);
+      
+      // Recreate provider after network switch
+      this.ethersProvider = new BrowserProvider(browserWindow.ethereum);
+      
+      if (accounts.length > 0) {
+        this.signer = await this.ethersProvider.getSigner();
+        this.userAddress = await this.signer.getAddress();
+        this.alias = this.formatAddress(this.userAddress);
+      }
+      
+      // Default tokens for MetaMask
+      this.tokenBalances = [{
+        symbol: "POL",
+        name: "Polygon",
+        address: "native",
+        decimals: 18,
+        balance: "0",
+        type: "native",
+        icon: "🟣"
+      }];
+      
+    } catch (connectError: unknown) {
+      console.error("❌ Error conectando MetaMask:", connectError);
+      const err = connectError as { code?: number };
+      if (err.code === -32002) {
+        throw new Error("Por favor abre MetaMask y aprueba la solicitud de conexión pendiente");
+      }
+      throw connectError;
+    }
   }
 
   /**
    * Switch MetaMask to Polygon Amoy network
    */
-  private async switchToPolygonAmoy(ethereum: Eip1193Provider): Promise<void> {
-    const POLYGON_AMOY_CHAIN_ID = "0x13882"; // 80002 in hex
+  private async switchToPolygonAmoy(ethereum: unknown): Promise<void> {
+    const eth = ethereum as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
     
     try {
-      // Try to switch to the network
-      await ethereum.request({
+      await eth.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: POLYGON_AMOY_CHAIN_ID }]
       });
       console.log("✅ Cambiado a Polygon Amoy");
     } catch (switchError: unknown) {
       const err = switchError as { code?: number };
-      // Error 4902 means the chain is not added yet
       if (err.code === 4902) {
-        console.log("📡 Agregando Polygon Amoy a MetaMask...");
-        await ethereum.request({
+        console.log("📡 Agregando Polygon Amoy...");
+        await eth.request({
           method: "wallet_addEthereumChain",
-          params: [{
-            chainId: POLYGON_AMOY_CHAIN_ID,
-            chainName: "Polygon Amoy Testnet",
-            nativeCurrency: {
-              name: "POL",
-              symbol: "POL",
-              decimals: 18
-            },
-            rpcUrls: [
-              "https://polygon-amoy.drpc.org",
-              "https://rpc-amoy.polygon.technology",
-              "https://polygon-amoy-bor-rpc.publicnode.com"
-            ],
-            blockExplorerUrls: ["https://amoy.polygonscan.com"]
-          }]
+          params: [POLYGON_AMOY_CONFIG]
         });
-        console.log("✅ Polygon Amoy agregado y seleccionado");
+        console.log("✅ Polygon Amoy agregado");
       } else {
         console.warn("⚠️ No se pudo cambiar de red:", switchError);
       }
@@ -199,120 +315,124 @@ class XoConnectService {
   }
 
   /**
+   * Format address to short form
+   */
+  private formatAddress(address: string): string {
+    if (!address || address.length < 10) return "Anon";
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  }
+
+  /**
    * Fetch token balances from the blockchain
    */
   async fetchTokenBalances(): Promise<TokenInfo[]> {
-    if (!this.provider || !this.userAddress) {
-      // Return mock balances for demo
-      this.tokenBalances = DEFAULT_TOKENS.map(t => ({
-        ...t,
-        balance: t.type === "custodial" ? "100.00" : t.type === "native" ? "0.5" : "25.00"
-      }));
+    if (!this.userAddress || this.userAddress === "0x" + "0".repeat(40)) {
       return this.tokenBalances;
     }
 
-    const balances: TokenInfo[] = [];
+    const provider = this.getReadProvider();
+    const updatedBalances: TokenInfo[] = [];
 
-    for (const token of DEFAULT_TOKENS) {
+    for (const token of this.tokenBalances) {
       try {
         let balance = "0";
         
-        if (token.type === "native") {
-          const rawBalance = await this.provider.getBalance(this.userAddress);
+        if (token.type === "native" || token.address === "native") {
+          const rawBalance = await provider.getBalance(this.userAddress);
           balance = formatUnits(rawBalance, token.decimals);
-        } else if (token.type === "erc20") {
-          const contract = new Contract(token.address, ERC20_ABI, this.provider);
+        } else if (token.type === "erc20" && token.address !== "native") {
+          const contract = new Contract(token.address, ERC20_ABI, provider);
           const rawBalance = await contract.balanceOf(this.userAddress);
           balance = formatUnits(rawBalance, token.decimals);
         } else if (token.type === "custodial") {
-          // Custodial tokens are managed by Beexo backend - mock for now
-          balance = "100.00";
+          // Custodial tokens handled by Beexo backend
+          balance = "0";
         }
 
-        balances.push({
+        updatedBalances.push({
           ...token,
           balance: parseFloat(balance).toFixed(token.decimals > 2 ? 4 : 2)
         });
       } catch (error) {
-        console.warn(`Failed to fetch balance for ${token.symbol}:`, error);
-        balances.push({ ...token, balance: "0" });
+        console.warn(`Error fetching balance for ${token.symbol}:`, error);
+        updatedBalances.push({ ...token, balance: "0" });
       }
     }
 
-    this.tokenBalances = balances;
-    return balances;
+    this.tokenBalances = updatedBalances;
+    return updatedBalances;
   }
 
-  getAlias() {
+  // ==================== PUBLIC API ====================
+
+  getAlias(): string {
     return this.alias || "Anon Player";
   }
 
-  getAddress() {
+  getAddress(): string {
     return this.userAddress;
   }
 
-  getUserAddress() {
+  getUserAddress(): string {
     return this.userAddress || "";
   }
 
-  /**
-   * Get all available tokens with balances
-   */
+  isConnectedToBeexo(): boolean {
+    return this.isBeexoWallet;
+  }
+
   getTokens(): TokenInfo[] {
     return this.tokenBalances;
   }
 
-  /**
-   * Get balance for a specific token
-   */
   getTokenBalance(symbol: string): string {
     const token = this.tokenBalances.find(t => t.symbol === symbol);
     return token?.balance || "0";
   }
 
-  getProvider() {
-    if (!this.provider) {
-      throw new Error("XO-CONNECT not initialized. Call init() first.");
+  /**
+   * Get the ethers provider (for contract interactions)
+   */
+  getProvider(): BrowserProvider {
+    if (!this.ethersProvider) {
+      throw new Error("XO Connect no inicializado. Llama a init() primero.");
     }
-    return this.provider;
+    return this.ethersProvider;
   }
 
   /**
-   * Get a read-only provider that always uses the correct RPC for Polygon Amoy.
-   * This avoids issues when MetaMask is connected to a different network.
+   * Get a read-only provider for Polygon Amoy
    */
   getReadProvider(): JsonRpcProvider {
     return new JsonRpcProvider(env.polygonRpc);
   }
 
-  async getSigner() {
-    const provider = this.getProvider();
-
-    if (provider instanceof BrowserProvider) {
-      return provider.getSigner();
+  /**
+   * Get the signer for transactions
+   */
+  async getSigner(): Promise<Signer> {
+    if (this.signer) {
+      return this.signer;
     }
-
-    if (!this.mockWallet) {
-      const tempWallet = Wallet.createRandom();
-      this.mockWallet = new Wallet(tempWallet.privateKey, provider);
+    
+    if (!this.ethersProvider) {
+      throw new Error("No hay provider disponible");
     }
-
-    return this.mockWallet;
+    
+    this.signer = await this.ethersProvider.getSigner();
+    return this.signer;
   }
 
   /**
-   * Sign a message using XO Connect personalSign or fallback
+   * Sign a message
    */
   async signMessage(message: string): Promise<string> {
-    if (this.instance?.personalSign) {
-      return this.instance.personalSign(message);
-    }
     const signer = await this.getSigner();
     return signer.signMessage(message);
   }
 
   /**
-   * Approve token spending for betting contract
+   * Approve token spending
    */
   async approveToken(tokenSymbol: string, spenderAddress: string, amount: string): Promise<string> {
     const token = this.tokenBalances.find(t => t.symbol === tokenSymbol);
@@ -329,55 +449,17 @@ class XoConnectService {
   }
 
   /**
-   * Send a bet transaction using XO Connect transactionSign
+   * Disconnect wallet
    */
-  async sendBetTransaction(
-    contractAddress: string,
-    tokenSymbol: string,
-    amount: string,
-    matchId: number
-  ): Promise<string> {
-    const token = this.tokenBalances.find(t => t.symbol === tokenSymbol);
-    if (!token) throw new Error(`Token ${tokenSymbol} not found`);
-
-    // For custodial tokens, use XO Connect's internal API
-    if (token.type === "custodial" && this.instance?.transactionSign) {
-      // Custodial tokens use a special transaction format
-      return this.instance.transactionSign({
-        to: contractAddress,
-        data: `bet:${matchId}:${amount}:${tokenSymbol}`
-      });
-    }
-
-    const signer = await this.getSigner();
-    
-    if (token.type === "native") {
-      // Send native token (MATIC)
-      const tx = await signer.sendTransaction({
-        to: contractAddress,
-        value: parseUnits(amount, token.decimals)
-      });
-      const receipt = await tx.wait();
-      return receipt?.hash || "";
-    }
-
-    // For ERC20, the contract should have transferFrom after approval
-    // This is a simplified version - real implementation would call the betting contract
-    const contract = new Contract(token.address, ERC20_ABI, signer);
-    const amountWei = parseUnits(amount, token.decimals);
-    const tx = await contract.transfer(contractAddress, amountWei);
-    const receipt = await tx.wait();
-    return receipt.hash;
-  }
-
   async disconnect() {
-    await this.instance?.disconnect();
-    this.provider = undefined;
-    this.mockWallet = undefined;
+    this.ethersProvider = undefined;
+    this.signer = undefined;
+    this.xoProvider = undefined;
     this.alias = "";
     this.userAddress = "";
     this.tokenBalances = [];
     this.initialized = false;
+    this.isBeexoWallet = false;
   }
 
   /**
