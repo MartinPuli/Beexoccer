@@ -48,11 +48,9 @@ const ERC20_ABI = [
   "function transfer(address to, uint256 amount) returns (bool)"
 ];
 
-// Tokens soportados por defecto en Beexo
+// Tokens soportados - Solo nativos para testnet (USDT/USDC no existen en Amoy)
 const DEFAULT_TOKENS: Omit<TokenInfo, "balance">[] = [
-  { symbol: "MATIC", name: "Polygon", address: "native", decimals: 18, type: "native", icon: "🟣" },
-  { symbol: "USDT", name: "Tether USD", address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", decimals: 6, type: "erc20", icon: "💵" },
-  { symbol: "USDC", name: "USD Coin", address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", decimals: 6, type: "erc20", icon: "💲" },
+  { symbol: "POL", name: "Polygon", address: "native", decimals: 18, type: "native", icon: "🟣" },
   { symbol: "XO", name: "XO Points", address: "custodial", decimals: 2, type: "custodial", icon: "⭐" },
 ];
 
@@ -76,64 +74,127 @@ class XoConnectService {
   private alias = "";
   private userAddress = "";
   private tokenBalances: TokenInfo[] = [];
+  private initialized = false;
 
-  async init() {
-    if (this.provider) return;
+  /**
+   * Check if there's an existing wallet connection WITHOUT asking for permission.
+   * Returns the connected address or null if not connected.
+   */
+  async checkExistingConnection(): Promise<string | null> {
+    const browserWindow = globalThis as Window & typeof globalThis;
+    if (!browserWindow.ethereum) {
+      console.log("⚠️ No wallet detected");
+      return null;
+    }
 
     try {
-      this.instance = new XOConnect({ projectId: env.xoProjectId });
-      const session = await this.instance.connect();
-      this.provider = session.provider;
-      this.alias = session.alias;
+      // eth_accounts doesn't trigger a popup - just checks existing connections
+      const provider = new BrowserProvider(browserWindow.ethereum);
+      const accounts = await provider.send("eth_accounts", []) as string[];
+      console.log("🔍 Cuentas existentes:", accounts);
       
-      // Get user address
-      const signer = await session.provider.getSigner();
-      this.userAddress = await signer.getAddress();
-      
-      // Try to get balances from XO Connect
-      if (this.instance.getBalances) {
-        this.tokenBalances = await this.instance.getBalances();
-      } else {
-        await this.fetchTokenBalances();
+      if (accounts.length > 0 && accounts[0] !== "0x" + "0".repeat(40)) {
+        return accounts[0];
       }
+      return null;
     } catch (error) {
-      console.warn("XO-CONNECT unavailable, using mock identity", error);
+      console.error("Error checking existing connection:", error);
+      return null;
+    }
+  }
 
-      const browserWindow = globalThis as Window & typeof globalThis;
-      if (browserWindow.ethereum) {
+  async init() {
+    if (this.initialized) return;
+    this.initialized = true;
+
+    // Ir directo a MetaMask/wallet del navegador
+    const browserWindow = globalThis as Window & typeof globalThis;
+    if (browserWindow.ethereum) {
+      console.log("🦊 MetaMask detectado, conectando...");
+      this.provider = new BrowserProvider(browserWindow.ethereum);
+      
+      try {
+        // Pedir conexión explícitamente
+        const accounts = await this.provider.send("eth_requestAccounts", []) as string[];
+        console.log("✅ Cuentas conectadas:", accounts);
+        
+        // Intentar cambiar a Polygon Amoy automáticamente
+        await this.switchToPolygonAmoy(browserWindow.ethereum);
+        
+        // Recrear provider después de cambio de red
         this.provider = new BrowserProvider(browserWindow.ethereum);
-        try {
-          // Intentar obtener cuentas ya conectadas primero
-          const accounts = await this.provider.send("eth_accounts", []);
-          if (accounts.length > 0) {
-            this.userAddress = accounts[0];
-          } else {
-            // Solo pedir conexión si no hay cuentas
-            try {
-              const signer = await this.provider.getSigner();
-              this.userAddress = await signer.getAddress();
-            } catch (signerError: unknown) {
-              // Error -32002: ya hay una solicitud pendiente en MetaMask
-              const err = signerError as { code?: number };
-              if (err.code === -32002) {
-                console.warn("MetaMask tiene una solicitud pendiente. Abre MetaMask y aprueba/rechaza la solicitud.");
-                throw new Error("Por favor abre MetaMask y aprueba la solicitud de conexión pendiente");
-              }
-              this.userAddress = "0x" + "0".repeat(40);
-            }
-          }
-        } catch (accountsError) {
-          console.warn("Error getting accounts:", accountsError);
-          this.userAddress = "0x" + "0".repeat(40);
+        
+        if (accounts.length > 0) {
+          this.userAddress = accounts[0];
+          const signer = await this.provider.getSigner();
+          this.userAddress = await signer.getAddress();
+          console.log("👛 Dirección del usuario:", this.userAddress);
         }
-      } else {
-        this.provider = new JsonRpcProvider(env.polygonRpc);
+      } catch (connectError: unknown) {
+        console.error("❌ Error conectando wallet:", connectError);
+        const err = connectError as { code?: number };
+        if (err.code === -32002) {
+          alert("Por favor abre MetaMask y aprueba la solicitud de conexión pendiente");
+        }
         this.userAddress = "0x" + "0".repeat(40);
       }
-      this.alias = "Scout" + Math.floor(Math.random() * 999).toString().padStart(3, "0");
       
-      // Fetch balances from chain
-      await this.fetchTokenBalances();
+      // Crear alias desde la dirección
+      this.alias = this.userAddress 
+        ? `${this.userAddress.slice(0, 6)}...${this.userAddress.slice(-4)}`
+        : "Sin conectar";
+      
+    } else {
+      console.warn("⚠️ No hay wallet detectada, usando RPC público");
+      this.provider = new JsonRpcProvider(env.polygonRpc);
+      this.userAddress = "0x" + "0".repeat(40);
+      this.alias = "Sin wallet";
+    }
+    
+    // Fetch balances from chain (skip ERC20 tokens on testnet)
+    // await this.fetchTokenBalances();
+  }
+
+  /**
+   * Switch MetaMask to Polygon Amoy network
+   */
+  private async switchToPolygonAmoy(ethereum: Eip1193Provider): Promise<void> {
+    const POLYGON_AMOY_CHAIN_ID = "0x13882"; // 80002 in hex
+    
+    try {
+      // Try to switch to the network
+      await ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: POLYGON_AMOY_CHAIN_ID }]
+      });
+      console.log("✅ Cambiado a Polygon Amoy");
+    } catch (switchError: unknown) {
+      const err = switchError as { code?: number };
+      // Error 4902 means the chain is not added yet
+      if (err.code === 4902) {
+        console.log("📡 Agregando Polygon Amoy a MetaMask...");
+        await ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: POLYGON_AMOY_CHAIN_ID,
+            chainName: "Polygon Amoy Testnet",
+            nativeCurrency: {
+              name: "POL",
+              symbol: "POL",
+              decimals: 18
+            },
+            rpcUrls: [
+              "https://polygon-amoy.drpc.org",
+              "https://rpc-amoy.polygon.technology",
+              "https://polygon-amoy-bor-rpc.publicnode.com"
+            ],
+            blockExplorerUrls: ["https://amoy.polygonscan.com"]
+          }]
+        });
+        console.log("✅ Polygon Amoy agregado y seleccionado");
+      } else {
+        console.warn("⚠️ No se pudo cambiar de red:", switchError);
+      }
     }
   }
 
@@ -190,6 +251,10 @@ class XoConnectService {
     return this.userAddress;
   }
 
+  getUserAddress() {
+    return this.userAddress || "";
+  }
+
   /**
    * Get all available tokens with balances
    */
@@ -210,6 +275,14 @@ class XoConnectService {
       throw new Error("XO-CONNECT not initialized. Call init() first.");
     }
     return this.provider;
+  }
+
+  /**
+   * Get a read-only provider that always uses the correct RPC for Polygon Amoy.
+   * This avoids issues when MetaMask is connected to a different network.
+   */
+  getReadProvider(): JsonRpcProvider {
+    return new JsonRpcProvider(env.polygonRpc);
   }
 
   async getSigner() {
@@ -304,6 +377,14 @@ class XoConnectService {
     this.alias = "";
     this.userAddress = "";
     this.tokenBalances = [];
+    this.initialized = false;
+  }
+
+  /**
+   * Reset the service to allow re-initialization
+   */
+  reset() {
+    this.initialized = false;
   }
 }
 

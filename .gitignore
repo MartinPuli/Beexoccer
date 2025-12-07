@@ -6,7 +6,8 @@ typechain/
 coverage/
 deployments/
 .env
-.env.*
+.env.local
+.env.*.local
 
 # Frontend build outputs
 frontend/node_modules/
@@ -16,6 +17,10 @@ frontend/coverage/
 frontend/.env.local
 frontend/.env.development.local
 frontend/.env.production.local
+
+# Server build outputs
+server/node_modules/
+server/dist/
 
 # IDE
 .vscode/

@@ -12,7 +12,13 @@ interface TopNavProps {
 export function TopNav({ onPlayBot }: Readonly<TopNavProps>) {
   const alias = useGameStore((state) => state.alias);
   const balance = useGameStore((state) => state.balance);
+  const userAddress = useGameStore((state) => state.userAddress);
   const setView = useGameStore((state) => state.setView);
+
+  const isConnected = userAddress && userAddress !== "0x" + "0".repeat(40);
+  const shortAddress = isConnected 
+    ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`
+    : "No conectado";
 
   return (
     <header className="top-nav">
@@ -25,6 +31,11 @@ export function TopNav({ onPlayBot }: Readonly<TopNavProps>) {
       </div>
       <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
         <div>
+          <div className="badge">
+            <span style={{ color: isConnected ? "var(--neon-green)" : "var(--neon-yellow)" }}>
+              {isConnected ? "🟢" : "🟡"} {shortAddress}
+            </span>
+          </div>
           <div className="badge">Alias: <span style={{ color: "var(--neon-green)" }}>{alias}</span></div>
           <div className="badge" style={{ color: "var(--text-muted)" }}>Balance: {balance}</div>
         </div>

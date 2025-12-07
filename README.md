@@ -174,6 +174,70 @@ This spins up Vite with hot reload plus mock data for aliases/balances when XO-C
 3. Add or update tests (smart contract unit tests or UI spec tests when applicable)
 4. Submit PR with screenshots or screen recordings for UI tweaks
 
+---
+
+## 🚀 Despliegue en Producción
+
+### Frontend → Vercel
+
+1. **Conectar repositorio a Vercel:**
+   - Ve a [vercel.com](https://vercel.com)
+   - Importa tu repositorio de GitHub
+   - Configura:
+     - **Root Directory:** `frontend`
+     - **Build Command:** `npm run build`
+     - **Output Directory:** `dist`
+
+2. **Variables de entorno en Vercel:**
+   ```
+   VITE_POLYGON_AMOY_RPC=https://polygon-amoy.drpc.org
+   VITE_MATCH_MANAGER_ADDRESS=0x9197Aa4F607fC2e245411eb69ab2d72CDa02CC2b
+   VITE_REALTIME_URL=https://tu-server.railway.app
+   VITE_ENABLE_REALTIME=true
+   ```
+
+3. **Deploy:** Vercel construirá automáticamente en cada push a main.
+
+### Server (WebSocket) → Railway
+
+Vercel no soporta WebSockets persistentes. Usa Railway, Render, o Fly.io:
+
+**Railway:**
+1. Ve a [railway.app](https://railway.app)
+2. New Project → Deploy from GitHub repo
+3. Configura:
+   - **Root Directory:** `server`
+   - **Start Command:** `npm run build && npm start`
+4. Variables de entorno:
+   ```
+   PORT=4000
+   ```
+5. Railway te dará una URL como `https://beexoccer-server.up.railway.app`
+6. Copia esa URL a `VITE_REALTIME_URL` en Vercel
+
+**Render (alternativa):**
+1. Ve a [render.com](https://render.com)
+2. New → Web Service → Connect repo
+3. Configura:
+   - **Root Directory:** `server`
+   - **Build Command:** `npm install && npm run build`
+   - **Start Command:** `npm start`
+4. Render te dará una URL para usar en `VITE_REALTIME_URL`
+
+### Smart Contract (ya desplegado)
+
+El contrato `MatchManager` está en Polygon Amoy:
+```
+0x9197Aa4F607fC2e245411eb69ab2d72CDa02CC2b
+```
+
+Para redesplegar:
+```powershell
+npx hardhat run scripts/deploy.ts --network polygonAmoy
+```
+
+---
+
 ## License
 
 MIT-style placeholder; update when product charter finalizes.

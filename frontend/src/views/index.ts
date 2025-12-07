@@ -4,3 +4,5 @@ export { CreateBotMatchScreen } from "./CreateBotMatchScreen";
 export { AcceptMatchScreen } from "./AcceptMatchScreen";
 export { PlayingScreen } from "./PlayingScreen";
 export { BotMatchScreen } from "./BotMatchScreen";
+export { WaitingScreen } from "./WaitingScreen";
+export { ConnectWalletScreen } from "./ConnectWalletScreen";

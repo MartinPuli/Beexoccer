@@ -30,6 +30,7 @@ contract MatchManager {
     event MatchCreated(uint256 indexed matchId, address indexed creator, uint8 goalsTarget, bool isFree);
     event MatchJoined(uint256 indexed matchId, address indexed challenger);
     event MatchResult(uint256 indexed matchId, address indexed winner, uint256 totalPayout);
+    event MatchCancelled(uint256 indexed matchId, address indexed creator, uint256 refundAmount);
 
     error InvalidGoalTarget();
     error InvalidStakeCombo();
@@ -37,6 +38,8 @@ contract MatchManager {
     error MatchAlreadyCompleted();
     error NotParticipant();
     error ChallengerAlreadySet();
+    error NotCreator();
+    error MatchNotOpen();
 
     /**
      * @notice Opens a new match lobby. If `isFree` is false the creator must transfer stake tokens up-front.
@@ -96,6 +99,28 @@ contract MatchManager {
         }
 
         emit MatchJoined(matchId, msg.sender);
+    }
+
+    /**
+     * @notice Cancels an open match and refunds the creator's stake.
+     * @param matchId Lobby to cancel.
+     */
+    function cancelMatch(uint256 matchId) external {
+        Match storage matchInfo = matches[matchId];
+        if (msg.sender != matchInfo.creator) revert NotCreator();
+        if (!matchInfo.isOpen) revert MatchNotOpen();
+        if (matchInfo.challenger != address(0)) revert ChallengerAlreadySet();
+
+        matchInfo.isOpen = false;
+        matchInfo.isCompleted = true;
+
+        uint256 refundAmount = 0;
+        if (!matchInfo.isFree) {
+            refundAmount = matchInfo.stakeAmount;
+            _pushStake(matchInfo.stakeToken, matchInfo.creator, refundAmount);
+        }
+
+        emit MatchCancelled(matchId, msg.sender, refundAmount);
     }
 
     /**

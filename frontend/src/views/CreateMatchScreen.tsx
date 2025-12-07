@@ -3,15 +3,18 @@ import { createMatch } from "../services/matchService";
 import { useGameStore } from "../hooks/useGameStore";
 import { GoalTarget } from "../types/game";
 import { xoConnectService, TokenInfo } from "../services/xoConnectService";
+import { toast } from "../components/Toast";
 
 export function CreateMatchScreen() {
   const [goals, setGoals] = useState<GoalTarget>(3);
   const [isBet, setIsBet] = useState(false);
   const [stakeAmount, setStakeAmount] = useState("10");
-  const [selectedToken, setSelectedToken] = useState("MATIC");
+  const [selectedToken, setSelectedToken] = useState("POL");
   const [tokens, setTokens] = useState<TokenInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const setView = useGameStore((state) => state.setView);
+  const setWaitingMatch = useGameStore((state) => state.setWaitingMatch);
+  const userAddress = useGameStore((state) => state.userAddress);
 
   // Cargar tokens disponibles
   useEffect(() => {
@@ -32,7 +35,7 @@ export function CreateMatchScreen() {
         console.warn("Error loading tokens:", error);
         // Usar tokens mock en caso de error
         setTokens([
-          { symbol: "MATIC", name: "Polygon", address: "native", decimals: 18, type: "native", balance: "0", icon: "🟣" }
+          { symbol: "POL", name: "Polygon", address: "native", decimals: 18, type: "native", balance: "0", icon: "🟣" }
         ]);
       }
     };
@@ -46,24 +49,74 @@ export function CreateMatchScreen() {
     event.preventDefault();
     setLoading(true);
     try {
-      const token = tokens.find(t => t.symbol === selectedToken);
-      // Para tokens nativos (MATIC), usar address zero
-      // Para ERC20, usar la dirección del contrato
-      const tokenAddress = token?.type === "native" || token?.address === "native"
-        ? "0x0000000000000000000000000000000000000000"
-        : token?.address || "0x0000000000000000000000000000000000000000";
+      // Para partidas gratuitas: stakeAmount = 0 y stakeToken = address(0)
+      // Para partidas con apuesta: usar el token seleccionado
+      let tokenAddress = "0x0000000000000000000000000000000000000000";
+      let amount = "0";
       
-      await createMatch({
+      if (isBet) {
+        const token = tokens.find(t => t.symbol === selectedToken);
+        // Para tokens nativos (POL), usar address zero
+        // Para ERC20, usar la dirección del contrato
+        tokenAddress = token?.type === "native" || token?.address === "native"
+          ? "0x0000000000000000000000000000000000000000"
+          : token?.address || "0x0000000000000000000000000000000000000000";
+        amount = stakeAmount;
+      }
+      
+      console.log("📤 Creando partida:", { goals, isFree: !isBet, stakeAmount: amount, stakeToken: tokenAddress });
+      
+      const result = await createMatch({
+        goals,
+        isFree: !isBet,
+        stakeAmount: amount,
+        stakeToken: tokenAddress
+      });
+      
+      toast.success("¡Partida creada!", `Match #${result.matchId} esperando rival`);
+      
+      // Guardar info de la partida y ir a pantalla de espera
+      setWaitingMatch({
+        matchId: result.matchId,
         goals,
         isFree: !isBet,
         stakeAmount: isBet ? stakeAmount : "0",
-        stakeToken: tokenAddress
+        creatorAddress: userAddress
       });
-      alert("Partida creada. Esperando rival...");
-      setView("accept");
+      setView("waiting");
     } catch (error) {
       console.error(error);
-      alert("Error al crear partida");
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Analizar el tipo de error
+      if (errorMessage.includes("insufficient funds")) {
+        toast.error(
+          "Sin fondos para gas",
+          "Necesitas más POL para pagar la transacción",
+          {
+            label: "Obtener POL gratis",
+            onClick: () => window.open("https://faucet.polygon.technology/", "_blank")
+          }
+        );
+      } else if (errorMessage.includes("user rejected") || errorMessage.includes("ACTION_REJECTED")) {
+        toast.warning("Transacción cancelada", "Rechazaste la transacción en tu wallet");
+      } else if (errorMessage.includes("Red incorrecta")) {
+        toast.error("Red incorrecta", "Cambia a Polygon Amoy en MetaMask");
+      } else if (errorMessage.includes("Internal JSON-RPC") || errorMessage.includes("-32603")) {
+        // Error de RPC - puede ser problema de red o de nonce
+        toast.error(
+          "Error de conexión",
+          "Prueba: 1) Refrescar la página, 2) Reconectar MetaMask, 3) Cambiar el RPC de Polygon Amoy",
+          {
+            label: "Ver guía de solución",
+            onClick: () => {
+              alert(`Para solucionar este error:\n\n1. Abre MetaMask → Configuración → Redes\n2. Busca "Polygon Amoy" y elimínala\n3. Refresca esta página (la red se agregará automáticamente)\n4. Si persiste, ve a MetaMask → Configuración → Avanzado → Restablecer cuenta`);
+            }
+          }
+        );
+      } else {
+        toast.error("Error al crear partida", errorMessage.slice(0, 100));
+      }
     } finally {
       setLoading(false);
     }

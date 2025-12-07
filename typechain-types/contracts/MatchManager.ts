@@ -26,6 +26,7 @@ import type {
 export interface MatchManagerInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "cancelMatch"
       | "createMatch"
       | "joinMatch"
       | "matchCount"
@@ -34,9 +35,17 @@ export interface MatchManagerInterface extends Interface {
   ): FunctionFragment;
 
   getEvent(
-    nameOrSignatureOrTopic: "MatchCreated" | "MatchJoined" | "MatchResult"
+    nameOrSignatureOrTopic:
+      | "MatchCancelled"
+      | "MatchCreated"
+      | "MatchJoined"
+      | "MatchResult"
   ): EventFragment;
 
+  encodeFunctionData(
+    functionFragment: "cancelMatch",
+    values: [BigNumberish]
+  ): string;
   encodeFunctionData(
     functionFragment: "createMatch",
     values: [BigNumberish, boolean, BigNumberish, AddressLike]
@@ -59,6 +68,10 @@ export interface MatchManagerInterface extends Interface {
   ): string;
 
   decodeFunctionResult(
+    functionFragment: "cancelMatch",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "createMatch",
     data: BytesLike
   ): Result;
@@ -69,6 +82,28 @@ export interface MatchManagerInterface extends Interface {
     functionFragment: "reportResult",
     data: BytesLike
   ): Result;
+}
+
+export namespace MatchCancelledEvent {
+  export type InputTuple = [
+    matchId: BigNumberish,
+    creator: AddressLike,
+    refundAmount: BigNumberish
+  ];
+  export type OutputTuple = [
+    matchId: bigint,
+    creator: string,
+    refundAmount: bigint
+  ];
+  export interface OutputObject {
+    matchId: bigint;
+    creator: string;
+    refundAmount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace MatchCreatedEvent {
@@ -174,6 +209,12 @@ export interface MatchManager extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  cancelMatch: TypedContractMethod<
+    [matchId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   createMatch: TypedContractMethod<
     [
       goalsTarget: BigNumberish,
@@ -227,6 +268,9 @@ export interface MatchManager extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "cancelMatch"
+  ): TypedContractMethod<[matchId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "createMatch"
   ): TypedContractMethod<
@@ -283,6 +327,13 @@ export interface MatchManager extends BaseContract {
   >;
 
   getEvent(
+    key: "MatchCancelled"
+  ): TypedContractEvent<
+    MatchCancelledEvent.InputTuple,
+    MatchCancelledEvent.OutputTuple,
+    MatchCancelledEvent.OutputObject
+  >;
+  getEvent(
     key: "MatchCreated"
   ): TypedContractEvent<
     MatchCreatedEvent.InputTuple,
@@ -305,6 +356,17 @@ export interface MatchManager extends BaseContract {
   >;
 
   filters: {
+    "MatchCancelled(uint256,address,uint256)": TypedContractEvent<
+      MatchCancelledEvent.InputTuple,
+      MatchCancelledEvent.OutputTuple,
+      MatchCancelledEvent.OutputObject
+    >;
+    MatchCancelled: TypedContractEvent<
+      MatchCancelledEvent.InputTuple,
+      MatchCancelledEvent.OutputTuple,
+      MatchCancelledEvent.OutputObject
+    >;
+
     "MatchCreated(uint256,address,uint8,bool)": TypedContractEvent<
       MatchCreatedEvent.InputTuple,
       MatchCreatedEvent.OutputTuple,

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PitchCanvas } from "../components/PitchCanvas";
 import { useGameStore } from "../hooks/useGameStore";
 import { EventOverlay } from "../components/EventOverlay";
 import { socketService } from "../services/socketService";
+import { toast } from "../components/Toast";
 
 export function PlayingScreen() {
   const playing = useGameStore((state) => state.playing);
@@ -15,11 +16,17 @@ export function PlayingScreen() {
   const playerSide = useGameStore((state) => state.playerSide);
   const goalTarget = useGameStore((state) => state.matchGoalTarget);
   const setView = useGameStore((state) => state.setView);
+  const consecutiveTimeouts = useGameStore((state) => state.consecutiveTimeouts);
+  const resetTimeoutCounter = useGameStore((state) => state.resetTimeoutCounter);
+  const setActiveMatch = useGameStore((state) => state.setActiveMatch);
+  const clearSession = useGameStore((state) => state.clearSession);
+  const userAddress = useGameStore((state) => state.userAddress);
 
   const [aim, setAim] = useState<{ from: { x: number; y: number }; to: { x: number; y: number } } | undefined>();
   const dragRef = useRef<{ chipId: string; start: { x: number; y: number } } | null>(null);
   const [showEnd, setShowEnd] = useState(false);
   const [winner, setWinner] = useState<"creator" | "challenger" | null>(null);
+  const [loseReason, setLoseReason] = useState<string>("");
   const [timerPercent, setTimerPercent] = useState(100);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
@@ -31,13 +38,25 @@ export function PlayingScreen() {
     // Cleanup sockets
     socketService.offAll();
     socketService.disconnect();
-    // TODO: Notify server about forfeit
+    // Limpiar sesión al abandonar
+    clearSession();
+    toast.warning("Partida abandonada", "Has perdido la partida por abandono");
     setView("home");
   };
 
   const handleExitCancel = () => {
     setShowExitConfirm(false);
   };
+
+  // Guardar partida activa al montar
+  useEffect(() => {
+    setActiveMatch({
+      matchId,
+      playerSide,
+      goalTarget,
+      userAddress
+    });
+  }, [matchId, playerSide, goalTarget, userAddress, setActiveMatch]);
 
   useEffect(() => {
     socketService.connect(matchId, playerSide ?? "creator");
@@ -53,8 +72,19 @@ export function PlayingScreen() {
   const ball = playing?.ball ?? { x: 300, y: 450, vx: 0, vy: 0 };
   const creatorScore = playing?.creatorScore ?? 0;
   const challengerScore = playing?.challengerScore ?? 0;
-  const isMyTurn = playing?.activePlayer === "creator";
+  const isMyTurn = playing?.activePlayer === playerSide;
   const turnLabel = isMyTurn ? "Tu turno" : "Turno rival";
+
+  // Detectar 3 timeouts seguidos = derrota automática
+  useEffect(() => {
+    if (consecutiveTimeouts >= 3) {
+      toast.error("¡Derrota por inactividad!", "Perdiste 3 turnos seguidos");
+      setWinner(playerSide === "creator" ? "challenger" : "creator");
+      setLoseReason("Perdiste por inactividad (3 turnos sin jugar)");
+      setShowEnd(true);
+      clearSession();
+    }
+  }, [consecutiveTimeouts, playerSide, clearSession]);
 
   // Timer countdown
   useEffect(() => {
@@ -74,20 +104,40 @@ export function PlayingScreen() {
     return () => globalThis.clearTimeout(timeout);
   }, [lastEvent, clearLastEvent]);
 
-  const handleTimeout = useCallback(() => {
-    registerTimeout();
-  }, [registerTimeout]);
+  // Detectar timeout de turno (en modo online el servidor lo maneja)
+  useEffect(() => {
+    if (!playing?.turnEndsAt || !isMyTurn) return;
+    
+    const checkTimeout = () => {
+      if (Date.now() >= playing.turnEndsAt) {
+        registerTimeout();
+      }
+    };
+    
+    const remaining = playing.turnEndsAt - Date.now();
+    if (remaining <= 0) {
+      registerTimeout();
+      return;
+    }
+    
+    const timer = setTimeout(checkTimeout, remaining);
+    return () => clearTimeout(timer);
+  }, [playing?.turnEndsAt, isMyTurn, registerTimeout]);
 
   useEffect(() => {
     if (!playing) return;
     if (creatorScore >= goalTarget) {
       setWinner("creator");
+      setLoseReason("");
       setShowEnd(true);
+      clearSession(); // Limpiar sesión al terminar
     } else if (challengerScore >= goalTarget) {
       setWinner("challenger");
+      setLoseReason("");
       setShowEnd(true);
+      clearSession(); // Limpiar sesión al terminar
     }
-  }, [playing, creatorScore, challengerScore, goalTarget]);
+  }, [playing, creatorScore, challengerScore, goalTarget, clearSession]);
 
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!playing) return;
@@ -119,6 +169,8 @@ export function PlayingScreen() {
     const dx = (start.x - x) * 0.15;
     const dy = (start.y - y) * 0.15;
     socketService.sendInput(matchId, chipId, { dx, dy });
+    // Resetear contador de timeouts cuando el jugador hace una jugada
+    resetTimeoutCounter();
     dragRef.current = null;
     setAim(undefined);
   };
@@ -177,14 +229,34 @@ export function PlayingScreen() {
         }}>
           <div style={{
             background: "var(--dark-panel)",
-            border: "3px solid var(--border-green)",
+            border: `3px solid ${winner === playerSide ? "var(--neon-green)" : "#ff4f64"}`,
             borderRadius: 24,
             padding: 32,
             textAlign: "center",
-            color: "var(--text-white)"
+            color: "var(--text-white)",
+            maxWidth: 320
           }}>
-            <h2>{winner === "creator" ? "¡GANASTE!" : "Perdiste"}</h2>
-            <button className="home-btn primary" style={{ marginTop: 20 }} onClick={() => setView("home")}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>
+              {winner === playerSide ? "🏆" : "😢"}
+            </div>
+            <h2 style={{ 
+              color: winner === playerSide ? "var(--neon-green)" : "#ff4f64",
+              marginBottom: 8
+            }}>
+              {winner === playerSide ? "¡GANASTE!" : "Perdiste"}
+            </h2>
+            {loseReason && (
+              <p style={{ color: "#888", fontSize: 14, marginBottom: 16 }}>{loseReason}</p>
+            )}
+            <div style={{ 
+              fontSize: 24, 
+              fontWeight: 700, 
+              marginBottom: 20,
+              color: "#fff"
+            }}>
+              {creatorScore} - {challengerScore}
+            </div>
+            <button className="home-btn primary" onClick={() => setView("home")}>
               Volver al inicio
             </button>
           </div>
