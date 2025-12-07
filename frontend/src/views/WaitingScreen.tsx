@@ -93,6 +93,16 @@ export function WaitingScreen() {
   const handleConfirmCancel = async () => {
     if (!waitingMatch) return;
     
+    // Validar matchId antes de intentar cancelar
+    if (!waitingMatch.matchId || waitingMatch.matchId <= 0) {
+      toast.error("Error", "ID de partida inválido. Vuelve al lobby.");
+      setWaitingMatch(undefined);
+      setView("accept");
+      return;
+    }
+    
+    console.log("🚫 Intentando cancelar partida #", waitingMatch.matchId);
+    
     setCancelling(true);
     try {
       await cancelMatch(waitingMatch.matchId);
@@ -103,12 +113,27 @@ export function WaitingScreen() {
       console.error("Error cancelling match:", error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       
-      if (errorMessage.includes("insufficient funds") || errorMessage.includes("Internal JSON-RPC")) {
+      // Mensajes específicos según el error
+      if (errorMessage.includes("creador")) {
+        toast.error("No autorizado", errorMessage);
+      } else if (errorMessage.includes("abierta")) {
+        toast.error("Partida cerrada", errorMessage);
+        setWaitingMatch(undefined);
+        setView("accept");
+      } else if (errorMessage.includes("rival")) {
+        toast.warning("¡Ya tienes rival!", "La partida comenzará pronto");
+      } else if (errorMessage.includes("inválido")) {
+        toast.error("Error", errorMessage);
+        setWaitingMatch(undefined);
+        setView("accept");
+      } else if (errorMessage.includes("insufficient funds") || errorMessage.includes("Fondos insuficientes")) {
         toast.error("Sin fondos", "Necesitas POL para cancelar");
-      } else if (errorMessage.includes("user rejected")) {
+      } else if (errorMessage.includes("user rejected") || errorMessage.includes("cancelada por el usuario")) {
         toast.warning("Cancelación rechazada", "Sigues esperando rival");
+      } else if (errorMessage.includes("MetaMask") || errorMessage.includes("-32603")) {
+        toast.error("Error de MetaMask", errorMessage);
       } else {
-        toast.error("Error", "No se pudo cancelar la partida");
+        toast.error("Error", errorMessage || "No se pudo cancelar la partida");
       }
     } finally {
       setCancelling(false);
