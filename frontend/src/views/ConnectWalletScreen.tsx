@@ -103,69 +103,55 @@ export function ConnectWalletScreen() {
 
   return (
     <div className="connect-screen">
-      {/* Logo */}
-      <div className="connect-logo">
-        <img src={logoSvg} alt="Beexoccer" className="connect-logo-img" />
+      <div className="connect-logo" style={{ marginBottom: 32 }}>
+        <img src={logoSvg} alt="Beexoccer" style={{ width: 68, height: 68, opacity: 0.92 }} />
       </div>
-
-      {/* Mensaje principal */}
-      <div className="connect-content">
-        <h1 className="connect-title">Conecta tu Wallet</h1>
-        <p className="connect-subtitle">
-          Necesitas una wallet para jugar partidas online y apostar cripto.
+      <div className="connect-content" style={{ maxWidth: 350, margin: '0 auto', background: 'none', boxShadow: 'none', padding: 0 }}>
+        <h1 style={{ fontSize: '1.55rem', fontWeight: 700, margin: '0 0 18px 0', color: '#ffe45b', letterSpacing: '.01em', textAlign: 'center' }}>
+          Conectá tu Beexo Wallet
+        </h1>
+        <p style={{ color: '#888', fontSize: '1.02rem', margin: '0 0 32px 0', textAlign: 'center' }}>
+          Para jugar online y apostar cripto necesitas conectar tu wallet.
         </p>
-
-        {/* Botón de conexión con Beexo */}
-        <button 
+        <button
           className="connect-btn primary"
           onClick={handleConnect}
           disabled={connecting}
+          style={{ width: '100%', marginBottom: 22, padding: '13px 0', fontSize: '1.07rem', borderRadius: 12, boxShadow: 'none' }}
         >
           {connecting ? (
-            <>
-              <span className="connect-spinner">⏳</span>
-              Conectando...
-            </>
+            <span><span className="connect-spinner">⏳</span> Conectando...</span>
           ) : (
-            <>
-              🐝 Conectar con Beexo
-            </>
+            <span>🐝 Conectar con Beexo</span>
           )}
         </button>
-
-        {/* Error */}
         {error && (
-          <div className="connect-error">
-            <span className="connect-error-icon">⚠️</span>
-            {error}
+          <div className="connect-error" style={{ marginBottom: 18, textAlign: 'center', color: '#e74c3c', fontSize: '1rem' }}>
+            <span className="connect-error-icon">⚠️</span> {error}
           </div>
         )}
-
-        {/* Info adicional */}
-        <div className="connect-info">
-          <p>¿No tenés Beexo Wallet?</p>
-          <a 
-            href={BEEXO_DOWNLOAD_URL}
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="connect-link"
-          >
-            Descargar Beexo Wallet →
-          </a>
+        <a
+          href={BEEXO_DOWNLOAD_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="connect-link"
+          style={{ display: 'block', textAlign: 'center', fontWeight: 500, color: '#ffe45b', marginBottom: 30, fontSize: '1.01rem', textDecoration: 'none' }}
+        >
+          ¿No tenés Beexo Wallet? Descargala gratis
+        </a>
+        <div className="or-divider" style={{ margin: '18px 0', textAlign: 'center', color: '#bbb', fontSize: '1.09rem', letterSpacing: '.1em' }}>
+          <span>o</span>
         </div>
-
-        {/* Botón para jugar sin wallet (solo bot) */}
-        <button 
+        <button
           className="connect-btn secondary"
           onClick={() => setView("createBot")}
+          style={{ width: '100%', padding: '13px 0', fontSize: '1.07rem', borderRadius: 12, background: 'none', border: '1.5px solid #ffe45b', color: '#ffe45b', marginBottom: 8, boxShadow: 'none' }}
         >
-          🤖 Jugar contra Bot (sin wallet)
+          🤖 Jugar contra el Bot (sin wallet)
         </button>
       </div>
-
-      {/* Footer */}
-      <div className="connect-footer">
-        <p>Red: Polygon Amoy Testnet • Powered by XO Connect</p>
+      <div className="connect-footer" style={{ marginTop: 40, fontSize: '0.98rem', color: '#aaa', textAlign: 'center', letterSpacing: '.02em' }}>
+        <p>Polygon Amoy Testnet • XO Connect</p>
       </div>
     </div>
   );

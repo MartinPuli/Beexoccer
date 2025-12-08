@@ -1,4 +1,36 @@
 import { useEffect, useRef, useState } from "react";
+
+// Helper para animar favicon
+function setAnimatedFavicon(isLoading: boolean) {
+  const faviconId = "dynamic-favicon-loading";
+  // Elimina todos los favicons existentes antes de agregar el nuestro
+  document.querySelectorAll('link[rel="icon"]').forEach((el) => el.parentNode?.removeChild(el));
+  let favicon = document.getElementById(faviconId) as HTMLLinkElement | null;
+  if (!favicon) {
+    favicon = document.createElement("link");
+    favicon.id = faviconId;
+    favicon.rel = "icon";
+    document.head.appendChild(favicon);
+  }
+  if (isLoading) {
+    let angle = 0;
+    function animate() {
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'><g transform='rotate(${angle},32,32)'><circle cx='32' cy='32' r='30' fill='%2300ff6a' opacity='0.13'/><circle cx='32' cy='32' r='24' fill='%230a1a10' stroke='%2300ff6a' stroke-width='2'/><path d='M32 12 L38 20 L35 28 L29 28 L26 20 Z' fill='%2300ff6a' opacity='0.9'/><path d='M48 26 L52 34 L48 42 L40 40 L38 32 Z' fill='%2300ff6a' opacity='0.9'/><path d='M16 26 L26 32 L24 40 L16 42 L12 34 Z' fill='%2300ff6a' opacity='0.9'/><path d='M22 48 L30 44 L38 48 L36 56 L28 56 Z' fill='%2300ff6a' opacity='0.9'/></g></svg>`;
+      favicon!.type = "image/svg+xml";
+      favicon!.href = "data:image/svg+xml," + encodeURIComponent(svg);
+      angle = (angle + 12) % 360;
+      (window as any)._faviconAnimFrame = requestAnimationFrame(animate);
+    }
+    animate();
+  } else {
+    if ((window as any)._faviconAnimFrame) {
+      cancelAnimationFrame((window as any)._faviconAnimFrame);
+      (window as any)._faviconAnimFrame = null;
+    }
+    favicon!.type = "image/svg+xml";
+    favicon!.href = "/favicon.svg";
+  }
+}
 import { useGameStore } from "./hooks/useGameStore";
 import {
   AcceptMatchScreen,
@@ -15,6 +47,12 @@ import { ToastContainer, useToast, toast } from "./components/Toast";
 import { cancelMatch, checkMatchStatus } from "./services/matchService";
 
 export default function App() {
+  // Estado de loading global (ajusta esto según tu lógica)
+  const [isLoading, setIsLoading] = useState(false);
+  useEffect(() => {
+    setAnimatedFavicon(isLoading);
+    return () => setAnimatedFavicon(false);
+  }, [isLoading]);
   const view = useGameStore((state) => state.view);
   const setView = useGameStore((state) => state.setView);
   const setAlias = useGameStore((state) => state.setAlias);
