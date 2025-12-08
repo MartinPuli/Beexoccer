@@ -10,8 +10,8 @@ export const env = {
   chainIdHex: "0x89",
   
   // Dirección del contrato MatchManager en Polygon Mainnet (se actualizará después del deploy)
-  matchManagerAddress: "",
+  matchManagerAddress: "0xad6715C528F092D31010407C1D9Eb961A1aB545C",
   
-  // URL del servidor de tiempo real
-  realtimeUrl: "https://beexoccer-server.onrender.com"
+  // URL del servidor de tiempo real (usar localhost para desarrollo, producción para deploy)
+  realtimeUrl: "http://localhost:4000"
 };

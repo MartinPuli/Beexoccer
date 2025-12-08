@@ -7,6 +7,7 @@
 import React, { useState } from "react";
 import { walletService } from "../services/walletService";
 import { useGameStore } from "../hooks/useGameStore";
+import beexoccerLogo from "../assets/BEEXOCCER.png";
 import beexoLogo from "../assets/beexo.png";
 
 const BEEXO_DOWNLOAD_URL = "https://share.beexo.com/?type=download";
@@ -118,8 +119,8 @@ export const NeedBeexoScreen: React.FC<ConnectWalletScreenProps> = ({ onConnecte
 
         <div className="beexo-logo">
           <img 
-            src={beexoLogo}
-            alt="Beexo Wallet" 
+            src={beexoccerLogo}
+            alt="BEEXOCCER" 
             className="beexo-logo-img"
           />
         </div>
@@ -147,7 +148,7 @@ export const NeedBeexoScreen: React.FC<ConnectWalletScreenProps> = ({ onConnecte
             </div>
           ) : (
             <div className="button-content">
-              <span className="btn-icon">🐝</span>
+              <img src={beexoLogo} alt="Beexo" className="wallet-icon" />
               <span>Conectar con Beexo</span>
             </div>
           )}
@@ -182,7 +183,7 @@ export const NeedBeexoScreen: React.FC<ConnectWalletScreenProps> = ({ onConnecte
         
         <div className="wallet-info">
           <div className="info-item">
-            <span className="info-icon">🐝</span>
+            <img src={beexoLogo} alt="Beexo" className="info-icon-img" />
             <div>
               <strong>Beexo Wallet</strong>
               <p>Tu alias aparece en el juego</p>
