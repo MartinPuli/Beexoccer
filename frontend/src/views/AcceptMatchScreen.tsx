@@ -143,7 +143,7 @@ export function AcceptMatchScreen() {
                     <span className="lobby-badge own">⏳ Esperando</span>
                   </div>
                   <span className={`lobby-stake ${m.isFree ? "free" : ""}`}>
-                    {m.isFree ? "GRATIS" : `${m.stakeAmount} POL`}
+                    {m.isFree ? "GRATIS" : `${m.stakeAmount || "0"} POL`}
                   </span>
                   <span className="lobby-meta">Goles: {m.goals}</span>
                 </div>
@@ -167,7 +167,7 @@ export function AcceptMatchScreen() {
                     <span className="lobby-badge">🏆 {m.goals} goles</span>
                   </div>
                   <span className={`lobby-stake ${m.isFree ? "free" : ""}`}>
-                    {m.isFree ? "GRATIS" : `${m.stakeAmount} POL`}
+                    {m.isFree ? "GRATIS" : `${m.stakeAmount || "0"} POL`}
                   </span>
                   <span className="lobby-creator">
                     {m.creator.slice(0, 6)}...{m.creator.slice(-4)}

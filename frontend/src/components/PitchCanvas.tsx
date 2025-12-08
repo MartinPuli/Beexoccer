@@ -156,11 +156,12 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
 
         {/* Fichas */}
         {chips.map((chip) => {
-          const isPlayer = chip.owner === "creator";
-          const chipColor = isPlayer ? "var(--accent-blue, #00a8ff)" : "var(--accent-red, #ff4d5a)";
-          const borderColor = isPlayer ? "#0066cc" : "#cc0022";
-          // Glow solo si es el turno del jugador correspondiente
-          const isActive = activePlayer === chip.owner && (isPlayerTurn || chip.owner === "challenger");
+          // Azul = mi ficha, Rojo = rival (ya transformado por PlayingScreen)
+          const isMyChip = chip.fill === "#00a8ff";
+          const chipColor = chip.fill || (isMyChip ? "var(--accent-blue, #00a8ff)" : "var(--accent-red, #ff4d5a)");
+          const borderColor = isMyChip ? "#0066cc" : "#cc0022";
+          // Glow solo si es mi turno y es mi ficha
+          const isActive = isPlayerTurn && isMyChip;
           const isSelected = highlightId === chip.id;
           
           return (
@@ -172,7 +173,7 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
                   cy={chip.y} 
                   r={chip.radius + 8} 
                   fill="none" 
-                  stroke={isPlayer ? "var(--accent-blue, #00a8ff)" : "var(--accent-red, #ff4d5a)"}
+                  stroke={chipColor}
                   strokeWidth="3"
                   opacity="0.6"
                   filter="url(#activeGlow)"

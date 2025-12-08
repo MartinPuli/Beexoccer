@@ -26,7 +26,7 @@ type ClientToServerEvents = {
   forfeit: (payload: { matchId: string }) => void;
   subscribeLobbies: () => void;
   unsubscribeLobbies: () => void;
-  createLobby: (payload: { matchId: string; creator: string; creatorAlias: string; stake: string }) => void;
+  createLobby: (payload: { matchId: string; creator: string; creatorAlias: string; goals: number; isFree: boolean; stakeAmount: string }) => void;
   joinLobby: (payload: { matchId: string; challenger: string; challengerAlias: string }) => void;
   cancelLobby: (payload: { matchId: string }) => void;
 };
@@ -134,6 +134,7 @@ class SocketService {
     this.lobbyCreatedCallbacks = [];
     this.socket?.off("lobbiesUpdate");
     this.socket?.off("lobbyCreated");
+    this.socket?.off("lobbyCancelled");
   }
 
   disconnect() {
@@ -188,15 +189,16 @@ class SocketService {
   }
 
   // Lobby management methods
-  createLobby(matchId: string, creator: string, creatorAlias: string, stake: string) {
-    if (!this.socket?.connected) {
+  createLobby(matchId: string, creator: string, creatorAlias: string, goals: number, isFree: boolean, stakeAmount: string) {
+    const payload = { matchId, creator, creatorAlias, goals, isFree, stakeAmount };
+    if (this.socket?.connected) {
+      this.socket.emit("createLobby", payload);
+    } else {
       // Connect first, then emit when connected
       this.connectLobbies();
       this.socket?.once("connect", () => {
-        this.socket?.emit("createLobby", { matchId, creator, creatorAlias, stake });
+        this.socket?.emit("createLobby", payload);
       });
-    } else {
-      this.socket.emit("createLobby", { matchId, creator, creatorAlias, stake });
     }
   }
 
