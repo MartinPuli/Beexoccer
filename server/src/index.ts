@@ -192,14 +192,26 @@ function reflect(entity: { x: number; y: number; vx: number; vy: number; radius:
     entity.x = FIELD_WIDTH - entity.radius;
     entity.vx = -Math.abs(entity.vx) * WALL_RESTITUTION;
   }
-  // Walls top/bottom
+  
+  // Verificar si está en la zona del arco (para permitir goles)
+  const inGoalX = entity.x >= GOAL_X_START && entity.x <= GOAL_X_END;
+  
+  // Walls top/bottom - pero NO rebotar si está en el arco
   if (entity.y - entity.radius < 0) {
-    entity.y = entity.radius;
-    entity.vy = Math.abs(entity.vy) * WALL_RESTITUTION;
+    if (!inGoalX) {
+      // Fuera del arco: rebotar
+      entity.y = entity.radius;
+      entity.vy = Math.abs(entity.vy) * WALL_RESTITUTION;
+    }
+    // Si está en el arco, dejarlo pasar (se detectará como gol)
   }
   if (entity.y + entity.radius > FIELD_HEIGHT) {
-    entity.y = FIELD_HEIGHT - entity.radius;
-    entity.vy = -Math.abs(entity.vy) * WALL_RESTITUTION;
+    if (!inGoalX) {
+      // Fuera del arco: rebotar
+      entity.y = FIELD_HEIGHT - entity.radius;
+      entity.vy = -Math.abs(entity.vy) * WALL_RESTITUTION;
+    }
+    // Si está en el arco, dejarlo pasar (se detectará como gol)
   }
 }
 

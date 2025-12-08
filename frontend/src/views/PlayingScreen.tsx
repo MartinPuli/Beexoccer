@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { PitchCanvas } from "../components/PitchCanvas";
 import { useGameStore } from "../hooks/useGameStore";
 import { socketService } from "../services/socketService";
+import { reportResult } from "../services/matchService";
 import { TokenChip, PlayingSnapshot } from "../types/game";
 
 /**
@@ -72,6 +73,8 @@ export function PlayingScreen() {
   const goalTarget = useGameStore((s) => s.matchGoalTarget);
   const setView = useGameStore((s) => s.setView);
   const setMatchStatus = useGameStore((s) => s.setMatchStatus);
+  const setCurrentMatchId = useGameStore((s) => s.setCurrentMatchId);
+  const setActiveMatch = useGameStore((s) => s.setActiveMatch);
   const alias = useGameStore((s) => s.alias);
 
   const isChallenger = playerSide === "challenger";
@@ -90,13 +93,36 @@ export function PlayingScreen() {
   const [commentary, setCommentary] = useState("Conectando...");
   const [connected, setConnected] = useState(false);
   const [shotPower, setShotPower] = useState(0);
+  const [goalAnimation, setGoalAnimation] = useState<"you" | "rival" | null>(null);
+  const [turnLostAnimation, setTurnLostAnimation] = useState(false);
 
   const dragRef = useRef<{ chipId: string; start: { x: number; y: number } } | null>(null);
   const turnEndRef = useRef<number>(Date.now() + TURN_TIME);
   const consecutiveTimeoutsRef = useRef(0);
   const lastTurnPlayerRef = useRef<"creator" | "challenger" | null>(null);
+  const resultReportedRef = useRef(false);
 
   const isMyTurn = (isChallenger && activePlayer === "challenger") || (!isChallenger && activePlayer === "creator");
+
+  // Reportar resultado al contrato cuando la partida termina
+  useEffect(() => {
+    if (!showEnd || !winner || !currentMatchId || resultReportedRef.current) return;
+    
+    // Solo el ganador reporta el resultado para evitar doble llamada
+    if (winner === "you") {
+      resultReportedRef.current = true;
+      const matchIdNum = Number.parseInt(currentMatchId, 10);
+      const userAddress = useGameStore.getState().userAddress;
+      
+      if (matchIdNum && userAddress) {
+        console.log("[PlayingScreen] Reporting result to contract:", { matchId: matchIdNum, winner: userAddress });
+        reportResult(matchIdNum, userAddress).catch((err) => {
+          console.error("[PlayingScreen] Error reporting result:", err);
+          // El error puede ser porque la partida es gratis o ya se reportó
+        });
+      }
+    }
+  }, [showEnd, winner, currentMatchId]);
 
   // Conectar al servidor de tiempo real
   useEffect(() => {
@@ -156,10 +182,18 @@ export function PlayingScreen() {
 
     socketService.onEvent((event) => {
       if (event.type === "goal-self") {
+        // goal-self = el jugador activo metió gol
+        setGoalAnimation("you");
         setCommentary("¡GOOOL!");
+        setTimeout(() => setGoalAnimation(null), 2000);
       } else if (event.type === "goal-rival") {
+        setGoalAnimation("rival");
         setCommentary("Gol rival...");
+        setTimeout(() => setGoalAnimation(null), 2000);
       } else if (event.type === "timeout") {
+        // Mostrar animación de turno perdido
+        setTurnLostAnimation(true);
+        setTimeout(() => setTurnLostAnimation(false), 1500);
         const myServerSide = isChallenger ? "challenger" : "creator";
         if (event.from === myServerSide) {
           consecutiveTimeoutsRef.current += 1;
@@ -290,14 +324,17 @@ export function PlayingScreen() {
     setShotPower(normalizedPower);
     (globalThis as Record<string, unknown>).shotPower = normalizedPower;
 
+    // La línea de apuntado muestra hacia dónde IRÁ la ficha
+    // Para el challenger, el impulso se invierte, así que la aim line también
+    const aimAngle = isChallenger ? angle + Math.PI : angle;
     setAim({
       from: { x: chip.x, y: chip.y },
       to: {
-        x: chip.x + Math.cos(angle) * dist,
-        y: chip.y + Math.sin(angle) * dist
+        x: chip.x + Math.cos(aimAngle) * dist * 1.5,
+        y: chip.y + Math.sin(aimAngle) * dist * 1.5
       }
     });
-  }, [chips, getSvgPoint]);
+  }, [chips, getSvgPoint, isChallenger]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (!dragRef.current || !currentMatchId) {
@@ -353,6 +390,10 @@ export function PlayingScreen() {
       socketService.sendForfeit(currentMatchId);
     }
     socketService.disconnect();
+    // Limpiar estado del store
+    setCurrentMatchId(undefined);
+    setActiveMatch(undefined);
+    setMatchStatus("idle");
     setView("home");
   };
   const cancelExit = () => setShowExitConfirm(false);
@@ -364,6 +405,10 @@ export function PlayingScreen() {
 
   const handleGoHome = () => {
     socketService.disconnect();
+    // Limpiar estado del store
+    setCurrentMatchId(undefined);
+    setActiveMatch(undefined);
+    setMatchStatus("idle");
     setView("home");
   };
 
@@ -448,6 +493,22 @@ export function PlayingScreen() {
       <div className="commentary">
         {!connected ? "🔄 Conectando al servidor..." : commentary}
       </div>
+
+      {/* Animación de GOL */}
+      {goalAnimation && (
+        <div className={`goal-overlay ${goalAnimation === "you" ? "goal-you" : "goal-rival"}`}>
+          <div className="goal-text">
+            {goalAnimation === "you" ? "⚽ ¡GOOOL!" : "😔 Gol rival"}
+          </div>
+        </div>
+      )}
+
+      {/* Animación de turno perdido */}
+      {turnLostAnimation && (
+        <div className="turn-lost-overlay">
+          <div className="turn-lost-text">⏱️ Turno perdido</div>
+        </div>
+      )}
 
       {/* Player info */}
       <div className="player-info">

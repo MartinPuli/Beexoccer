@@ -125,32 +125,67 @@ export default function App() {
   }, []);
 
   const restorePendingMatches = async (address: string) => {
-    if (waitingMatch) {
-      const status = await checkMatchStatus(waitingMatch.matchId);
+    // Leer directamente de localStorage porque zustand persist puede no haber hidratado aún
+    let storedWaitingMatch = waitingMatch;
+    let storedActiveMatch = activeMatch;
+    
+    if (!storedWaitingMatch && !storedActiveMatch) {
+      try {
+        const stored = localStorage.getItem("beexoccer-session");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.state) {
+            storedWaitingMatch = parsed.state.waitingMatch;
+            storedActiveMatch = parsed.state.activeMatch;
+          }
+        }
+      } catch (e) {
+        console.warn("Error parsing stored session:", e);
+      }
+    }
+    
+    if (storedWaitingMatch) {
+      // Verificar que la partida pertenece a este usuario
+      if (storedWaitingMatch.creatorAddress?.toLowerCase() !== address.toLowerCase()) {
+        console.log("Waiting match belongs to different user, clearing");
+        setWaitingMatch(undefined);
+        return;
+      }
+      
+      const status = await checkMatchStatus(storedWaitingMatch.matchId);
       if (status.hasChallenger) {
         toast.info("¡Tu partida comenzó!", "Un rival se unió mientras no estabas");
-        setCurrentMatchId(String(waitingMatch.matchId));
+        setCurrentMatchId(String(storedWaitingMatch.matchId));
         setPlayerSide("creator");
-        setMatchGoalTarget(waitingMatch.goals);
+        setMatchGoalTarget(storedWaitingMatch.goals);
         setMatchStatus("playing");
         setActiveMatch({
-          matchId: String(waitingMatch.matchId),
+          matchId: String(storedWaitingMatch.matchId),
           playerSide: "creator",
-          goalTarget: waitingMatch.goals,
+          goalTarget: storedWaitingMatch.goals,
           userAddress: address
         });
         setWaitingMatch(undefined);
         setView("playing");
       } else {
         toast.info("Partida pendiente", "Sigues esperando un rival");
+        setWaitingMatch(storedWaitingMatch); // Asegurar que esté en el store
         setView("waiting");
       }
-    } else if (activeMatch) {
+    } else if (storedActiveMatch) {
+      // Verificar que la partida pertenece a este usuario
+      if (storedActiveMatch.userAddress?.toLowerCase() !== address.toLowerCase()) {
+        console.log("Active match belongs to different user, clearing");
+        setActiveMatch(undefined);
+        return;
+      }
+      
       toast.info("Partida en curso", "Volviendo a tu partida");
-      setCurrentMatchId(activeMatch.matchId);
-      setPlayerSide(activeMatch.playerSide);
-      setMatchGoalTarget(activeMatch.goalTarget);
+      setCurrentMatchId(storedActiveMatch.matchId);
+      setPlayerSide(storedActiveMatch.playerSide);
+      setMatchGoalTarget(storedActiveMatch.goalTarget);
       setMatchStatus("playing");
+      setActiveMatch(storedActiveMatch); // Asegurar que esté en el store
       setView("playing");
     }
   };
