@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.2",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "ngrok": "^5.0.0-beta.2"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

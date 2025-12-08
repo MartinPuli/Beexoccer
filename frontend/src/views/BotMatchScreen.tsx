@@ -26,11 +26,11 @@ const GOAL_RIGHT = 380;
 /* =========================
    FÍSICA / TUNING
    ========================= */
-const FRICTION = 0.97;
-const EPSILON = 0.12;
-const POWER = 0.25;
-const MAX_SPEED = 12;
-const MAX_DRAG_DISTANCE = 350;
+const FRICTION = 0.96;  // Aumentado ligeramente para más deslizamiento
+const EPSILON = 0.1;    // Reducido para detección de parada más sensible
+const POWER = 0.3;      // Aumentado para mejor respuesta
+const MAX_SPEED = 15;   // Aumentado para mayor velocidad máxima
+const MAX_DRAG_DISTANCE = 300;  // Reducido para mejor control
 const TURN_TIME = 10000;
 
 /* =========================
@@ -258,6 +258,13 @@ export function BotMatchScreen() {
   const turnTakenRef = useRef(false);
   const turnStartTimeRef = useRef<number>(Date.now());
   const goalScoredRef = useRef(false);
+  const botAggressionRef = useRef(0.5);
+  const botStatsRef = useRef({
+    shots: 0,
+    passes: 0,
+    goals: 0,
+    conceded: 0,
+  });
 
   // EXIT handlers
   const handleExitRequest = () => setShowExitConfirm(true);
@@ -266,13 +273,89 @@ export function BotMatchScreen() {
 
   const momentum = myScore - botScore;
   const momentumPercent = 50 + (momentum / Math.max(1, goalTarget)) * 50;
+  const recomputeBotAggression = () => {
+    const stats = botStatsRef.current;
+    const scoreDiff = myScore - botScore;
+    const pressure = stats.conceded - stats.goals;
+    // Modo equilibrado: agresividad media que se adapta al marcador y a la presión
+    let value = 0.65 + scoreDiff * 0.05 + pressure * 0.04;
+    if (botScore > myScore + 1) {
+      // Si va muy arriba en el marcador, baja un poco la agresividad
+      value -= 0.08;
+    }
+    botAggressionRef.current = clamp(value, 0.35, 0.9);
+  };
   
-  // Función para el disparo del bot
-  const botShoot = useCallback(() => {
-    console.log("Intentando ejecutar botShoot...");
+  // Analiza la posición de los defensores y el arquero
+  const analyzeDefense = useCallback((botChip: MovingChip, playerChips: MovingChip[]) => {
+    // Encontrar el arquero (jugador más cercano a su propia área)
+    const goalkeeper = [...playerChips].sort(
+      (a, b) => (Math.hypot(a.x - 300, a.y - 800) - Math.hypot(b.x - 300, b.y - 800))
+    )[0];
     
-    // Obtener fichas del bot y la pelota
+    // Calcular ángulo desde la posición del bot al arco
+    const goalLeft = { x: 220, y: 850 };
+    const goalRight = { x: 380, y: 850 };
+    
+    // Crear múltiples puntos objetivo en el arco
+    const goalTargets = Array.from({ length: 9 }, (_, i) => ({
+      x: goalLeft.x + (i * (goalRight.x - goalLeft.x) / 8),
+      y: goalLeft.y
+    }));
+    
+    // Calcular puntuación para cada punto del arco
+    const scoredTargets = goalTargets.map(target => {
+      // Distancia al arquero (cuanto más lejos, mejor)
+      const goalieDist = Math.hypot(goalkeeper.x - target.x, goalkeeper.y - target.y);
+      
+      // Ángulo desde la posición del bot
+      const angleToTarget = Math.atan2(target.y - botChip.y, target.x - botChip.x);
+      
+      // Verificar si hay defensores en la línea de tiro
+      const defendersInWay = playerChips.filter(player => {
+        if (player === goalkeeper) return false;
+        
+        // Calcular distancia del jugador a la línea de tiro
+        const A = { x: botChip.x, y: botChip.y };
+        const B = { x: target.x, y: target.y };
+        const P = { x: player.x, y: player.y };
+        
+        // Distancia del punto a la línea (A-B)
+        const normalLength = Math.hypot(B.x - A.x, B.y - A.y);
+        const distance = Math.abs((P.x - A.x) * (B.y - A.y) - (P.y - A.y) * (B.x - A.x)) / normalLength;
+        
+        // Verificar si el defensor está en el camino
+        const dotProduct = ((P.x - A.x) * (B.x - A.x) + (P.y - A.y) * (B.y - A.y)) / (normalLength * normalLength);
+        return distance < 50 && dotProduct > 0 && dotProduct < 1;
+      }).length;
+      
+      // Calcular puntuación (mayor es mejor)
+      let score = goalieDist; // Preferir lejos del arquero
+      score -= defendersInWay * 100; // Penalizar defensores en el camino
+      
+      // Preferir tiros con mejor ángulo
+      const angleScore = 1 - Math.abs(angleToTarget) / (Math.PI / 2);
+      score += angleScore * 50;
+      
+      return { x: target.x, y: target.y, score };
+    });
+    
+    // Ordenar por puntuación y devolver el mejor
+    const bestTarget = [...scoredTargets].sort((a, b) => b.score - a.score)[0];
+    
+    return {
+      target: { x: bestTarget.x, y: bestTarget.y },
+      goalkeeperPosition: { x: goalkeeper.x, y: goalkeeper.y }
+    };
+  }, []);
+
+  // Función para el disparo del bot con IA mejorada
+  const botShoot = useCallback(() => {
+    console.log("Ejecutando botShoot con IA...");
+    
+    // Obtener fichas del bot, jugador y la pelota
     const botChips = chipsRef.current.filter(c => c.owner === "challenger");
+    const playerChips = chipsRef.current.filter(c => c.owner === "creator");
     const ballPos = { ...ballRef.current };
     
     if (botChips.length === 0) {
@@ -280,40 +363,235 @@ export function BotMatchScreen() {
       return;
     }
 
-    // Elegir la ficha más cercana al balón
+    recomputeBotAggression();
+    const aggression = botAggressionRef.current;
+
+    // 1. Elegir la mejor ficha para tirar
+    // Priorizar fichas más cercanas al área rival y mejor posicionadas
     let bestChip = botChips[0];
-    let minDistance = Math.hypot(ballPos.x - bestChip.x, ballPos.y - bestChip.y);
+    let bestScore = -Infinity;
+    let bestAction: 'shoot' | 'pass' | 'clear' = 'shoot';
+    let bestTarget = { x: 0, y: 0 };
+    let bestPassTargetX: number | null = null;
+    let bestPassTargetY: number | null = null;
     
+    // Analizar cada ficha del bot
     botChips.forEach(chip => {
-      const distance = Math.hypot(ballPos.x - chip.x, ballPos.y - chip.y);
-      if (distance < minDistance) {
+      // Calcular puntuación de tiro
+      const { target: shootTarget, goalkeeperPosition } = analyzeDefense(chip, playerChips);
+      
+      // Calcular puntuación de pase a compañeros mejor posicionados
+      let bestPassScore = -Infinity;
+      let bestPass: MovingChip | null = null;
+      
+      botChips.forEach(teammate => {
+        if (teammate === chip) return;
+        
+        const distToTeammate = Math.hypot(teammate.x - chip.x, teammate.y - chip.y);
+        if (distToTeammate > 300) return; // Pases muy largos son difíciles
+        
+        // Preferir pases hacia adelante
+        const forwardBias = (teammate.y - chip.y) * 2;
+        const goalDist = Math.hypot(teammate.x - 300, teammate.y - 850);
+        
+        // Verificar si hay defensores en el camino
+        const defendersInWay = playerChips.filter(player => {
+          const A = { x: chip.x, y: chip.y };
+          const B = { x: teammate.x, y: teammate.y };
+          const P = { x: player.x, y: player.y };
+          
+          const normalLength = Math.hypot(B.x - A.x, B.y - A.y);
+          const distance = Math.abs((P.x - A.x) * (B.y - A.y) - (P.y - A.y) * (B.x - A.x)) / normalLength;
+          const dotProduct = ((P.x - A.x) * (B.x - A.x) + (P.y - A.y) * (B.y - A.y)) / (normalLength * normalLength);
+          
+          return distance < 60 && dotProduct > 0 && dotProduct < 1;
+        }).length;
+        
+        // Calcular puntuación del pase
+        let passScore = 100 - goalDist + forwardBias - (defendersInWay * 50);
+        
+        if (passScore > bestPassScore) {
+          bestPassScore = passScore;
+          bestPass = teammate;
+        }
+      });
+      
+      // Calcular puntuación de tiro
+      const goalDist = Math.hypot(chip.x - 300, chip.y - 850);
+      const angleToGoal = Math.abs(Math.atan2(850 - chip.y, 300 - chip.x));
+      const angleScore = (Math.PI/2 - angleToGoal) * 100; // Mejor ángulo = mejor puntuación
+
+      // Ajustar puntuación basada en la posición y cercanía a la pelota
+      const distToBall = Math.hypot(chip.x - ballPos.x, chip.y - ballPos.y);
+      let positionScore = 0;
+      if (chip.y > 600) { // Cerca del área
+        positionScore = 200 - goalDist * 0.5;
+      } else if (chip.y > 400) { // Mitad de cancha
+        positionScore = 100 - goalDist * 0.3;
+      } else { // Defensa
+        positionScore = 50 - goalDist * 0.2;
+      }
+      const ballProximityScore = Math.max(0, 260 - distToBall) * 0.7;
+      positionScore += ballProximityScore;
+
+      // --- MOTOR DE RAZONAMIENTO DEL BOT ---
+      // Para cada ficha, evalúa todas las jugadas posibles y simula utilidad
+      let bestLocalAction: 'shoot' | 'pass' | 'clear' = 'shoot';
+      let bestLocalScore = -Infinity;
+      let bestLocalTarget = { x: 0, y: 0 };
+      let bestLocalPassTarget: MovingChip | null = null;
+      let reasoningLog = [] as string[];
+
+      // 1. Simular tiro
+      const shootUtility = positionScore + angleScore * 1.3 + Math.max(0, 320 - goalDist) * 0.8;
+      reasoningLog.push(`Tiro: pos=${positionScore.toFixed(1)} ang=${angleScore.toFixed(1)} distBonus=${Math.max(0,320-goalDist)*0.8}`);
+      if (shootUtility > bestLocalScore) {
+        bestLocalScore = shootUtility;
+        bestLocalAction = 'shoot';
+        bestLocalTarget = shootTarget;
+        bestLocalPassTarget = null;
+      }
+
+      // 2. Simular pase a cada compañero
+      botChips.forEach(teammate => {
+        if (teammate === chip) return;
+        const distToTeammate = Math.hypot(teammate.x - chip.x, teammate.y - chip.y);
+        if (distToTeammate > 340) return;
+        const forwardBias = (teammate.y - chip.y) * 2;
+        const goalDistTeammate = Math.hypot(teammate.x - 300, teammate.y - 850);
+        const defendersInWay = playerChips.filter(player => {
+          const A = { x: chip.x, y: chip.y };
+          const B = { x: teammate.x, y: teammate.y };
+          const P = { x: player.x, y: player.y };
+          const normalLength = Math.hypot(B.x - A.x, B.y - A.y);
+          const distance = Math.abs((P.x - A.x) * (B.y - A.y) - (P.y - A.y) * (B.x - A.x)) / normalLength;
+          const dotProduct = ((P.x - A.x) * (B.x - A.x) + (P.y - A.y) * (B.y - A.y)) / (normalLength * normalLength);
+          return distance < 60 && dotProduct > 0 && dotProduct < 1;
+        }).length;
+        let passUtility = 120 - goalDistTeammate + forwardBias - defendersInWay * 80;
+        passUtility += Math.max(0, 180 - distToTeammate) * 0.5;
+        reasoningLog.push(`Pase a ${teammate.id}: util=${passUtility.toFixed(1)} dist=${distToTeammate.toFixed(1)} defensores=${defendersInWay}`);
+        if (passUtility > bestLocalScore) {
+          bestLocalScore = passUtility;
+          bestLocalAction = 'pass';
+          bestLocalTarget = { x: teammate.x, y: teammate.y };
+          bestLocalPassTarget = teammate;
+        }
+      });
+
+      // 3. Simular despeje defensivo si está en zona propia
+      if (chip.y < FIELD_HEIGHT * 0.35) {
+        // Despeje hacia banda
+        const side = chip.x < FIELD_WIDTH / 2 ? -1 : 1;
+        const clearX = clamp(FIELD_WIDTH / 2 + side * (FIELD_WIDTH / 2 - 80), BOUNDARY_LEFT + 40, BOUNDARY_RIGHT - 40);
+        const clearY = FIELD_HEIGHT * 0.6 + Math.random() * 120;
+        const clearUtility = 80 + (FIELD_HEIGHT - chip.y) * 0.2;
+        reasoningLog.push(`Despeje: util=${clearUtility.toFixed(1)} hacia x=${clearX.toFixed(1)}, y=${clearY.toFixed(1)}`);
+        if (clearUtility > bestLocalScore) {
+          bestLocalScore = clearUtility;
+          bestLocalAction = 'clear';
+          bestLocalTarget = { x: clearX, y: clearY };
+          bestLocalPassTarget = null;
+        }
+      }
+
+      // --- Fin razonamiento para esta ficha ---
+      reasoningLog.push(`Mejor acción: ${bestLocalAction} (utilidad=${bestLocalScore.toFixed(1)})`);
+      if (bestLocalScore > bestScore) {
+        bestScore = bestLocalScore;
         bestChip = chip;
-        minDistance = distance;
+        bestAction = bestLocalAction;
+        bestTarget = bestLocalTarget;
+        bestPassTargetX = bestLocalPassTarget ? bestLocalPassTarget.x : null;
+        bestPassTargetY = bestLocalPassTarget ? bestLocalPassTarget.y : null;
+        // Log razonamiento solo de la ficha elegida
+        console.log(`Bot reasoning for ${chip.id}:\n` + reasoningLog.join('\n'));
       }
     });
+    const ballIsNearOurGoal = ballPos.y < BOUNDARY_TOP + 140;
+    const playerNearBall = playerChips.some(player => Math.hypot(player.x - ballPos.x, player.y - ballPos.y) < 140);
+    // Si la pelota está cerca de nuestro arco y el rival presiona, priorizar despeje
+    if (ballIsNearOurGoal && playerNearBall) {
+      let closestChip = botChips[0];
+      let closestDist = Infinity;
+      botChips.forEach(chip => {
+        const d = Math.hypot(chip.x - ballPos.x, chip.y - ballPos.y);
+        if (d < closestDist) {
+          closestDist = d;
+          closestChip = chip;
+        }
+      });
+      bestChip = closestChip;
+      bestAction = 'clear';
+      bestPassTargetX = null;
+      bestPassTargetY = null;
+    }
+    
+    // 2. Ejecutar la mejor acción: tiro o pase hacia el objetivo decidido
+    let targetX = bestChip.x;
+    let targetY = bestChip.y;
+    let powerMultiplier = 1.0;
 
-    // Calcular dirección del tiro (hacia la portería del jugador)
-    const targetX = FIELD_WIDTH / 2 + (Math.random() - 0.5) * 100; // Un poco de aleatoriedad
-    const targetY = BOUNDARY_BOTTOM - 50; // Hacia la portería del jugador
+    if (bestAction === 'shoot') {
+      const distanceToGoal = Math.hypot(bestTarget.x - bestChip.x, bestTarget.y - bestChip.y);
+      const baseAngle = Math.atan2(bestTarget.y - bestChip.y, bestTarget.x - bestChip.x);
+      // Máxima precisión: casi sin ruido angular
+      const angleVariance = Math.max(0.01, 0.06 - distanceToGoal / 2000);
+      const finalAngle = baseAngle + (Math.random() - 0.5) * angleVariance;
 
+      const shootDistance = Math.min(distanceToGoal + 100, 620);
+      targetX = bestChip.x + Math.cos(finalAngle) * shootDistance;
+      targetY = bestChip.y + Math.sin(finalAngle) * shootDistance;
+
+      powerMultiplier = 1.15 + Math.random() * 0.2; // Tiros muy potentes y directos
+    } else if (bestAction === 'pass' && bestPassTargetX !== null && bestPassTargetY !== null) {
+      // Pases casi perfectos: dispersión mínima
+      targetX = bestPassTargetX + (Math.random() - 0.5) * 8;
+      targetY = bestPassTargetY + (Math.random() - 0.5) * 8;
+      powerMultiplier = 0.82 + Math.random() * 0.18; // Pases tensos y precisos
+    } else {
+      if (bestAction === 'clear') {
+        const side = ballPos.x < FIELD_WIDTH / 2 ? -1 : 1;
+        const safeX = FIELD_WIDTH / 2 + side * (FIELD_WIDTH / 2 - 80);
+        targetX = clamp(safeX, BOUNDARY_LEFT + 40, BOUNDARY_RIGHT - 40);
+        targetY = FIELD_HEIGHT * 0.6 + Math.random() * 120;
+        powerMultiplier = 1.0;
+      } else {
+        targetX = FIELD_WIDTH / 2 + (Math.random() - 0.5) * 40;
+        targetY = (FIELD_HEIGHT * 3) / 4 + (Math.random() - 0.5) * 40;
+        powerMultiplier = 0.8;
+      }
+    }
+
+    // 3. Calcular dirección, potencia y velocidad
     const dx = targetX - bestChip.x;
     const dy = targetY - bestChip.y;
     const distance = Math.hypot(dx, dy) || 1;
-    const speed = 8 + Math.random() * 4; // Velocidad más consistente
 
-    // Actualizar la velocidad de la ficha
-    chipsRef.current = chipsRef.current.map(chip => 
-      chip.id === bestChip.id 
-        ? { ...chip, vx: (dx / distance) * speed, vy: (dy / distance) * speed }
-        : chip
+    const basePower = 9;
+    const distanceFactor = Math.min(1.5, distance / 500);
+    const power = basePower * powerMultiplier * (0.8 + distanceFactor);
+    const speed = Math.min(MAX_SPEED, power);
+
+    const vx = (dx / distance) * speed;
+    const vy = (dy / distance) * speed;
+
+    // 4. Aplicar la velocidad a la ficha seleccionada
+    chipsRef.current = chipsRef.current.map(chip =>
+      chip.id === bestChip.id ? { ...chip, vx, vy } : chip
     );
 
-    // Forzar actualización del estado
     setChips([...chipsRef.current]);
     turnTakenRef.current = true;
-    
-    console.log("Bot ha realizado un tiro exitosamente");
-  }, []);
+    const stats = botStatsRef.current;
+    if (bestAction === 'shoot') {
+      stats.shots += 1;
+    } else if (bestAction === 'pass') {
+      stats.passes += 1;
+    }
+    const tipoAccion = bestAction === 'shoot' ? 'tiro' : bestAction === 'pass' ? 'pase' : 'despeje';
+    console.log(`Bot ha realizado un ${tipoAccion} con potencia ${power.toFixed(1)}`);
+  }, [analyzeDefense, myScore, botScore]);
 
   // RESET campo (compatible)
   const resetField = useCallback((scorer: "you" | "bot") => {
@@ -352,7 +630,14 @@ export function BotMatchScreen() {
     
     setTimeout(() => {
       setGoalAnimation(null);
-      
+      const stats = botStatsRef.current;
+      if (scorer === "bot") {
+        stats.goals += 1;
+      } else {
+        stats.conceded += 1;
+      }
+      recomputeBotAggression();
+
       // 1. Primero reiniciamos el campo
       resetField(scorer);
       
@@ -568,9 +853,13 @@ export function BotMatchScreen() {
       dist = MAX_DRAG_DISTANCE;
     }
 
-    const powerScale = Math.min(1, dist / (MAX_DRAG_DISTANCE * 0.7));
+    // Calcular powerScale con una curva más suave para mejor control
+    const rawPower = dist / (MAX_DRAG_DISTANCE * 0.7);
+    const powerScale = Math.min(1, rawPower * rawPower);  // Curva cuadrática para mejor control
+    // Update both state and ref for immediate access
     setShotPower(powerScale);
-    (globalThis as Record<string, unknown>).shotPower = powerScale;
+    (globalThis as Record<string, any>).currentShotPower = powerScale;
+    
     setAim((prev) => (prev ? { ...prev, to: { x, y } } : undefined));
 
     if (showPowerMeter) setShowPowerMeter({ x: start.x, y: start.y });
@@ -601,11 +890,21 @@ export function BotMatchScreen() {
       dist = MAX_DRAG_DISTANCE;
     }
 
-    const power = POWER * (0.5 + shotPower * 1.5);
-    const dx = (start.x - x) * power;
-    const dy = (start.y - y) * power;
+    // Cálculo de potencia con mejor respuesta
+    const normalizedDist = Math.min(1, dist / (MAX_DRAG_DISTANCE * 0.8));
+    const powerCurve = Math.pow(normalizedDist, 1.5);  // Curva más suave al inicio, más pronunciada al final
+    
+    const minPower = 0.1;   // Mínima potencia para que los tiros sean más consistentes
+    const maxPower = 8.0;   // Reducido para mejor control
+    const effectivePower = minPower + (powerCurve * (maxPower - minPower));
+    
+    // Aplicar vector de dirección con la potencia calculada
+    const powerMultiplier = 0.18;  // Ajuste fino de la sensibilidad
+    const dx = (start.x - x) * effectivePower * powerMultiplier;
+    const dy = (start.y - y) * effectivePower * 0.15;
 
-    if (Math.hypot(dx, dy) > 0.45) {
+    // Umbral ligeramente más bajo para permitir tiros más suaves
+    if (Math.hypot(dx, dy) > 0.3) {
       // Actualizar solo la ficha objetivo de forma inmutable
       chipsRef.current = chipsRef.current.map((c) => c.id === chipId ? { ...c, vx: dx, vy: dy } : c);
       turnTakenRef.current = true;
@@ -733,6 +1032,20 @@ export function BotMatchScreen() {
           </div>
         </div>
       )}
-    </div>
-  );
+  
+  {showPowerMeter && (
+    <g>
+      <line
+        x1={showPowerMeter.x}
+        y1={showPowerMeter.y - 40}
+        x2={showPowerMeter.x + 100 * (shotPower || 0)}
+        y2={showPowerMeter.y - 40}
+        stroke="white"
+        strokeWidth="8"
+        strokeLinecap="round"
+      />
+    </g>
+  )}
+</div>
+);
 }

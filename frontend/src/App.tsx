@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useGameStore } from "./hooks/useGameStore";
-import { AcceptMatchScreen, BotMatchScreen, CreateBotMatchScreen, CreateMatchScreen, HomeScreen, PlayingScreen, WaitingScreen } from "./views";
+import {
+  AcceptMatchScreen,
+  BotMatchScreen,
+  CreateBotMatchScreen,
+  CreateMatchScreen,
+  HomeScreen,
+  PlayingScreen,
+  WaitingScreen
+} from "./views";
 import { NeedBeexoScreen } from "./views/NeedBeexoScreen";
 import { xoConnectService } from "./services/xoConnectService";
 import { ToastContainer, useToast, toast } from "./components/Toast";
@@ -21,52 +29,50 @@ export default function App() {
   const setPlayerSide = useGameStore((state) => state.setPlayerSide);
   const setMatchGoalTarget = useGameStore((state) => state.setMatchGoalTarget);
   const setMatchStatus = useGameStore((state) => state.setMatchStatus);
+
   const { toasts, dismissToast } = useToast();
-  
+
   const initRef = useRef(false);
   const toastShownRef = useRef(false);
-  
-  // Estado para mostrar pantalla de conexión
+
   const [showConnectScreen, setShowConnectScreen] = useState(true);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
 
-  // Verificar si tiene wallet conectada
-  const isWalletConnected = userAddress && userAddress !== "0x" + "0".repeat(40) && userAddress !== "";
+  const isWalletConnected =
+    userAddress &&
+    userAddress !== "0x" + "0".repeat(40) &&
+    userAddress !== "";
 
-  // Inicialización - verificar si hay sesión existente
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
-    
+
     void (async () => {
-      console.log("🚀 Inicializando app con XO Connect...");
       try {
-        // Verificar si hay sesión existente
         const existingSession = await xoConnectService.checkExistingConnection();
-        console.log("🔍 Sesión existente:", existingSession);
-        
+
         if (existingSession) {
-          // Hay sesión - intentar reconectar
-          console.log("🔄 Reconectando sesión existente...");
           const success = await xoConnectService.connect();
-          
+
           if (success) {
             const address = xoConnectService.getUserAddress();
             setAlias(xoConnectService.getAlias());
             setBalance(xoConnectService.getTokenBalance("POL") + " POL");
             setUserAddress(address);
             setShowConnectScreen(false);
-            
+
             if (!toastShownRef.current) {
               toastShownRef.current = true;
-              toast.success("Beexo Wallet conectada", `${address.slice(0, 6)}...${address.slice(-4)}`);
+              toast.success(
+                "Beexo Wallet conectada",
+                `${address.slice(0, 6)}...${address.slice(-4)}`
+              );
             }
-            
-            // Restaurar partidas pendientes
+
             await restorePendingMatches(address);
           }
         }
-        
+
         setIsCheckingSession(false);
       } catch (error) {
         console.error("❌ Error verificando sesión:", error);
@@ -75,10 +81,8 @@ export default function App() {
     })();
   }, []);
 
-  // Restaurar partidas pendientes
   const restorePendingMatches = async (address: string) => {
     if (waitingMatch) {
-      console.log("🔄 Restaurando partida en espera:", waitingMatch.matchId);
       const status = await checkMatchStatus(waitingMatch.matchId);
       if (status.hasChallenger) {
         toast.info("¡Tu partida comenzó!", "Un rival se unió mientras no estabas");
@@ -99,7 +103,6 @@ export default function App() {
         setView("waiting");
       }
     } else if (activeMatch) {
-      console.log("🔄 Restaurando partida activa:", activeMatch.matchId);
       toast.info("Partida en curso", "Volviendo a tu partida");
       setCurrentMatchId(activeMatch.matchId);
       setPlayerSide(activeMatch.playerSide);
@@ -109,72 +112,133 @@ export default function App() {
     }
   };
 
-  // Callback cuando se conecta exitosamente
   const handleConnected = () => {
     setShowConnectScreen(false);
     toast.success("Beexo Wallet conectada", xoConnectService.getAlias());
   };
 
-  // Cancelar partida en espera cuando el usuario cierra la página
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (waitingMatch) {
-        // Mostrar advertencia
         e.preventDefault();
-        e.returnValue = "Tienes una partida esperando. Si sales, se cancelará.";
-        
-        // Intentar cancelar la partida (puede no completarse)
-        // Nota: En un sistema real, el servidor debería manejar esto con timeouts
+        e.returnValue =
+          "Tienes una partida esperando. Si sales, se cancelará.";
         cancelMatch(waitingMatch.matchId).catch(console.warn);
       }
     };
-    
+
     const handleVisibilityChange = () => {
-      // Cuando la página se oculta (cierra pestaña, cambia de app en móvil)
       if (document.visibilityState === "hidden" && waitingMatch) {
-        // Guardar timestamp para verificar timeout al volver
         localStorage.setItem("beexoccer-hide-time", String(Date.now()));
       }
     };
-    
+
     window.addEventListener("beforeunload", handleBeforeUnload);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    
+
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [waitingMatch]);
 
+
+  // -------------------------------------------------------
+  // 🎨 *** PANTALLA DE CARGA VERDE NEÓN — SVG INTEGRADO ***
+  // -------------------------------------------------------
+
   const renderView = () => {
-    // Si está verificando sesión, mostrar loading
     if (isCheckingSession) {
       return (
-        <div className="loading-screen" style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'linear-gradient(135deg, #0a0a12 0%, #1a1a2e 50%, #0f0f23 100%)',
-          color: '#FFC800',
-          fontSize: '1.5rem'
-        }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🐝</div>
-            <div>Cargando...</div>
+        <div
+          className="loading-screen"
+          style={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            position: "relative",
+            overflow: "hidden",
+            background:
+              "radial-gradient(circle at center, #003b1f 0%, #001a0d 70%, #000 100%)"
+          }}
+        >
+          {/* Glow de fondo */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "radial-gradient(circle at 20% 30%, rgba(0,255,100,0.15) 0%, transparent 60%)," +
+                "radial-gradient(circle at 80% 70%, rgba(0,255,140,0.12) 0%, transparent 65%)," +
+                "radial-gradient(circle at 50% 50%, rgba(0,255,120,0.08) 0%, transparent 70%)",
+              filter: "blur(40px)",
+              zIndex: 1
+            }}
+          />
+
+          <div style={{ textAlign: "center", zIndex: 2 }}>
+
+            {/* ⭐ PELOTA SVG (no requiere archivo, siempre funciona) */}
+            <div
+              style={{
+                width: "120px",
+                height: "120px",
+                margin: "0 auto 1.5rem",
+                animation:
+                  "bounce 1.6s ease-in-out infinite, spin 3s linear infinite",
+                transformOrigin: "center",
+                filter: "drop-shadow(0 0 25px rgba(0,255,120,0.7))"
+              }}
+            >
+              <svg
+                viewBox="0 0 100 100"
+                style={{ width: "100%", height: "100%" }}
+              >
+                <circle cx="50" cy="50" r="47" fill="#e9e9e9" stroke="#00ff88" strokeWidth="3" />
+                <path d="M50 8 L72 30 L62 55 L38 55 L28 30 Z" fill="#000" />
+                <path d="M72 30 L90 45 L82 70 L62 55 Z" fill="#000" />
+                <path d="M28 30 L10 45 L18 70 L38 55 Z" fill="#000" />
+              </svg>
+            </div>
+
+            <div
+              style={{
+                color: "#00ff9d",
+                fontSize: "1.4rem",
+                letterSpacing: "1px",
+                textShadow: "0 0 8px #00ff8a"
+              }}
+            >
+              Cargando...
+            </div>
+
+            <style>
+              {`
+                @keyframes spin {
+                  0% { transform: rotate(0deg); }
+                  100% { transform: rotate(360deg); }
+                }
+
+                @keyframes bounce {
+                  0%, 100% { transform: translateY(0); }
+                  50% { transform: translateY(-22px); }
+                }
+              `}
+            </style>
           </div>
         </div>
       );
     }
-    
-    // Si no hay wallet conectada, mostrar pantalla de conexión con XO Connect
+
+    // -------------------------------------------------------
+
     if (showConnectScreen || !isWalletConnected) {
-      // Excepto para bot mode que no requiere wallet
       if (view !== "bot" && view !== "createBot") {
         return <NeedBeexoScreen onConnected={handleConnected} />;
       }
     }
-    
+
     switch (view) {
       case "connect":
         return <NeedBeexoScreen onConnected={handleConnected} />;

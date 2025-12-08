@@ -1,16 +1,48 @@
 import { useGameStore } from "../hooks/useGameStore";
 import logoSvg from "../assets/logo.svg";
+import { useState } from "react";
 
 export function HomeScreen() {
+  const [isHovered, setIsHovered] = useState(false);
   const setView = useGameStore((state) => state.setView);
   const alias = useGameStore((state) => state.alias);
 
   return (
     <div className="home-screen">
       {/* Logo con pelota neón */}
-      <div className="home-logo">
-        <img src={logoSvg} alt="Beexoccer" className="home-logo-img" />
+      <div 
+        className="home-logo" 
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          width: '100%',
+          marginBottom: '2rem'
+        }}
+      >
+        <img 
+          src={logoSvg} 
+          alt="Beexoccer" 
+          className="home-logo-img" 
+          style={{
+            width: '200px',
+            height: 'auto',
+            animation: isHovered ? 'spin 2s linear infinite' : 'none',
+            transition: 'transform 0.3s ease-in-out'
+          }}
+        />
       </div>
+      
+      <style>{
+        `
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        `
+      }</style>
 
       {/* Botones principales */}
       <button className="home-btn primary" onClick={() => setView("accept")}>
