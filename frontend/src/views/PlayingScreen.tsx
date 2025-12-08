@@ -19,9 +19,10 @@ const TURN_TIME = 15000;
 const MAX_DRAG_DISTANCE = 200;  // Distancia máxima de arrastre (estilo Table Soccer)
 const MAX_TIMEOUTS_TO_LOSE = 3;
 
-// Constantes de física estilo Table Soccer (Plato)
+// Constantes de física estilo Table Soccer (sincronizadas con BotMatchScreen y servidor)
 const MIN_SPEED = 3;
 const MAX_SPEED = 28;  // Velocidad máxima controlada
+const POWER_CURVE_FACTOR = 0.7; // Factor de curva de potencia (igual que BotMatchScreen)
 
 interface AimLine {
   from: { x: number; y: number };
@@ -300,16 +301,23 @@ export function PlayingScreen() {
   const handlePointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (!isMyTurn || showEnd) return;
     
+    // Prevenir comportamientos del navegador y capturar el pointer
+    e.preventDefault();
+    (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
+    
     const { x, y } = getSvgPoint(e);
     
     // Buscar ficha propia cercana (azules = mías)
     const myChips = chips.filter((c) => c.fill === "#00a8ff");
-    const hit = myChips.find((c) => Math.hypot(c.x - x, c.y - y) < c.radius + 10);
+    const hit = myChips.find((c) => Math.hypot(c.x - x, c.y - y) < c.radius + 15);
     
     if (hit) {
-      dragRef.current = { chipId: hit.id, start: { x, y } };
+      // Usar la posición del chip como inicio (igual que BotMatchScreen)
+      dragRef.current = { chipId: hit.id, start: { x: hit.x, y: hit.y } };
       setSelectedChipId(hit.id);
-      (e.target as Element).setPointerCapture(e.pointerId);
+      setAim({ from: { x: hit.x, y: hit.y }, to: { x, y } });
+      setShotPower(0);
+      (globalThis as Record<string, unknown>).shotPower = 0;
     }
   }, [chips, isMyTurn, showEnd, getSvgPoint]);
 
@@ -325,14 +333,13 @@ export function PlayingScreen() {
     const dist = Math.min(Math.hypot(dx, dy), MAX_DRAG_DISTANCE);
     const angle = Math.atan2(dy, dx);
     
-    // Calcular potencia normalizada para feedback visual
-    const normalizedPower = dist / MAX_DRAG_DISTANCE;
-    setShotPower(normalizedPower);
-    (globalThis as Record<string, unknown>).shotPower = normalizedPower;
+    // Calcular potencia con curva cuadrática (igual que BotMatchScreen)
+    const rawPower = dist / (MAX_DRAG_DISTANCE * POWER_CURVE_FACTOR);
+    const powerScale = Math.min(1, rawPower * rawPower);
+    setShotPower(powerScale);
+    (globalThis as Record<string, unknown>).shotPower = powerScale;
 
     // La línea de apuntado muestra hacia dónde IRÁ la ficha
-    // El angle ya apunta en la dirección correcta (opuesto al arrastre)
-    // No invertir para nadie - la línea siempre muestra la dirección local
     setAim({
       from: { x: chip.x, y: chip.y },
       to: {
@@ -356,16 +363,19 @@ export function PlayingScreen() {
     const dist = Math.min(Math.hypot(dx, dy), MAX_DRAG_DISTANCE);
     
     if (dist > 20) {
-      // === SISTEMA DE POTENCIA LINEAL ===
-      // La potencia es directamente proporcional a la longitud del arrastre
-      // 0% arrastre = 0 velocidad, 100% arrastre = MAX_SPEED (36)
+      // === SISTEMA DE POTENCIA (igual que BotMatchScreen) ===
+      // Potencia lineal: velocidad = porcentaje * MAX_SPEED
       const normalizedDist = Math.min(1, dist / MAX_DRAG_DISTANCE);
       const targetSpeed = normalizedDist * MAX_SPEED;
       
       // Calcular dirección normalizada
-      const angle = Math.atan2(dy, dx);
-      let impulseX = Math.cos(angle) * targetSpeed;
-      let impulseY = Math.sin(angle) * targetSpeed;
+      const dirX = dragRef.current.start.x - x;
+      const dirY = dragRef.current.start.y - y;
+      const dirMag = Math.hypot(dirX, dirY) || 1;
+      
+      // Aplicar velocidad en la dirección del arrastre
+      let impulseX = (dirX / dirMag) * targetSpeed;
+      let impulseY = (dirY / dirMag) * targetSpeed;
 
       // Si es challenger, invertir porque la cancha está rotada para él
       if (isChallenger) {
@@ -510,9 +520,11 @@ export function PlayingScreen() {
         activePlayer={activePlayer}
         isPlayerTurn={isMyTurn}
         aimLine={aim}
+        shotPower={shotPower}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       />
 
       {/* Commentary */}
