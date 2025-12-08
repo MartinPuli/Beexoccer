@@ -4,6 +4,11 @@ import { Server, Socket } from "socket.io";
 // Basic field configuration - SYNCED WITH FRONTEND (Table Soccer style)
 const FIELD_WIDTH = 600;
 const FIELD_HEIGHT = 900;
+// Límites del campo de juego (dentro de las líneas neón)
+const BOUNDARY_LEFT = 50;
+const BOUNDARY_RIGHT = 550;
+const BOUNDARY_TOP = 50;
+const BOUNDARY_BOTTOM = 850;
 const GOAL_WIDTH = 160;
 const GOAL_HEIGHT = 120;
 const GOAL_X_START = (FIELD_WIDTH - GOAL_WIDTH) / 2;
@@ -183,13 +188,13 @@ function magnitude(vx: number, vy: number) {
 }
 
 function reflect(entity: { x: number; y: number; vx: number; vy: number; radius: number }) {
-  // Walls left/right - rebote vivo
-  if (entity.x - entity.radius < 0) {
-    entity.x = entity.radius;
+  // Walls left/right - rebote en las líneas neón laterales
+  if (entity.x - entity.radius < BOUNDARY_LEFT) {
+    entity.x = BOUNDARY_LEFT + entity.radius;
     entity.vx = Math.abs(entity.vx) * WALL_RESTITUTION;
   }
-  if (entity.x + entity.radius > FIELD_WIDTH) {
-    entity.x = FIELD_WIDTH - entity.radius;
+  if (entity.x + entity.radius > BOUNDARY_RIGHT) {
+    entity.x = BOUNDARY_RIGHT - entity.radius;
     entity.vx = -Math.abs(entity.vx) * WALL_RESTITUTION;
   }
   
@@ -197,18 +202,18 @@ function reflect(entity: { x: number; y: number; vx: number; vy: number; radius:
   const inGoalX = entity.x >= GOAL_X_START && entity.x <= GOAL_X_END;
   
   // Walls top/bottom - pero NO rebotar si está en el arco
-  if (entity.y - entity.radius < 0) {
+  if (entity.y - entity.radius < BOUNDARY_TOP) {
     if (!inGoalX) {
-      // Fuera del arco: rebotar
-      entity.y = entity.radius;
+      // Fuera del arco: rebotar en la línea neón
+      entity.y = BOUNDARY_TOP + entity.radius;
       entity.vy = Math.abs(entity.vy) * WALL_RESTITUTION;
     }
     // Si está en el arco, dejarlo pasar (se detectará como gol)
   }
-  if (entity.y + entity.radius > FIELD_HEIGHT) {
+  if (entity.y + entity.radius > BOUNDARY_BOTTOM) {
     if (!inGoalX) {
-      // Fuera del arco: rebotar
-      entity.y = FIELD_HEIGHT - entity.radius;
+      // Fuera del arco: rebotar en la línea neón
+      entity.y = BOUNDARY_BOTTOM - entity.radius;
       entity.vy = -Math.abs(entity.vy) * WALL_RESTITUTION;
     }
     // Si está en el arco, dejarlo pasar (se detectará como gol)
@@ -287,10 +292,12 @@ function resetAfterGoal(state: MatchState, conceded: PlayerSide) {
 
 function detectGoal(ball: Ball): PlayerSide | null {
   const inX = ball.x >= GOAL_X_START && ball.x <= GOAL_X_END;
-  const atTop = ball.y - ball.radius <= GOAL_HEIGHT && inX;
-  const atBottom = ball.y + ball.radius >= FIELD_HEIGHT - GOAL_HEIGHT && inX;
-  if (atTop) return "challenger"; // creator dispara hacia abajo; gol al rival (arriba)
-  if (atBottom) return "creator";
+  // Gol cuando la pelota cruza COMPLETAMENTE la línea de fondo (sale del campo)
+  // Los arcos están fuera del área de juego (arriba de BOUNDARY_TOP y abajo de BOUNDARY_BOTTOM)
+  const atTop = ball.y - ball.radius <= BOUNDARY_TOP && inX;
+  const atBottom = ball.y + ball.radius >= BOUNDARY_BOTTOM && inX;
+  if (atTop) return "challenger"; // creator dispara hacia arriba; gol al challenger
+  if (atBottom) return "creator"; // challenger dispara hacia abajo; gol al creator
   return null;
 }
 

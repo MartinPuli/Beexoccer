@@ -9,6 +9,7 @@ interface PitchCanvasProps {
   isPlayerTurn?: boolean;
   children?: ReactNode;
   aimLine?: { from: { x: number; y: number }; to: { x: number; y: number } };
+  shotPower?: number;
   onPointerDown?: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerMove?: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerUp?: (event: React.PointerEvent<SVGSVGElement>) => void;
@@ -262,7 +263,7 @@ function SoccerBall3DCanvas({ rotateX, rotateY, size = 40 }: { rotateX: number; 
   );
 }
 
-export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTurn, children, aimLine, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }: Readonly<PitchCanvasProps>) {
+export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTurn, children, aimLine, shotPower: shotPowerProp = 0, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }: Readonly<PitchCanvasProps>) {
   // Sistema de rotación 3D realista para la pelota
   const lastBallPosRef = useRef({ x: ball.x, y: ball.y });
   const [ballRotation, setBallRotation] = useState({ rotateX: 0, rotateY: 0 });
@@ -296,8 +297,8 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
     lastBallPosRef.current = { x: ball.x, y: ball.y };
   }, [ball.x, ball.y]);
   
-  // Obtener la potencia del tiro desde props globales
-  const shotPower = (globalThis as Record<string, unknown>).shotPower as number || 0;
+  // Usar el prop de shotPower directamente
+  const shotPower = shotPowerProp;
   
   // Sistema de colores mejorado según potencia
   const getAimLineColor = (power: number) => {
@@ -365,6 +366,12 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
             <rect width="600" height="50" fill="#0d3320" />
             <rect y="50" width="600" height="50" fill="#1a5035" />
           </pattern>
+          {/* Gradiente para brillo de la flecha */}
+          <linearGradient id="arrowShine" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="white" stopOpacity="0.8" />
+            <stop offset="40%" stopColor="white" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="white" stopOpacity="0" />
+          </linearGradient>
         </defs>
 
         {/* Fondo con franjas de césped */}
@@ -407,79 +414,92 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
         {/* Arco inferior - portería */}
         <rect x="220" y="850" width="160" height="35" fill="rgba(0,255,106,0.15)" stroke="var(--neon-green, #00ff6a)" strokeWidth="3" rx="2" filter="url(#neonGlow)" />
 
-        {/* Línea de tiro (aiming) con indicador de potencia mejorado */}
-        {aimLine && (
-          <>
-            {/* Línea punteada de fondo para mejor contraste */}
-            <line
-              x1={aimLine.from.x}
-              y1={aimLine.from.y}
-              x2={aimLine.to.x}
-              y2={aimLine.to.y}
-              stroke="rgba(0,0,0,0.5)"
-              strokeWidth={getAimLineWidth(shotPower) + 6}
-              strokeLinecap="round"
-            />
-            {/* Línea principal con gradiente de potencia */}
-            <line
-              x1={aimLine.from.x}
-              y1={aimLine.from.y}
-              x2={aimLine.to.x}
-              y2={aimLine.to.y}
-              stroke={getAimLineColor(shotPower)}
-              strokeWidth={getAimLineWidth(shotPower)}
-              strokeLinecap="round"
-              opacity={getAimLineOpacity(shotPower)}
-              filter="url(#neonGlow)"
-            />
-            {/* Línea interior blanca para efecto 3D */}
-            <line
-              x1={aimLine.from.x}
-              y1={aimLine.from.y}
-              x2={aimLine.to.x}
-              y2={aimLine.to.y}
-              stroke="rgba(255,255,255,0.4)"
-              strokeWidth={Math.max(1, getAimLineWidth(shotPower) - 4)}
-              strokeLinecap="round"
-            />
-            {/* Flecha direccional al final */}
-            <circle
-              cx={aimLine.to.x}
-              cy={aimLine.to.y}
-              r={6 + (shotPower * 10)}
-              fill={getAimLineColor(shotPower)}
-              opacity={getAimLineOpacity(shotPower)}
-              filter="url(#neonGlow)"
-            >
-              <animate attributeName="r" values={`${6 + shotPower * 8};${8 + shotPower * 12};${6 + shotPower * 8}`} dur="0.5s" repeatCount="indefinite" />
-            </circle>
-            {/* Círculo interior pulsante */}
-            <circle
-              cx={aimLine.to.x}
-              cy={aimLine.to.y}
-              r={3 + (shotPower * 4)}
-              fill="white"
-              opacity="0.8"
-            />
-            {/* Barra de potencia visual */}
-            <rect
-              x={aimLine.from.x - 15}
-              y={aimLine.from.y - 45}
-              width="30"
-              height="12"
-              rx="6"
-              fill="rgba(0,0,0,0.7)"
-            />
-            <rect
-              x={aimLine.from.x - 14}
-              y={aimLine.from.y - 44}
-              width={28 * shotPower}
-              height="10"
-              rx="5"
-              fill="#ffffff"
-            />
-          </>
-        )}
+        {/* Flecha de potencia apuntando hacia atrás (dirección opuesta al tiro) */}
+        {aimLine && (() => {
+          // Calcular dirección del tiro
+          const dx = aimLine.to.x - aimLine.from.x;
+          const dy = aimLine.to.y - aimLine.from.y;
+          // Invertir el ángulo para que apunte hacia atrás
+          const angle = Math.atan2(-dy, -dx);
+          
+          // Dimensiones fijas de la punta triangular
+          const arrowHeadLength = 18; // Largo fijo de la punta
+          const arrowHeadWidth = 14; // Ancho fijo de las alas
+          const bodyThickness = 5; // Grosor fijo del cuerpo
+          
+          // Solo el cuerpo se extiende con la potencia
+          const bodyLength = 10 + (shotPower * 50); // 10-60 px de largo del cuerpo
+          
+          // Posición inicial (base del cuerpo, cerca del chip)
+          const startDistance = 38;
+          const startX = aimLine.from.x + Math.cos(angle) * startDistance;
+          const startY = aimLine.from.y + Math.sin(angle) * startDistance;
+          
+          // Puntos perpendiculares al ángulo
+          const perpAngle = angle + Math.PI / 2;
+          
+          // Puntos de la base del cuerpo (inicio, cerca del chip)
+          const baseLeftX = startX + Math.cos(perpAngle) * bodyThickness;
+          const baseLeftY = startY + Math.sin(perpAngle) * bodyThickness;
+          const baseRightX = startX - Math.cos(perpAngle) * bodyThickness;
+          const baseRightY = startY - Math.sin(perpAngle) * bodyThickness;
+          
+          // Puntos donde termina el cuerpo y empieza la punta (se mueve con la potencia)
+          const bodyEndX = startX + Math.cos(angle) * bodyLength;
+          const bodyEndY = startY + Math.sin(angle) * bodyLength;
+          const bodyEndLeftX = bodyEndX + Math.cos(perpAngle) * bodyThickness;
+          const bodyEndLeftY = bodyEndY + Math.sin(perpAngle) * bodyThickness;
+          const bodyEndRightX = bodyEndX - Math.cos(perpAngle) * bodyThickness;
+          const bodyEndRightY = bodyEndY - Math.sin(perpAngle) * bodyThickness;
+          
+          // Puntos de las alas (donde se ensancha para la punta)
+          const wingLeftX = bodyEndX + Math.cos(perpAngle) * arrowHeadWidth;
+          const wingLeftY = bodyEndY + Math.sin(perpAngle) * arrowHeadWidth;
+          const wingRightX = bodyEndX - Math.cos(perpAngle) * arrowHeadWidth;
+          const wingRightY = bodyEndY - Math.sin(perpAngle) * arrowHeadWidth;
+          
+          // Punta de la flecha (siempre a distancia fija desde el fin del cuerpo)
+          const tipX = bodyEndX + Math.cos(angle) * arrowHeadLength;
+          const tipY = bodyEndY + Math.sin(angle) * arrowHeadLength;
+          
+          // Path: cuerpo rectangular + punta triangular
+          const arrowPath = `
+            M ${baseLeftX} ${baseLeftY}
+            L ${bodyEndLeftX} ${bodyEndLeftY}
+            L ${wingLeftX} ${wingLeftY}
+            L ${tipX} ${tipY}
+            L ${wingRightX} ${wingRightY}
+            L ${bodyEndRightX} ${bodyEndRightY}
+            L ${baseRightX} ${baseRightY}
+            Z
+          `;
+          
+          return (
+            <>
+              {/* Sombra de la flecha */}
+              <path
+                d={arrowPath}
+                fill="rgba(0,0,0,0.5)"
+                transform="translate(2, 2)"
+              />
+              {/* Flecha blanca principal */}
+              <path
+                d={arrowPath}
+                fill="white"
+                stroke="rgba(255,255,255,0.9)"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+                opacity={0.9 + (shotPower * 0.1)}
+              />
+              {/* Brillo en el centro */}
+              <path
+                d={arrowPath}
+                fill="url(#arrowShine)"
+                opacity={0.6}
+              />
+            </>
+          );
+        })()}
 
         {/* Fichas */}
         {chips.map((chip) => {
