@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { MatchLobby, GoalTarget, PlayingSnapshot, MatchEvent } from "../types/game";
 
-type ViewId = "home" | "create" | "createBot" | "accept" | "playing" | "bot" | "waiting" | "connect" | "freeOnline";
+type ViewId = "home" | "create" | "createBot" | "accept" | "playing" | "bot" | "waiting" | "connect";
 
 interface WaitingMatchInfo {
   matchId: number;
