@@ -54,15 +54,16 @@ const POLYGON_AMOY_CHAIN_ID_HEX = "0x13882";
 const POLYGON_AMOY_RPC = "https://polygon-amoy.drpc.org";
 
 // XOConnectProvider requiere defaultChainId y rpcs en v2.1.3
+// IMPORTANTE: Las keys de rpcs deben ser HEX strings, no números
 const XO_CONNECT_CONFIG = {
-  defaultChainId: POLYGON_AMOY_CHAIN_ID_HEX, // DEBE ser hex string
+  defaultChainId: POLYGON_AMOY_CHAIN_ID_HEX,
   rpcs: {
-    // Polygon Amoy Testnet
-    80002: POLYGON_AMOY_RPC,
-    // Polygon Mainnet
-    137: "https://polygon.drpc.org",
-    // Ethereum Mainnet
-    1: "https://eth.drpc.org"
+    // Polygon Amoy Testnet (chainId 80002 = 0x13882)
+    "0x13882": POLYGON_AMOY_RPC,
+    // Polygon Mainnet (chainId 137 = 0x89)
+    "0x89": "https://polygon.drpc.org",
+    // Ethereum Mainnet (chainId 1 = 0x1)
+    "0x1": "https://eth.drpc.org"
   }
 };
 
