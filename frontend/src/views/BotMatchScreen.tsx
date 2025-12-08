@@ -729,13 +729,15 @@ export function BotMatchScreen() {
         0.8, playerChips
       );
       
-      // Gran bonus si la simulación predice gol
+      // Gran bonus si la simulación predice gol (priorizar estos tiros)
       if (shotSimulation.willScore) {
-        shootScore += 150;
+        shootScore += 220;
+        // Preferir potencia alta en tiros con probabilidad de gol
+        // (se ajustará más abajo al decidir power)
       }
-      // Penalizar si será bloqueado (menos si somos arriesgados)
+      // Penalizar fuertemente si será bloqueado (solo menos si somos muy arriesgados)
       if (shotSimulation.blocked) {
-        shootScore -= 80 * (1 - riskTolerance * 0.5);
+        shootScore -= 150 * (1 - riskTolerance * 0.6);
       }
       
       // Bonus si estamos en posición ofensiva
@@ -786,10 +788,11 @@ export function BotMatchScreen() {
         const teammateGoalOpp = evaluateGoalOpportunity(teammate.x, teammate.y, playerChips);
         passScore += teammateGoalOpp.score * 0.6;
         
-        // Simular si el pase llegaría
+        // Simular si el pase llegaría (usamos la misma simulación simplificada)
         const passSimulation = simulateShot(chip.x, chip.y, teammate.x, teammate.y, 0.5, playerChips);
         if (passSimulation.blocked) {
-          passScore -= 70 * (1 - riskTolerance * 0.3);
+          // Penalizamos, pero menos si somos arriesgados
+          passScore -= 90 * (1 - riskTolerance * 0.5);
         }
         
         // Penalizar si hay defensores en el camino
@@ -941,7 +944,10 @@ export function BotMatchScreen() {
     const decision = makeDecision();
     
     // Añadir variación humana (pequeños errores aleatorios)
-    const humanError = 0.05 + Math.random() * 0.08; // 5-13% de error
+    // Reducir error cuando la confianza de la decisión es alta
+    const confidenceFactor = Math.min(1, Math.max(0, (decision.confidence || 0) / 300));
+    const baseError = 0.05 + Math.random() * 0.06; // base 5-11%
+    const humanError = Math.max(0.02, baseError * (1 - confidenceFactor * 0.7));
     const errorAngle = (Math.random() - 0.5) * humanError * Math.PI;
     
     // Calcular dirección base
