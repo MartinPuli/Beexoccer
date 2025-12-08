@@ -3,6 +3,7 @@ import { PitchCanvas } from "../components/PitchCanvas";
 import { useGameStore } from "../hooks/useGameStore";
 import { socketService } from "../services/socketService";
 import { reportResult } from "../services/matchService";
+import { audioService } from "../services/audioService";
 import { TokenChip, PlayingSnapshot } from "../types/game";
 
 /**
@@ -95,6 +96,8 @@ export function PlayingScreen() {
   const [shotPower, setShotPower] = useState(0);
   const [goalAnimation, setGoalAnimation] = useState<"you" | "rival" | null>(null);
   const [turnLostAnimation, setTurnLostAnimation] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [audioInitialized, setAudioInitialized] = useState(false);
 
   const dragRef = useRef<{ chipId: string; start: { x: number; y: number } } | null>(null);
   const turnEndRef = useRef<number>(Date.now() + TURN_TIME);
@@ -181,20 +184,29 @@ export function PlayingScreen() {
     });
 
     socketService.onEvent((event) => {
-      if (event.type === "goal-self") {
-        // goal-self = el jugador activo metió gol
-        setGoalAnimation("you");
-        setCommentary("¡GOOOL!");
-        setTimeout(() => setGoalAnimation(null), 2000);
-      } else if (event.type === "goal-rival") {
-        setGoalAnimation("rival");
-        setCommentary("Gol rival...");
+      const myServerSide = isChallenger ? "challenger" : "creator";
+      
+      if (event.type === "goal-self" && event.from) {
+        // Interpretar desde la perspectiva del jugador
+        const iScored = event.from === myServerSide;
+        if (iScored) {
+          setCommentary("¡GOOOL!");
+          setGoalAnimation("you");
+          audioService.playGoalSound(true);
+        } else {
+          setCommentary("Gol rival...");
+          setGoalAnimation("rival");
+          audioService.playGoalSound(false);
+        }
+        // Pitido de árbitro para sacar del medio después del gol
+        setTimeout(() => {
+          audioService.playWhistle();
+        }, 1500);
         setTimeout(() => setGoalAnimation(null), 2000);
       } else if (event.type === "timeout") {
         // Mostrar animación de turno perdido
         setTurnLostAnimation(true);
         setTimeout(() => setTurnLostAnimation(false), 1500);
-        const myServerSide = isChallenger ? "challenger" : "creator";
         if (event.from === myServerSide) {
           consecutiveTimeoutsRef.current += 1;
           if (consecutiveTimeoutsRef.current >= MAX_TIMEOUTS_TO_LOSE) {
@@ -216,6 +228,8 @@ export function PlayingScreen() {
         setShowEnd(true);
         setMatchStatus("ended");
         setCommentary("¡Tu rival abandonó!");
+        audioService.playVictory();
+        audioService.stopCrowdAmbience();
       }
     });
 
@@ -224,11 +238,14 @@ export function PlayingScreen() {
       const myServerSide = isChallenger ? "challenger" : "creator";
       if (data.winner === myServerSide) {
         setWinner("you");
+        audioService.playVictory();
       } else {
         setWinner("rival");
+        audioService.playDefeat();
       }
       setShowEnd(true);
       setMatchStatus("ended");
+      audioService.stopCrowdAmbience();
     });
 
     // Request sync after listeners are registered to ensure we get the current state
@@ -266,6 +283,31 @@ export function PlayingScreen() {
     timeoutSentRef.current = false;
   }, [activePlayer]);
 
+  // Inicialización del audio con interacción del usuario
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      if (!audioInitialized) {
+        audioService.init();
+        audioService.startCrowdAmbience();
+        audioService.playWhistle(); // Pitido inicial del partido
+        setAudioInitialized(true);
+      }
+      document.removeEventListener("pointerdown", handleFirstInteraction);
+    };
+    
+    document.addEventListener("pointerdown", handleFirstInteraction);
+    
+    return () => {
+      document.removeEventListener("pointerdown", handleFirstInteraction);
+      audioService.stopCrowdAmbience();
+    };
+  }, [audioInitialized]);
+
+  // Manejar mute/unmute
+  useEffect(() => {
+    audioService.toggleMute(isMuted);
+  }, [isMuted]);
+
   // Verificar victoria por goles
   useEffect(() => {
     if (showEnd) return;
@@ -273,10 +315,14 @@ export function PlayingScreen() {
       setWinner("you");
       setShowEnd(true);
       setMatchStatus("ended");
+      audioService.playVictory();
+      audioService.stopCrowdAmbience();
     } else if (rivalScore >= goalTarget) {
       setWinner("rival");
       setShowEnd(true);
       setMatchStatus("ended");
+      audioService.playDefeat();
+      audioService.stopCrowdAmbience();
     }
   }, [myScore, rivalScore, goalTarget, setMatchStatus, showEnd]);
 
@@ -370,6 +416,9 @@ export function PlayingScreen() {
       // Resetear timeout counter porque hicimos una jugada
       consecutiveTimeoutsRef.current = 0;
 
+      // Reproducir sonido de tiro
+      audioService.playKick(normalizedDist);
+
       socketService.sendInput(currentMatchId, dragRef.current.chipId, {
         dx: impulseX,
         dy: impulseY
@@ -438,6 +487,14 @@ export function PlayingScreen() {
             <span className="score-value">{rivalScore}</span>
           </div>
         </div>
+        
+        <button 
+          className="mute-btn" 
+          onClick={() => setIsMuted(!isMuted)}
+          title={isMuted ? "Activar sonido" : "Silenciar"}
+        >
+          {isMuted ? "🔇" : "🔊"}
+        </button>
       </div>
 
       {/* Momentum bar */}
