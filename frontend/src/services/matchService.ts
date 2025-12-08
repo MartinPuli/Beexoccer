@@ -2,13 +2,14 @@ import { Contract, InterfaceAbi, formatEther, parseEther } from "ethers";
 import abiJson from "../abi/MatchManager.json";
 import { MatchConfig, MatchLobby } from "../types/game";
 import { walletService } from "./walletService";
+import { env } from "../config/env";
 
 // El archivo JSON de Hardhat tiene formato { abi: [...], ... }
 const matchAbi = abiJson.abi as InterfaceAbi;
 const POLYGON_AMOY_CHAIN_ID = 80002n;
 
-// Dirección del contrato (hardcoded para producción)
-const MATCH_MANAGER_ADDRESS = "0x1234567890123456789012345678901234567890";
+// Dirección del contrato desde configuración
+const MATCH_MANAGER_ADDRESS = env.matchManagerAddress;
 
 /**
  * Builds a contract instance bound to the wallet signer
@@ -162,7 +163,12 @@ export async function createMatch(config: MatchConfig): Promise<{ matchId: numbe
     
     return { matchId };
   } catch (error: unknown) {
-    const err = error as { reason?: string; data?: { message?: string }; message?: string; code?: string };
+    const err = error as { reason?: string; data?: { message?: string }; message?: string; code?: string | number };
+    
+    // Handle Internal JSON-RPC error specifically
+    if (err.code === -32603 || (typeof err.message === 'string' && err.message.includes("-32603"))) {
+      throw new Error("Error interno RPC. Ve a MetaMask → Configuración → Avanzado → 'Borrar datos de actividad' y reintenta.");
+    }
     
     if (err.reason) {
       throw new Error(err.reason);
@@ -173,7 +179,7 @@ export async function createMatch(config: MatchConfig): Promise<{ matchId: numbe
     if (err.code === "INSUFFICIENT_FUNDS") {
       throw new Error("insufficient funds for gas");
     }
-    if (err.code === "ACTION_REJECTED") {
+    if (err.code === "ACTION_REJECTED" || err.code === 4001) {
       throw new Error("user rejected transaction");
     }
     

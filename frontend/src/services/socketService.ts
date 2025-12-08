@@ -1,8 +1,9 @@
 import { io, Socket } from "socket.io-client";
 import { PlayingSnapshot, MatchEvent, MatchLobby } from "../types/game";
+import { env } from "../config/env";
 
-// URL del servidor de tiempo real (cambiar para producción)
-const REALTIME_URL = "https://beexoccer-server.onrender.com";
+// URL del servidor de tiempo real
+const REALTIME_URL = env.realtimeUrl;
 
 type ServerToClientEvents = {
   snapshot: (payload: PlayingSnapshot) => void;
@@ -27,12 +28,12 @@ class SocketService {
   private lobbiesCallbacks: ((lobbies: MatchLobby[]) => void)[] = [];
   private lobbyCreatedCallbacks: ((lobby: MatchLobby) => void)[] = [];
   private matchReadyCallbacks: ((matchId: string) => void)[] = [];
-  private connectionFailed = false;
+  private retryCount = 0;
+  private maxRetries = 5;
   private currentMatchId?: string;
   private currentSide?: "creator" | "challenger";
 
   connect(matchId: string, side: "creator" | "challenger") {
-    if (this.connectionFailed) return;
     if (this.socket) {
       this.socket.disconnect();
     }
@@ -42,38 +43,48 @@ class SocketService {
     
     try {
       this.socket = io(REALTIME_URL, { 
-        transports: ["websocket"], 
+        transports: ["websocket", "polling"], 
         query: { matchId, side },
-        timeout: 5000,
-        reconnectionAttempts: 3
+        timeout: 10000,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
       });
       
       this.socket.on("connect_error", () => {
-        this.connectionFailed = true;
-        this.socket?.disconnect();
+        this.retryCount++;
+        if (this.retryCount >= this.maxRetries) {
+          this.socket?.disconnect();
+        }
+      });
+      
+      this.socket.on("connect", () => {
+        this.retryCount = 0;
       });
     } catch {
-      this.connectionFailed = true;
+      // Silently fail
     }
   }
 
   connectLobbies() {
-    if (this.connectionFailed) return;
-    if (this.socket) return;
+    if (this.socket?.connected) {
+      this.socket.emit("subscribeLobbies");
+      return;
+    }
     
     try {
       this.socket = io(REALTIME_URL, { 
-        transports: ["websocket"],
-        timeout: 5000,
-        reconnectionAttempts: 3
+        transports: ["websocket", "polling"],
+        timeout: 10000,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
       });
       
       this.socket.on("connect_error", () => {
-        this.connectionFailed = true;
-        this.socket?.disconnect();
+        this.retryCount++;
       });
       
       this.socket.on("connect", () => {
+        this.retryCount = 0;
         this.socket?.emit("subscribeLobbies");
       });
     
@@ -85,7 +96,7 @@ class SocketService {
         for (const cb of this.lobbyCreatedCallbacks) cb(lobby);
       });
     } catch {
-      this.connectionFailed = true;
+      // Silently fail
     }
   }
 
