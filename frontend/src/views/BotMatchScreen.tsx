@@ -95,6 +95,7 @@ function reflectInBounds(entity: { x: number; y: number; vx: number; vy: number;
   const r = entity.radius;
   const wallBounce = WALL_RESTITUTION; // Rebote vivo en paredes
   
+  // Ensure entity stays within horizontal boundaries
   if (entity.x - r < BOUNDARY_LEFT) {
     entity.x = BOUNDARY_LEFT + r;
     entity.vx = Math.abs(entity.vx) * wallBounce;
@@ -104,19 +105,47 @@ function reflectInBounds(entity: { x: number; y: number; vx: number; vy: number;
     entity.vx = -Math.abs(entity.vx) * wallBounce;
   }
   
+  // Check if entity is within goal area horizontally
   const inGoalX = entity.x > GOAL_LEFT && entity.x < GOAL_RIGHT;
   
+  // Handle top boundary
   if (entity.y - r < BOUNDARY_TOP) {
-    if (!isBall || !inGoalX) {
+    if (isBall) {
+      // If ball is in goal area, let it continue
+      if (!inGoalX) {
+        entity.y = BOUNDARY_TOP + r;
+        entity.vy = Math.abs(entity.vy) * wallBounce;
+      }
+    } else {
+      // For non-ball entities, always bounce
       entity.y = BOUNDARY_TOP + r;
       entity.vy = Math.abs(entity.vy) * wallBounce;
     }
   }
   
+  // Handle bottom boundary
   if (entity.y + r > BOUNDARY_BOTTOM) {
-    if (!isBall || !inGoalX) {
+    if (isBall) {
+      // If ball is in goal area, let it continue
+      if (!inGoalX) {
+        entity.y = BOUNDARY_BOTTOM - r;
+        entity.vy = -Math.abs(entity.vy) * wallBounce;
+      }
+    } else {
+      // For non-ball entities, always bounce
       entity.y = BOUNDARY_BOTTOM - r;
       entity.vy = -Math.abs(entity.vy) * wallBounce;
+    }
+  }
+  
+  // Additional safety check to ensure ball doesn't get stuck outside
+  if (isBall) {
+    // If ball somehow got outside the field, bring it back in
+    if (entity.y < BOUNDARY_TOP - 100 || entity.y > BOUNDARY_BOTTOM + 100) {
+      entity.x = Math.max(BOUNDARY_LEFT + r, Math.min(BOUNDARY_RIGHT - r, entity.x));
+      entity.y = Math.max(BOUNDARY_TOP + r, Math.min(BOUNDARY_BOTTOM - r, entity.y));
+      entity.vx = 0;
+      entity.vy = 0;
     }
   }
 }
