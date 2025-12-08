@@ -5,9 +5,10 @@ import { Server, Socket } from "socket.io";
 const FIELD_WIDTH = 600;
 const FIELD_HEIGHT = 900;
 const GOAL_WIDTH = 160;
-const GOAL_HEIGHT = 120;
-const GOAL_X_START = (FIELD_WIDTH - GOAL_WIDTH) / 2;
-const GOAL_X_END = GOAL_X_START + GOAL_WIDTH;
+const GOAL_X_START = (FIELD_WIDTH - GOAL_WIDTH) / 2;  // 220
+const GOAL_X_END = GOAL_X_START + GOAL_WIDTH;          // 380
+const BOUNDARY_TOP = 50;     // Línea de gol superior
+const BOUNDARY_BOTTOM = 850; // Línea de gol inferior
 const TICK_MS = 16;
 const FRICTION = 0.985;         // Fricción baja - superficie lisa
 const BALL_FRICTION = 0.98;     // Pelota con más fricción
@@ -18,7 +19,9 @@ const RESTITUTION = 0.85;       // Rebote en colisiones (reducido)
 const WALL_RESTITUTION = 0.80;  // Rebote en paredes (reducido)
 const CHIP_MASS = 5;            // Masa de las fichas (pesadas)
 const BALL_MASS = 1.58;         // Masa de la pelota (ajustada)
-const TURN_MS = 12_000;
+const BALL_RADIUS = 20;         // Radio de la pelota
+const CHIP_RADIUS = 32;         // Radio de las fichas
+const TURN_MS = 15_000;         // 15 segundos por turno (igual que frontend)
 const MAX_SIM_MS = 10_000;
 const MAX_CONSECUTIVE_TIMEOUTS = 3;
 
@@ -182,36 +185,55 @@ function magnitude(vx: number, vy: number) {
   return Math.hypot(vx, vy);
 }
 
-function reflect(entity: { x: number; y: number; vx: number; vy: number; radius: number }) {
-  // Walls left/right - rebote vivo
-  if (entity.x - entity.radius < 0) {
-    entity.x = entity.radius;
+function reflect(entity: { x: number; y: number; vx: number; vy: number; radius: number }, isBall: boolean) {
+  const r = entity.radius;
+  
+  // Paredes laterales siempre rebotan
+  if (entity.x - r < 0) {
+    entity.x = r;
     entity.vx = Math.abs(entity.vx) * WALL_RESTITUTION;
   }
-  if (entity.x + entity.radius > FIELD_WIDTH) {
-    entity.x = FIELD_WIDTH - entity.radius;
+  if (entity.x + r > FIELD_WIDTH) {
+    entity.x = FIELD_WIDTH - r;
     entity.vx = -Math.abs(entity.vx) * WALL_RESTITUTION;
   }
   
   // Verificar si está en la zona del arco (para permitir goles)
   const inGoalX = entity.x >= GOAL_X_START && entity.x <= GOAL_X_END;
   
-  // Walls top/bottom - pero NO rebotar si está en el arco
-  if (entity.y - entity.radius < 0) {
-    if (!inGoalX) {
-      // Fuera del arco: rebotar
-      entity.y = entity.radius;
+  // Límites verticales - la pelota puede entrar en la portería
+  // Pared superior (línea de gol = BOUNDARY_TOP = 50)
+  if (entity.y - r < BOUNDARY_TOP) {
+    if (isBall && inGoalX) {
+      // Pelota en área de gol - permitir que cruce para detectar gol
+    } else {
+      entity.y = BOUNDARY_TOP + r;
       entity.vy = Math.abs(entity.vy) * WALL_RESTITUTION;
     }
-    // Si está en el arco, dejarlo pasar (se detectará como gol)
   }
-  if (entity.y + entity.radius > FIELD_HEIGHT) {
-    if (!inGoalX) {
-      // Fuera del arco: rebotar
-      entity.y = FIELD_HEIGHT - entity.radius;
+  
+  // Pared inferior (línea de gol = BOUNDARY_BOTTOM = 850)
+  if (entity.y + r > BOUNDARY_BOTTOM) {
+    if (isBall && inGoalX) {
+      // Pelota en área de gol - permitir que cruce para detectar gol
+    } else {
+      entity.y = BOUNDARY_BOTTOM - r;
       entity.vy = -Math.abs(entity.vy) * WALL_RESTITUTION;
     }
-    // Si está en el arco, dejarlo pasar (se detectará como gol)
+  }
+  
+  // Las fichas no pueden entrar en las porterías (solo la pelota)
+  if (!isBall) {
+    // Portería superior
+    if (entity.y - r < BOUNDARY_TOP && inGoalX) {
+      entity.y = BOUNDARY_TOP + r;
+      entity.vy = Math.abs(entity.vy) * WALL_RESTITUTION * 0.5;
+    }
+    // Portería inferior
+    if (entity.y + r > BOUNDARY_BOTTOM && inGoalX) {
+      entity.y = BOUNDARY_BOTTOM - r;
+      entity.vy = -Math.abs(entity.vy) * WALL_RESTITUTION * 0.5;
+    }
   }
 }
 
@@ -286,11 +308,21 @@ function resetAfterGoal(state: MatchState, conceded: PlayerSide) {
 }
 
 function detectGoal(ball: Ball): PlayerSide | null {
-  const inX = ball.x >= GOAL_X_START && ball.x <= GOAL_X_END;
-  const atTop = ball.y - ball.radius <= GOAL_HEIGHT && inX;
-  const atBottom = ball.y + ball.radius >= FIELD_HEIGHT - GOAL_HEIGHT && inX;
-  if (atTop) return "challenger"; // creator dispara hacia abajo; gol al rival (arriba)
-  if (atBottom) return "creator";
+  const inGoalX = ball.x >= GOAL_X_START && ball.x <= GOAL_X_END;
+  
+  // Gol en portería superior (y < BOUNDARY_TOP)
+  // Creator está abajo, Challenger está arriba
+  // Si la pelota entra por arriba, Creator anotó
+  if (ball.y - ball.radius < BOUNDARY_TOP - 10 && inGoalX) {
+    return "creator"; // Creator anotó en la portería de arriba
+  }
+  
+  // Gol en portería inferior (y > BOUNDARY_BOTTOM)
+  // Si la pelota entra por abajo, Challenger anotó
+  if (ball.y + ball.radius > BOUNDARY_BOTTOM + 10 && inGoalX) {
+    return "challenger"; // Challenger anotó en la portería de abajo
+  }
+  
   return null;
 }
 
@@ -314,12 +346,11 @@ function toSnapshot(state: MatchState): SnapshotPayload {
   };
 }
 
-function applyStep(entity: { x: number; y: number; vx: number; vy: number; radius: number }) {
+function applyStep(entity: { x: number; y: number; vx: number; vy: number; radius: number }, isBall: boolean) {
   entity.x += entity.vx;
   entity.y += entity.vy;
   
   // Fricción diferenciada: pelota rueda más libre
-  const isBall = entity.radius <= 14;
   const friction = isBall ? BALL_FRICTION : FRICTION;
   entity.vx *= friction;
   entity.vy *= friction;
@@ -328,7 +359,7 @@ function applyStep(entity: { x: number; y: number; vx: number; vy: number; radiu
     entity.vx = 0;
     entity.vy = 0;
   }
-  reflect(entity);
+  reflect(entity, isBall);
 }
 
 function isMoving(entity: { vx: number; vy: number }) {
@@ -344,10 +375,10 @@ function finishTurn(state: MatchState) {
 
 function simulateStep(io: RealtimeServer, state: MatchState, startedAt: number): boolean {
   for (const chip of state.chips) {
-    applyStep(chip);
+    applyStep(chip, false);
   }
 
-  applyStep(state.ball);
+  applyStep(state.ball, true);
 
   for (let i = 0; i < state.chips.length; i += 1) {
     for (let j = i + 1; j < state.chips.length; j += 1) {
@@ -360,13 +391,20 @@ function simulateStep(io: RealtimeServer, state: MatchState, startedAt: number):
   if (scorer) {
     if (scorer === "creator") state.creatorScore += 1;
     else state.challengerScore += 1;
+    
+    // Enviar evento de gol con información de quién anotó
+    // El frontend interpretará desde su perspectiva
     io.to(state.id).emit("event", {
-      type: scorer === "creator" ? "goal-self" : "goal-rival",
+      type: "goal-self", // El tipo se interpreta en el frontend según quién anotó
       message: "GOOOL",
       accent: scorer === "creator" ? "#00ff9d" : "#ff4f64",
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      from: scorer // Quién anotó el gol
     });
-    resetAfterGoal(state, scorer === "creator" ? "challenger" : "creator");
+    
+    // Quien recibió el gol saca
+    const conceded = scorer === "creator" ? "challenger" : "creator";
+    resetAfterGoal(state, conceded);
     io.to(state.id).emit("snapshot", toSnapshot(state));
     return false;
   }

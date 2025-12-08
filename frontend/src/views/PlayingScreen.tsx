@@ -181,20 +181,23 @@ export function PlayingScreen() {
     });
 
     socketService.onEvent((event) => {
-      if (event.type === "goal-self") {
-        // goal-self = el jugador activo metió gol
-        setGoalAnimation("you");
-        setCommentary("¡GOOOL!");
-        setTimeout(() => setGoalAnimation(null), 2000);
-      } else if (event.type === "goal-rival") {
-        setGoalAnimation("rival");
-        setCommentary("Gol rival...");
+      const myServerSide = isChallenger ? "challenger" : "creator";
+      
+      if (event.type === "goal-self" && event.from) {
+        // Interpretar desde la perspectiva del jugador
+        const iScored = event.from === myServerSide;
+        if (iScored) {
+          setCommentary("¡GOOOL!");
+          setGoalAnimation("you");
+        } else {
+          setCommentary("Gol rival...");
+          setGoalAnimation("rival");
+        }
         setTimeout(() => setGoalAnimation(null), 2000);
       } else if (event.type === "timeout") {
         // Mostrar animación de turno perdido
         setTurnLostAnimation(true);
         setTimeout(() => setTurnLostAnimation(false), 1500);
-        const myServerSide = isChallenger ? "challenger" : "creator";
         if (event.from === myServerSide) {
           consecutiveTimeoutsRef.current += 1;
           if (consecutiveTimeoutsRef.current >= MAX_TIMEOUTS_TO_LOSE) {
