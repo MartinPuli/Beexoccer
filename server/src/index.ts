@@ -105,6 +105,8 @@ interface ClientToServerEvents {
   createFreeLobby: (lobby: FreeLobby) => void;
   joinFreeLobby: (payload: { lobbyId: string; odUserId: string; alias: string }) => void;
   cancelFreeLobby: (lobbyId: string) => void;
+  // Native socket.io events
+  disconnect: () => void;
 }
 
 interface ServerToClientEvents {
