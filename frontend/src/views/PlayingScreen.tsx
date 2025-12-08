@@ -95,10 +95,10 @@ export function PlayingScreen() {
   const [shotPower, setShotPower] = useState(0);
   const [goalAnimation, setGoalAnimation] = useState<"you" | "rival" | null>(null);
   const [turnLostAnimation, setTurnLostAnimation] = useState(false);
+  const [consecutiveTimeouts, setConsecutiveTimeouts] = useState(0);
 
   const dragRef = useRef<{ chipId: string; start: { x: number; y: number } } | null>(null);
   const turnEndRef = useRef<number>(Date.now() + TURN_TIME);
-  const consecutiveTimeoutsRef = useRef(0);
   const lastTurnPlayerRef = useRef<"creator" | "challenger" | null>(null);
   const resultReportedRef = useRef(false);
 
@@ -162,7 +162,7 @@ export function PlayingScreen() {
         const myServerSide = isChallenger ? "challenger" : "creator";
         if (snapshot.activePlayer === myServerSide) {
           // Ahora es mi turno - resetear contador si hice algo
-          consecutiveTimeoutsRef.current = 0;
+          setConsecutiveTimeouts(0);
         }
       }
       lastTurnPlayerRef.current = snapshot.activePlayer;
@@ -196,13 +196,16 @@ export function PlayingScreen() {
         setTimeout(() => setTurnLostAnimation(false), 1500);
         const myServerSide = isChallenger ? "challenger" : "creator";
         if (event.from === myServerSide) {
-          consecutiveTimeoutsRef.current += 1;
-          if (consecutiveTimeoutsRef.current >= MAX_TIMEOUTS_TO_LOSE) {
-            setWinner("rival");
-            setShowEnd(true);
-            setMatchStatus("ended");
-            setCommentary("Perdiste por inactividad");
-          }
+          setConsecutiveTimeouts(prev => {
+            const newCount = prev + 1;
+            if (newCount >= MAX_TIMEOUTS_TO_LOSE) {
+              setWinner("rival");
+              setShowEnd(true);
+              setMatchStatus("ended");
+              setCommentary("Perdiste por inactividad");
+            }
+            return newCount;
+          });
         }
       }
     });
@@ -254,7 +257,7 @@ export function PlayingScreen() {
       // Si es mi turno y el tiempo llegó a 0, enviar timeout
       if (remaining === 0 && isMyTurn && !timeoutSentRef.current && currentMatchId) {
         timeoutSentRef.current = true;
-        consecutiveTimeoutsRef.current += 1;
+        setConsecutiveTimeouts(prev => prev + 1);
         socketService.sendTimeout(currentMatchId);
       }
     }, 100);
@@ -325,16 +328,16 @@ export function PlayingScreen() {
     (globalThis as Record<string, unknown>).shotPower = normalizedPower;
 
     // La línea de apuntado muestra hacia dónde IRÁ la ficha
-    // Para el challenger, el impulso se invierte, así que la aim line también
-    const aimAngle = isChallenger ? angle + Math.PI : angle;
+    // El angle ya apunta en la dirección correcta (opuesto al arrastre)
+    // No invertir para nadie - la línea siempre muestra la dirección local
     setAim({
       from: { x: chip.x, y: chip.y },
       to: {
-        x: chip.x + Math.cos(aimAngle) * dist * 1.5,
-        y: chip.y + Math.sin(aimAngle) * dist * 1.5
+        x: chip.x + Math.cos(angle) * dist * 1.5,
+        y: chip.y + Math.sin(angle) * dist * 1.5
       }
     });
-  }, [chips, getSvgPoint, isChallenger]);
+  }, [chips, getSvgPoint]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (!dragRef.current || !currentMatchId) {
@@ -368,7 +371,7 @@ export function PlayingScreen() {
       }
 
       // Resetear timeout counter porque hicimos una jugada
-      consecutiveTimeoutsRef.current = 0;
+      setConsecutiveTimeouts(0);
 
       socketService.sendInput(currentMatchId, dragRef.current.chipId, {
         dx: impulseX,
@@ -460,8 +463,8 @@ export function PlayingScreen() {
       {/* Turn indicator */}
       <div className={`turn-indicator ${isMyTurn ? 'my-turn' : 'rival-turn'}`}>
         {isMyTurn ? "🎯 TU TURNO" : "⏳ TURNO RIVAL"}
-        {consecutiveTimeoutsRef.current > 0 && isMyTurn && (
-          <span className="timeout-warning"> ⚠️ {MAX_TIMEOUTS_TO_LOSE - consecutiveTimeoutsRef.current} turnos restantes</span>
+        {consecutiveTimeouts > 0 && isMyTurn && (
+          <span className="timeout-warning"> ⚠️ {MAX_TIMEOUTS_TO_LOSE - consecutiveTimeouts} turnos restantes</span>
         )}
       </div>
 

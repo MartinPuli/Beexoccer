@@ -2185,33 +2185,50 @@ body {
   
   /* Playing screen */
   .playing-screen {
-    padding: 4px;
-    gap: 4px;
+    padding: 2px;
+    gap: 2px;
   }
   
   .playing-hud {
-    padding: 10px 12px;
+    padding: 6px 10px;
   }
   
-  .hud-score-num {
-    font-size: 24px;
+  .hud-header {
+    margin-bottom: 4px;
   }
   
-  .hud-player {
+  .hud-title {
     font-size: 12px;
   }
   
+  .hud-score-num {
+    font-size: 20px;
+  }
+  
+  .hud-player {
+    font-size: 10px;
+  }
+  
+  .hud-sep {
+    font-size: 16px;
+  }
+  
   .timer-label {
-    font-size: 11px;
+    font-size: 9px;
   }
   
   .hud-timer {
-    margin-top: 8px;
-    gap: 8px;
+    margin-top: 4px;
+    gap: 6px;
   }
   
   .timer-bar {
-    height: 8px;
+    height: 6px;
+  }
+  
+  .momentum-bar {
+    height: 4px;
+    margin-bottom: 4px;
   }
   
   .score-wrapper {
@@ -2222,8 +2239,80 @@ body {
     font-size: 28px;
   }
   
+  /* Animaciones centradas para móvil */
+  .goal-overlay,
+  .turn-lost-overlay {
+    padding: 20px;
+  }
+  
+  .goal-text {
+    font-size: 42px;
+    letter-spacing: 2px;
+  }
+  
+  .turn-lost-text {
+    font-size: 28px;
+  }
+  
+  /* Turn indicator más compacto */
+  .turn-indicator {
+    padding: 6px 12px;
+    font-size: 12px;
+    margin: 2px 0;
+  }
+  
+  .timeout-warning {
+    font-size: 10px;
+  }
+  
+  /* Power meter más compacto */
+  .power-meter {
+    height: 16px;
+    margin: 2px auto;
+  }
+  
   /* General text reduction */
   body {
+    font-size: 14px;
+  }
+  
+  /* Game header para online match */
+  .game-header {
+    padding: 6px 10px;
+  }
+  
+  .score-section {
+    gap: 8px;
+  }
+  
+  .player-score-box {
+    min-width: 50px;
+    padding: 4px 8px;
+  }
+  
+  .score-label {
+    font-size: 9px;
+  }
+  
+  .score-value {
+    font-size: 20px;
+  }
+  
+  .vs-section {
+    gap: 2px;
+  }
+  
+  .vs-text {
+    font-size: 12px;
+  }
+  
+  .goal-target {
+    font-size: 10px;
+  }
+  
+  .exit-btn {
+    width: 28px;
+    height: 28px;
     font-size: 14px;
   }
 }
