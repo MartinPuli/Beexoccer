@@ -19,9 +19,10 @@ const TURN_TIME = 15000;
 const MAX_DRAG_DISTANCE = 200;  // Distancia máxima de arrastre (estilo Table Soccer)
 const MAX_TIMEOUTS_TO_LOSE = 3;
 
-// Constantes de física estilo Table Soccer (Plato)
+// Constantes de física estilo Table Soccer (sincronizadas con BotMatchScreen y servidor)
 const MIN_SPEED = 3;
 const MAX_SPEED = 28;  // Velocidad máxima controlada
+const POWER_CURVE_FACTOR = 0.7; // Factor de curva de potencia (igual que BotMatchScreen)
 
 interface AimLine {
   from: { x: number; y: number };
@@ -300,17 +301,25 @@ export function PlayingScreen() {
   const handlePointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (!isMyTurn || showEnd) return;
     
+    // Prevenir comportamientos del navegador y capturar el pointer
+    e.preventDefault();
+    (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
+    
     const { x, y } = getSvgPoint(e);
     
     // Buscar ficha propia cercana (azules = mías)
     const myChips = chips.filter((c) => c.fill === "#00a8ff");
-    const hit = myChips.find((c) => Math.hypot(c.x - x, c.y - y) < c.radius + 10);
+    const hit = myChips.find((c) => Math.hypot(c.x - x, c.y - y) < c.radius + 15);
     
     if (hit) {
       // Guardamos la posición del chip, no del toque
       dragRef.current = { chipId: hit.id, start: { x: hit.x, y: hit.y } };
+      // Usar la posición del chip como inicio (igual que BotMatchScreen)
+      dragRef.current = { chipId: hit.id, start: { x: hit.x, y: hit.y } };
       setSelectedChipId(hit.id);
-      (e.target as Element).setPointerCapture(e.pointerId);
+      setAim({ from: { x: hit.x, y: hit.y }, to: { x, y } });
+      setShotPower(0);
+      (globalThis as Record<string, unknown>).shotPower = 0;
     }
   }, [chips, isMyTurn, showEnd, getSvgPoint]);
 
@@ -326,10 +335,11 @@ export function PlayingScreen() {
     const dragDy = y - chip.y;
     const dist = Math.min(Math.hypot(dragDx, dragDy), MAX_DRAG_DISTANCE);
     
-    // Calcular potencia normalizada para feedback visual
-    const normalizedPower = dist / MAX_DRAG_DISTANCE;
-    setShotPower(normalizedPower);
-    (globalThis as Record<string, unknown>).shotPower = normalizedPower;
+    // Calcular potencia con curva cuadrática (igual que BotMatchScreen)
+    const rawPower = dist / (MAX_DRAG_DISTANCE * POWER_CURVE_FACTOR);
+    const powerScale = Math.min(1, rawPower * rawPower);
+    setShotPower(powerScale);
+    (globalThis as Record<string, unknown>).shotPower = powerScale;
 
     // Limitar la posición del aim a la distancia máxima
     let aimX = x;
@@ -342,6 +352,7 @@ export function PlayingScreen() {
     
     // Pasamos to como la posición del arrastre
     // PitchCanvas invertirá la dirección para mostrar hacia dónde irá el tiro
+    // La línea de apuntado muestra hacia dónde IRÁ la ficha
     setAim({
       from: { x: chip.x, y: chip.y },
       to: { x: aimX, y: aimY }
@@ -371,19 +382,19 @@ export function PlayingScreen() {
     const dist = Math.min(Math.hypot(dragDx, dragDy), MAX_DRAG_DISTANCE);
     
     if (dist > 20) {
-      // === SISTEMA DE POTENCIA LINEAL ===
-      // La potencia es directamente proporcional a la longitud del arrastre
+      // === SISTEMA DE POTENCIA (igual que BotMatchScreen) ===
+      // Potencia lineal: velocidad = porcentaje * MAX_SPEED
       const normalizedDist = Math.min(1, dist / MAX_DRAG_DISTANCE);
       const targetSpeed = normalizedDist * MAX_SPEED;
       
       // Dirección del tiro = opuesto al arrastre (arrastra abajo = tira arriba)
-      const shotDx = -dragDx;
-      const shotDy = -dragDy;
-      const shotMag = Math.hypot(shotDx, shotDy) || 1;
+      const dirX = chip.x - x;
+      const dirY = chip.y - y;
+      const dirMag = Math.hypot(dirX, dirY) || 1;
       
       // Impulso en coordenadas locales del jugador
-      let impulseX = (shotDx / shotMag) * targetSpeed;
-      let impulseY = (shotDy / shotMag) * targetSpeed;
+      let impulseX = (dirX / dirMag) * targetSpeed;
+      let impulseY = (dirY / dirMag) * targetSpeed;
 
       // Para el challenger, la vista está rotada 180°, así que el servidor
       // espera coordenadas del mundo real. Invertimos el impulso.
@@ -486,15 +497,35 @@ export function PlayingScreen() {
       </div>
 
       {/* Power meter cuando arrastra */}
-      {shotPower > 0 && (
-        <div className="power-meter">
-          <div className="power-fill" style={{ 
-            width: `${shotPower * 100}%`,
-            backgroundColor: shotPower > 0.7 ? '#ff4444' : shotPower > 0.4 ? '#ffaa00' : '#00ff6a'
-          }} />
-          <span className="power-label">{Math.round(shotPower * 100)}%</span>
-        </div>
-      )}
+      {shotPower > 0 && (() => {
+        // Interpolación de color continua: verde -> amarillo -> naranja -> rojo
+        const lerpColor = (c1: [number, number, number], c2: [number, number, number], t: number) => {
+          const r = Math.round(c1[0] + (c2[0] - c1[0]) * t);
+          const g = Math.round(c1[1] + (c2[1] - c1[1]) * t);
+          const b = Math.round(c1[2] + (c2[2] - c1[2]) * t);
+          return `rgb(${r}, ${g}, ${b})`;
+        };
+        const green: [number, number, number] = [0, 255, 106];
+        const yellow: [number, number, number] = [255, 170, 0];
+        const red: [number, number, number] = [255, 68, 68];
+        
+        let bgColor: string;
+        if (shotPower < 0.5) {
+          bgColor = lerpColor(green, yellow, shotPower / 0.5);
+        } else {
+          bgColor = lerpColor(yellow, red, (shotPower - 0.5) / 0.5);
+        }
+        
+        return (
+          <div className="power-meter">
+            <div className="power-fill" style={{ 
+              width: `${shotPower * 100}%`,
+              backgroundColor: bgColor
+            }} />
+            <span className="power-label">{Math.round(shotPower * 100)}%</span>
+          </div>
+        );
+      })()}
 
       {/* Pitch */}
       <PitchCanvas
@@ -504,9 +535,11 @@ export function PlayingScreen() {
         activePlayer={activePlayer}
         isPlayerTurn={isMyTurn}
         aimLine={aim}
+        shotPower={shotPower}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       />
 
       {/* Commentary */}

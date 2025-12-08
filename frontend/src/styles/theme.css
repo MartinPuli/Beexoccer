@@ -121,6 +121,29 @@ body {
   transform: translateY(-1px);
 }
 
+/* Botón secundario */
+.home-btn.secondary {
+  background: linear-gradient(180deg, var(--dark-panel-hover) 0%, var(--dark-panel-alt) 100%);
+  color: var(--text-light);
+  border: 2px solid var(--border-green);
+  box-shadow: 
+    0 4px 16px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.home-btn.secondary:hover {
+  transform: translateY(-3px);
+  border-color: var(--neon-green);
+  box-shadow: 
+    0 8px 32px rgba(0, 255, 106, 0.2),
+    0 4px 12px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.home-btn.secondary:active {
+  transform: translateY(-1px);
+}
+
 /* Torneos box - Próximamente */
 .torneos-box {
   width: 100%;

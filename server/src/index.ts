@@ -45,8 +45,22 @@ interface Lobby {
   status: "waiting" | "ready" | "playing";
 }
 
+// Free lobbies (no blockchain) system
+interface FreeLobby {
+  id: string;
+  creator: string;
+  creatorAlias: string;
+  goals: number;
+  createdAt: number;
+  creatorSocketId?: string;
+}
+
 const lobbies = new Map<string, Lobby>();
 const lobbySubscribers = new Set<string>(); // socket ids subscribed to lobby updates
+
+// Free lobbies storage
+const freeLobbies = new Map<string, FreeLobby>();
+const freeLobbySubscribers = new Set<string>();
 
 interface SnapshotPayload {
   activePlayer: PlayerSide;
@@ -85,6 +99,12 @@ interface ClientToServerEvents {
   createLobby: (payload: { matchId: string; creator: string; creatorAlias: string; goals: number; isFree: boolean; stakeAmount: string }) => void;
   joinLobby: (payload: { matchId: string; challenger: string; challengerAlias: string }) => void;
   cancelLobby: (payload: { matchId: string }) => void;
+  // Free lobbies events
+  subscribeFreeLobbies: () => void;
+  unsubscribeFreeLobbies: () => void;
+  createFreeLobby: (lobby: FreeLobby) => void;
+  joinFreeLobby: (payload: { lobbyId: string; odUserId: string; alias: string }) => void;
+  cancelFreeLobby: (lobbyId: string) => void;
 }
 
 interface ServerToClientEvents {
@@ -97,6 +117,10 @@ interface ServerToClientEvents {
   lobbyCancelled: (data: { matchId: string }) => void;
   matchEnded: (data: { winner: PlayerSide; reason: string }) => void;
   playerForfeited: (data: { side: PlayerSide }) => void;
+  // Free lobbies events
+  freeLobbiesUpdate: (lobbies: FreeLobby[]) => void;
+  freeMatchReady: (data: { matchId: string; rivalAlias: string }) => void;
+  freeLobbyRemoved: (lobbyId: string) => void;
 }
 
 interface InterServerEvents {}
@@ -661,9 +685,100 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
     io.to(lobbyMatchId).emit("lobbyCancelled", { matchId: lobbyMatchId });
   });
 
-  // Handle disconnect - clean up lobby subscriptions
+  // ========== FREE LOBBIES (sin blockchain) ==========
+  
+  socket.on("subscribeFreeLobbies", () => {
+    freeLobbySubscribers.add(socket.id);
+    // Send current free lobbies list
+    const currentLobbies = Array.from(freeLobbies.values());
+    socket.emit("freeLobbiesUpdate", currentLobbies);
+    console.log(`[FreeLobby] ${socket.id} subscribed. Total lobbies: ${currentLobbies.length}`);
+  });
+
+  socket.on("unsubscribeFreeLobbies", () => {
+    freeLobbySubscribers.delete(socket.id);
+  });
+
+  socket.on("createFreeLobby", (lobby: FreeLobby) => {
+    // Add socket id for cleanup on disconnect
+    lobby.creatorSocketId = socket.id;
+    freeLobbies.set(lobby.id, lobby);
+    
+    // Join the lobby room
+    socket.join(lobby.id);
+    
+    // Notify all subscribers
+    const currentLobbies = Array.from(freeLobbies.values());
+    for (const subId of freeLobbySubscribers) {
+      io.to(subId).emit("freeLobbiesUpdate", currentLobbies);
+    }
+    console.log(`[FreeLobby] Created lobby ${lobby.id} by ${lobby.creatorAlias}`);
+  });
+
+  socket.on("joinFreeLobby", ({ lobbyId, odUserId, alias }) => {
+    const lobby = freeLobbies.get(lobbyId);
+    if (!lobby) {
+      console.log(`[FreeLobby] Lobby ${lobbyId} not found`);
+      return;
+    }
+    
+    // Remove lobby from free lobbies
+    freeLobbies.delete(lobbyId);
+    
+    // Join the match room
+    socket.join(lobbyId);
+    
+    // Notify the creator that a rival joined
+    io.to(lobby.creatorSocketId || lobbyId).emit("freeMatchReady", { 
+      matchId: lobbyId, 
+      rivalAlias: alias 
+    });
+    
+    // Update lobbies list for all subscribers
+    const currentLobbies = Array.from(freeLobbies.values());
+    for (const subId of freeLobbySubscribers) {
+      io.to(subId).emit("freeLobbiesUpdate", currentLobbies);
+    }
+    
+    console.log(`[FreeLobby] ${alias} joined lobby ${lobbyId}`);
+  });
+
+  socket.on("cancelFreeLobby", (lobbyId: string) => {
+    const lobby = freeLobbies.get(lobbyId);
+    if (!lobby) return;
+    
+    freeLobbies.delete(lobbyId);
+    
+    // Notify all subscribers
+    const currentLobbies = Array.from(freeLobbies.values());
+    for (const subId of freeLobbySubscribers) {
+      io.to(subId).emit("freeLobbiesUpdate", currentLobbies);
+    }
+    
+    // Notify the room that lobby was removed
+    io.to(lobbyId).emit("freeLobbyRemoved", lobbyId);
+    
+    console.log(`[FreeLobby] Cancelled lobby ${lobbyId}`);
+  });
+
+  // Handle disconnect - clean up lobby subscriptions and free lobbies
   socket.on("disconnect", () => {
     lobbySubscribers.delete(socket.id);
+    freeLobbySubscribers.delete(socket.id);
+    
+    // Remove any free lobbies created by this socket
+    for (const [lobbyId, lobby] of freeLobbies.entries()) {
+      if (lobby.creatorSocketId === socket.id) {
+        freeLobbies.delete(lobbyId);
+        // Notify subscribers
+        const currentLobbies = Array.from(freeLobbies.values());
+        for (const subId of freeLobbySubscribers) {
+          io.to(subId).emit("freeLobbiesUpdate", currentLobbies);
+        }
+        io.to(lobbyId).emit("freeLobbyRemoved", lobbyId);
+        console.log(`[FreeLobby] Cleaned up lobby ${lobbyId} (creator disconnected)`);
+      }
+    }
   });
 });
 
