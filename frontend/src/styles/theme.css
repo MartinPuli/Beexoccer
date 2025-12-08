@@ -1901,6 +1901,7 @@ body {
 
 .connect-logo {
   margin-bottom: 24px;
+  align-self: center;
 }
 
 .connect-logo-img {

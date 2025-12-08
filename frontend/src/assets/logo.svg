@@ -1,80 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="600" height="120" viewBox="0 0 600 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Beexoccer logo">
-  <defs>
-    <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-    <linearGradient id="greenGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#15D648;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#11B13A;stop-opacity:1" />
-    </linearGradient>
-    <style>
-      @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-      }
-      #ballGroup {
-        animation: spin 3s linear infinite;
-        transform-origin: center;
-        transform-box: fill-box;
-      }
-    </style>
-  </defs>
-
-  <!-- Background -->
-  <rect width="600" height="120" fill="#0A1A10"/>
-  
+<svg width="360" height="80" viewBox="0 0 360 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Beexoccer logo">
   <!-- BEEX text -->
-  <text x="45" y="75" 
-        font-family="'Helvetica Neue', Arial, sans-serif" 
-        font-size="58" 
-        font-weight="800" 
-        fill="url(#greenGradient)"
-        letter-spacing="0.02em"
-        filter="url(#neonGlow)"
-        text-anchor="start"
-        dominant-baseline="middle">
-    BEEX
-  </text>
-
-  <!-- Soccer Ball in the middle -->
-  <g transform="translate(270, 70)">
-    <g id="ballGroup">
-      <!-- Outer circle with glow -->
-      <circle cx="0" cy="0" r="40" fill="#11B13A" opacity="0.3" filter="url(#neonGlow)"/>
-      <circle cx="0" cy="0" r="36" fill="white" stroke="#11B13A" stroke-width="3"/>
-      
-      <!-- Pentagon pattern -->
-      <path d="M0,-23 L22,-7 L13.5,18.5 L-13.5,18.5 L-22,-7 Z" 
-            fill="#11B13A" opacity="0.9"/>
-      
-      <!-- Hexagon patterns -->
-      <path d="M0,-23 L-22,-7 L-22,-25" fill="#11B13A" opacity="0.7"/>
-      <path d="M0,-23 L22,-7 L22,-25" fill="#11B13A" opacity="0.7"/>
-      <path d="M22,-7 L32,11 L13.5,18.5" fill="#11B13A" opacity="0.7"/>
-      <path d="M13.5,18.5 L0,29 L-13.5,18.5" fill="#11B13A" opacity="0.7"/>
-      <path d="M-13.5,18.5 L-32,11 L-22,-7" fill="#11B13A" opacity="0.7"/>
-      
-      <!-- Center dot -->
-      <circle cx="0" cy="0" r="5" fill="#0A1A10"/>
-    </g>
+  <text x="10" y="55" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#11B13A">BEEX</text>
+  
+  <!-- Soccer ball -->
+  <g transform="translate(175, 40)">
+    <circle cx="0" cy="0" r="28" fill="white" stroke="#11B13A" stroke-width="2"/>
+    <path d="M0,-18 L-11,0 L0,18 L11,0 Z" fill="#11B13A"/>
+    <circle cx="0" cy="0" r="6" fill="#0A1A10"/>
   </g>
-
-  <!-- OCCER text -->
-  <text x="320" y="75" 
-        font-family="'Helvetica Neue', Arial, sans-serif" 
-        font-size="58" 
-        font-weight="800" 
-        fill="url(#greenGradient)"
-        letter-spacing="0.02em"
-        filter="url(#neonGlow)"
-        text-anchor="start"
-        dominant-baseline="middle">
-    OCCER
-  </text>
+  
+  <!-- CCER text -->
+  <text x="215" y="55" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#11B13A">CCER</text>
 </svg>

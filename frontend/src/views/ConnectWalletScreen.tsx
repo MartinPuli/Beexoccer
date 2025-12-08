@@ -3,7 +3,7 @@ import { walletService } from "../services/walletService";
 import { useGameStore } from "../hooks/useGameStore";
 import { checkMatchStatus } from "../services/matchService";
 import { toast } from "../components/Toast";
-import logoSvg from "../assets/logo.svg";
+import logoImg from "../assets/BEEXOCCER.png";
 
 // URL de descarga de Beexo
 const BEEXO_DOWNLOAD_URL = "https://share.beexo.com/?type=download";
@@ -103,8 +103,8 @@ export function ConnectWalletScreen() {
 
   return (
     <div className="connect-screen">
-      <div className="connect-logo" style={{ marginBottom: 32 }}>
-        <img src={logoSvg} alt="Beexoccer" style={{ width: 68, height: 68, opacity: 0.92 }} />
+      <div className="connect-logo" style={{ marginBottom: 32, width: '100%', display: 'flex', justifyContent: 'center' }}>
+        <img src={logoImg} alt="Beexoccer" style={{ width: 220, height: 'auto', opacity: 0.92 }} />
       </div>
       <div className="connect-content" style={{ maxWidth: 350, margin: '0 auto', background: 'none', boxShadow: 'none', padding: 0 }}>
         <h1 style={{ fontSize: '1.55rem', fontWeight: 700, margin: '0 0 18px 0', color: '#ffe45b', letterSpacing: '.01em', textAlign: 'center' }}>

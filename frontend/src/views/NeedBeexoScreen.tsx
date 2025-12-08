@@ -262,6 +262,13 @@ export const NeedBeexoScreen: React.FC<ConnectWalletScreenProps> = ({ onConnecte
           z-index: 1;
         }
 
+        .beexo-logo {
+          width: 100%;
+          display: flex;
+          justify-content: center;
+          margin-bottom: 10px;
+        }
+
         .beexo-logo-img {
           width: 220px;
           max-width: 80%;

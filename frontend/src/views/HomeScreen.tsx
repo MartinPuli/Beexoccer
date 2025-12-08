@@ -1,5 +1,5 @@
 import { useGameStore } from "../hooks/useGameStore";
-import logoSvg from "../assets/logo.svg";
+import logoImg from "../assets/BEEXOCCER.png";
 import { useState } from "react";
 
 export function HomeScreen() {
@@ -23,7 +23,7 @@ export function HomeScreen() {
         }}
       >
         <img 
-          src={logoSvg} 
+          src={logoImg} 
           alt="Beexoccer" 
           className="home-logo-img" 
           style={{
