@@ -314,8 +314,6 @@ export function PlayingScreen() {
     if (hit) {
       // Guardamos la posición del chip, no del toque
       dragRef.current = { chipId: hit.id, start: { x: hit.x, y: hit.y } };
-      // Usar la posición del chip como inicio (igual que BotMatchScreen)
-      dragRef.current = { chipId: hit.id, start: { x: hit.x, y: hit.y } };
       setSelectedChipId(hit.id);
       setAim({ from: { x: hit.x, y: hit.y }, to: { x, y } });
       setShotPower(0);
@@ -360,7 +358,7 @@ export function PlayingScreen() {
   }, [chips, getSvgPoint]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
-    if (!dragRef.current || !currentMatchId) {
+    if (!dragRef.current || !currentMatchId || !isMyTurn) {
       setAim(undefined);
       setShotPower(0);
       dragRef.current = null;
@@ -388,16 +386,18 @@ export function PlayingScreen() {
       const targetSpeed = normalizedDist * MAX_SPEED;
       
       // Dirección del tiro = opuesto al arrastre (arrastra abajo = tira arriba)
+      // Las coordenadas ya están en espacio visual del jugador
       const dirX = chip.x - x;
       const dirY = chip.y - y;
       const dirMag = Math.hypot(dirX, dirY) || 1;
       
-      // Impulso en coordenadas locales del jugador
+      // Impulso en coordenadas visuales del jugador
       let impulseX = (dirX / dirMag) * targetSpeed;
       let impulseY = (dirY / dirMag) * targetSpeed;
 
-      // Para el challenger, la vista está rotada 180°, así que el servidor
-      // espera coordenadas del mundo real. Invertimos el impulso.
+      // Para el challenger, las coordenadas están invertidas visualmente,
+      // pero el servidor espera coordenadas del mundo real.
+      // La dirección visual es correcta, pero necesitamos invertir para el servidor.
       if (isChallenger) {
         impulseX = -impulseX;
         impulseY = -impulseY;
@@ -416,7 +416,7 @@ export function PlayingScreen() {
     setShotPower(0);
     setSelectedChipId(null);
     dragRef.current = null;
-  }, [currentMatchId, isChallenger, getSvgPoint, chips]);
+  }, [currentMatchId, isChallenger, isMyTurn, getSvgPoint, chips]);
 
   const handleExit = () => setShowExitConfirm(true);
   const confirmExit = () => {
