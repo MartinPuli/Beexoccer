@@ -65,6 +65,7 @@ interface ClientToServerEvents {
   sync: () => void;
   requestRematch: () => void;
   turnTimeout: (payload: { matchId?: string }) => void;
+  forfeit: (payload: { matchId?: string }) => void;
   subscribeLobbies: () => void;
   unsubscribeLobbies: () => void;
   createLobby: (payload: { matchId: string; creator: string; creatorAlias: string; stake: string }) => void;
@@ -81,6 +82,7 @@ interface ServerToClientEvents {
   matchReady: (data: { matchId: string }) => void;
   lobbyCancelled: (data: { matchId: string }) => void;
   matchEnded: (data: { winner: PlayerSide; reason: string }) => void;
+  playerForfeited: (data: { side: PlayerSide }) => void;
 }
 
 interface InterServerEvents {}
@@ -419,6 +421,19 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
     });
     finishTurn(state);
     io.to(state.id).emit("snapshot", toSnapshot(state));
+  });
+
+  // Handle player forfeit (abandonment)
+  socket.on("forfeit", ({ matchId: incomingId }) => {
+    const state = ensureMatch(incomingId || matchId);
+    const winner = side === "creator" ? "challenger" : "creator";
+    
+    // Notify both players
+    io.to(state.id).emit("playerForfeited", { side });
+    io.to(state.id).emit("matchEnded", { winner, reason: "forfeit" });
+    
+    // Clean up match
+    matches.delete(state.id);
   });
 
   socket.on("sync", () => {

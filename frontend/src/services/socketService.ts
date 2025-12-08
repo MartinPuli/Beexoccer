@@ -13,6 +13,8 @@ type ServerToClientEvents = {
   lobbyJoined: (data: { matchId: string; challenger: string; challengerAlias: string }) => void;
   matchReady: (data: { matchId: string }) => void;
   lobbyCancelled: (data: { matchId: string }) => void;
+  matchEnded: (data: { winner: "creator" | "challenger"; reason: string }) => void;
+  playerForfeited: (data: { side: "creator" | "challenger" }) => void;
 };
 
 type ClientToServerEvents = {
@@ -21,6 +23,7 @@ type ClientToServerEvents = {
   sync: () => void;
   requestRematch: () => void;
   turnTimeout: (payload: { matchId: string }) => void;
+  forfeit: (payload: { matchId: string }) => void;
   subscribeLobbies: () => void;
   unsubscribeLobbies: () => void;
   createLobby: (payload: { matchId: string; creator: string; creatorAlias: string; stake: string }) => void;
@@ -172,17 +175,51 @@ class SocketService {
     this.socket?.emit("turnTimeout", { matchId });
   }
 
+  sendForfeit(matchId: string) {
+    this.socket?.emit("forfeit", { matchId });
+  }
+
+  onPlayerForfeited(cb: (side: "creator" | "challenger") => void) {
+    this.socket?.on("playerForfeited", (data) => cb(data.side));
+  }
+
+  onMatchEnded(cb: (data: { winner: "creator" | "challenger"; reason: string }) => void) {
+    this.socket?.on("matchEnded", cb);
+  }
+
   // Lobby management methods
   createLobby(matchId: string, creator: string, creatorAlias: string, stake: string) {
-    this.socket?.emit("createLobby", { matchId, creator, creatorAlias, stake });
+    if (!this.socket?.connected) {
+      // Connect first, then emit when connected
+      this.connectLobbies();
+      this.socket?.once("connect", () => {
+        this.socket?.emit("createLobby", { matchId, creator, creatorAlias, stake });
+      });
+    } else {
+      this.socket.emit("createLobby", { matchId, creator, creatorAlias, stake });
+    }
   }
 
   joinLobby(matchId: string, challenger: string, challengerAlias: string) {
-    this.socket?.emit("joinLobby", { matchId, challenger, challengerAlias });
+    if (!this.socket?.connected) {
+      this.connectLobbies();
+      this.socket?.once("connect", () => {
+        this.socket?.emit("joinLobby", { matchId, challenger, challengerAlias });
+      });
+    } else {
+      this.socket.emit("joinLobby", { matchId, challenger, challengerAlias });
+    }
   }
 
   cancelLobby(matchId: string) {
-    this.socket?.emit("cancelLobby", { matchId });
+    if (!this.socket?.connected) {
+      this.connectLobbies();
+      this.socket?.once("connect", () => {
+        this.socket?.emit("cancelLobby", { matchId });
+      });
+    } else {
+      this.socket.emit("cancelLobby", { matchId });
+    }
   }
 
   onLobbyCancelled(cb: (matchId: string) => void) {

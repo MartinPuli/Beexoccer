@@ -156,6 +156,30 @@ export function PlayingScreen() {
       }
     });
 
+    // Listen for rival forfeit
+    socketService.onPlayerForfeited((side) => {
+      const myServerSide = isChallenger ? "challenger" : "creator";
+      if (side !== myServerSide) {
+        // Rival forfeited, we win!
+        setWinner("you");
+        setShowEnd(true);
+        setMatchStatus("ended");
+        setCommentary("¡Tu rival abandonó!");
+      }
+    });
+
+    // Listen for match ended
+    socketService.onMatchEnded((data) => {
+      const myServerSide = isChallenger ? "challenger" : "creator";
+      if (data.winner === myServerSide) {
+        setWinner("you");
+      } else {
+        setWinner("rival");
+      }
+      setShowEnd(true);
+      setMatchStatus("ended");
+    });
+
     return () => {
       socketService.offAll();
       socketService.disconnect();
@@ -292,6 +316,10 @@ export function PlayingScreen() {
   const handleExit = () => setShowExitConfirm(true);
   const confirmExit = () => {
     setShowExitConfirm(false);
+    // If game is not over, forfeit the match
+    if (!showEnd && currentMatchId) {
+      socketService.sendForfeit(currentMatchId);
+    }
     socketService.disconnect();
     setView("home");
   };
