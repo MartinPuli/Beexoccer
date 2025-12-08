@@ -50,33 +50,7 @@ const ERC20_ABI = [
 
 // Polygon Amoy chain config
 const POLYGON_AMOY_CHAIN_ID = 80002;
-const POLYGON_AMOY_CHAIN_ID_HEX = "0x13882"; // 80002 in hex
 const POLYGON_AMOY_RPC = "https://polygon-amoy.drpc.org";
-
-// XO Connect Provider config (rpcs is required)
-const XO_CONNECT_CONFIG = {
-  defaultChainId: POLYGON_AMOY_CHAIN_ID_HEX,
-  rpcs: {
-    [POLYGON_AMOY_CHAIN_ID]: POLYGON_AMOY_RPC,
-    137: "https://polygon.drpc.org",
-    1: "https://eth.drpc.org"
-  }
-};
-
-// Check if running inside Beexo WebView
-function isInBeexoWebView(): boolean {
-  const ua = navigator.userAgent || "";
-  // Check various indicators of being in Beexo WebView
-  if (ua.includes("BeexoWallet") || ua.includes("XOConnect")) return true;
-  if (typeof (window as unknown as { xoConnect?: unknown }).xoConnect !== "undefined") return true;
-  if (typeof (window as unknown as { ethereum?: { isBeexo?: boolean } }).ethereum?.isBeexo) return true;
-  return false;
-}
-
-// Check if on mobile device
-function isMobileDevice(): boolean {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-}
 
 class XoConnectService {
   private xoProvider?: typeof XOConnectProvider;
@@ -127,24 +101,22 @@ class XoConnectService {
   }
 
   /**
-   * Check if we're inside Beexo WebView
+   * Check if we're inside Beexo WebView (not used anymore, XO Connect works everywhere)
    */
   isInWebView(): boolean {
-    return isInBeexoWebView();
+    return true; // XO Connect should work in any context
   }
 
   /**
-   * Get the URL for opening in Beexo WebView (for QR code)
+   * Get the URL for opening in Beexo WebView (for QR code) - not needed
    */
   getBeexoDeepLink(): string {
-    // beexo:// deep link format to open a URL in Beexo's browser
-    const currentUrl = window.location.href;
-    return `beexo://browser?url=${encodeURIComponent(currentUrl)}`;
+    return window.location.href;
   }
 
   /**
-   * Connect with XO Connect - this will trigger Beexo connection flow
-   * Only works inside Beexo WebView
+   * Connect with XO Connect - siguiendo el ejemplo exacto de la documentación
+   * https://bitbucket.org/mellowwallet/xo-connect
    */
   async connect(): Promise<boolean> {
     if (this._isConnecting) {
@@ -152,29 +124,23 @@ class XoConnectService {
       return false;
     }
 
-    // Check if we're in WebView first
-    if (!isInBeexoWebView()) {
-      console.log("⚠️ No estamos en WebView de Beexo - necesita escanear QR");
-      this._connectionError = "SHOW_QR"; // Special flag to show QR
-      return false;
-    }
-
     this._isConnecting = true;
     this._connectionError = null;
     
     console.log("🔌 Iniciando conexión con XO Connect...");
-    console.log("📱 WebView de Beexo:", isInBeexoWebView());
     
     try {
-      // Create XO Connect Provider with required config
-      console.log("📡 Creando XOConnectProvider con config:", XO_CONNECT_CONFIG);
-      this.xoProvider = new XOConnectProvider(XO_CONNECT_CONFIG);
+      // Siguiendo el ejemplo EXACTO de la documentación:
+      // const provider = new ethers.providers.Web3Provider(new XOConnectProvider(), "any");
+      console.log("📡 Creando XOConnectProvider (sin config, como dice la doc)...");
+      this.xoProvider = new XOConnectProvider();
       
-      // Wrap in ethers BrowserProvider
-      this.ethersProvider = new BrowserProvider(this.xoProvider, POLYGON_AMOY_CHAIN_ID);
+      // Wrap in ethers BrowserProvider (ethers v6 version of Web3Provider)
+      // Usamos "any" como network como dice la documentación
+      this.ethersProvider = new BrowserProvider(this.xoProvider, "any");
       
-      // Request accounts
-      console.log("🔑 Solicitando conexión con Beexo Wallet...");
+      // Request accounts - await provider.send("eth_requestAccounts", []);
+      console.log("🔑 Solicitando eth_requestAccounts...");
       const accounts = await this.ethersProvider.send("eth_requestAccounts", []) as string[];
       console.log("✅ Cuentas conectadas:", accounts);
       
