@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { PitchCanvas } from "../components/PitchCanvas";
 import { useGameStore } from "../hooks/useGameStore";
 import { TokenChip } from "../types/game";
-import { audioService } from "../services/audioService";
 
 /**
  * BotMatchScreen (refactor compatible)
@@ -273,8 +272,6 @@ export function BotMatchScreen() {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [shotPower, setShotPower] = useState<number>(0);
   const [showPowerMeter, setShowPowerMeter] = useState<{ x: number; y: number } | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [audioInitialized, setAudioInitialized] = useState(false);
 
   const dragRef = useRef<{ chipId: string; start: { x: number; y: number } } | null>(null);
   const simRef = useRef<number | null>(null);
@@ -1064,14 +1061,6 @@ export function BotMatchScreen() {
   const showGoalAnim = useCallback((scorer: "you" | "bot") => {
     setGoalAnimation(scorer);
     
-    // Reproducir sonido de gol
-    audioService.playGoalSound(scorer === "you");
-    
-    // Pitido de árbitro para sacar del medio después del gol
-    setTimeout(() => {
-      audioService.playWhistle();
-    }, 1500);
-    
     setTimeout(() => {
       setGoalAnimation(null);
       const stats = botStatsRef.current;
@@ -1147,14 +1136,10 @@ export function BotMatchScreen() {
         // Colisiones entre fichas (ninguna es pelota)
         for (let i = 0; i < movedChips.length; i++) {
           for (let j = i + 1; j < movedChips.length; j++) {
-            if (handleCollision(movedChips[i], movedChips[j], false, false)) {
-              audioService.playCollision(0.3);
-            }
+            handleCollision(movedChips[i], movedChips[j], false, false);
           }
           // Colisión ficha con pelota (segundo es pelota)
-          if (handleCollision(movedChips[i], movedBall, false, true)) {
-            audioService.playCollision(0.5);
-          }
+          handleCollision(movedChips[i], movedBall, false, true);
         }
 
         // Actualizar refs (copia)
@@ -1172,8 +1157,6 @@ export function BotMatchScreen() {
           if (newScore >= goalTarget) { 
             setWinner("you"); 
             setShowEnd(true);
-            audioService.playVictory();
-            audioService.stopCrowdAmbience();
           }
           else { showGoalAnim("you"); }
         } else if (b.y > BOUNDARY_BOTTOM + 10 && b.x > GOAL_LEFT && b.x < GOAL_RIGHT) {
@@ -1183,8 +1166,6 @@ export function BotMatchScreen() {
           if (newScore >= goalTarget) { 
             setWinner("bot"); 
             setShowEnd(true);
-            audioService.playDefeat();
-            audioService.stopCrowdAmbience();
           }
           else { showGoalAnim("bot"); }
         }
@@ -1261,31 +1242,6 @@ export function BotMatchScreen() {
       }
     };
   }, [active, goalAnimation, showEnd, turnLostAnimation, showTurnLost]);
-
-  // Inicialización del audio con interacción del usuario
-  useEffect(() => {
-    const handleFirstInteraction = () => {
-      if (!audioInitialized) {
-        audioService.init();
-        audioService.startCrowdAmbience();
-        audioService.playWhistle(); // Pitido inicial del partido
-        setAudioInitialized(true);
-      }
-      document.removeEventListener("pointerdown", handleFirstInteraction);
-    };
-    
-    document.addEventListener("pointerdown", handleFirstInteraction);
-    
-    return () => {
-      document.removeEventListener("pointerdown", handleFirstInteraction);
-      audioService.stopCrowdAmbience();
-    };
-  }, [audioInitialized]);
-
-  // Manejar mute/unmute
-  useEffect(() => {
-    audioService.toggleMute(isMuted);
-  }, [isMuted]);
 
   /* =========================
      INPUT HANDLERS (pointer)
@@ -1393,9 +1349,6 @@ export function BotMatchScreen() {
       // Actualizar solo la ficha objetivo de forma inmutable
       chipsRef.current = chipsRef.current.map((c) => c.id === chipId ? { ...c, vx: dx, vy: dy } : c);
       turnTakenRef.current = true;
-      
-      // Reproducir sonido de tiro
-      audioService.playKick(normalizedDist);
     }
 
     // limpiar estados
@@ -1426,13 +1379,6 @@ export function BotMatchScreen() {
         <div className="hud-header">
           <button className="exit-btn" onClick={handleExitRequest}>✕</button>
           <span className="hud-title">VS BOT</span>
-          <button 
-            className="mute-btn" 
-            onClick={() => setIsMuted(!isMuted)}
-            title={isMuted ? "Activar sonido" : "Silenciar"}
-          >
-            {isMuted ? "🔇" : "🔊"}
-          </button>
         </div>
 
         <div className="momentum-bar">
