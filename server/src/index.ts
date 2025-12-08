@@ -21,12 +21,16 @@ type PlayerSide = "creator" | "challenger";
 
 type MatchEventType = "goal-self" | "goal-rival" | "timeout" | "rematch-requested" | "rematch-confirmed";
 
-// Lobby system
+// Lobby system - matches MatchLobby type from frontend
 interface Lobby {
-  matchId: string;
+  id: number;
   creator: string;
   creatorAlias: string;
-  stake: string;
+  goals: number;
+  isFree: boolean;
+  stakeAmount: string;
+  stakeToken: string;
+  open: boolean;
   createdAt: number;
   status: "waiting" | "ready" | "playing";
 }
@@ -65,9 +69,10 @@ interface ClientToServerEvents {
   sync: () => void;
   requestRematch: () => void;
   turnTimeout: (payload: { matchId?: string }) => void;
+  forfeit: (payload: { matchId?: string }) => void;
   subscribeLobbies: () => void;
   unsubscribeLobbies: () => void;
-  createLobby: (payload: { matchId: string; creator: string; creatorAlias: string; stake: string }) => void;
+  createLobby: (payload: { matchId: string; creator: string; creatorAlias: string; goals: number; isFree: boolean; stakeAmount: string }) => void;
   joinLobby: (payload: { matchId: string; challenger: string; challengerAlias: string }) => void;
   cancelLobby: (payload: { matchId: string }) => void;
 }
@@ -81,6 +86,7 @@ interface ServerToClientEvents {
   matchReady: (data: { matchId: string }) => void;
   lobbyCancelled: (data: { matchId: string }) => void;
   matchEnded: (data: { winner: PlayerSide; reason: string }) => void;
+  playerForfeited: (data: { side: PlayerSide }) => void;
 }
 
 interface InterServerEvents {}
@@ -349,23 +355,36 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
   socket.data.matchId = matchId;
   socket.data.side = side;
 
+  console.log(`[Socket] Player connected: matchId=${matchId}, side=${side}, socketId=${socket.id}`);
+
   const match = ensureMatch(matchId);
   socket.join(matchId);
 
-  socket.emit("snapshot", toSnapshot(match));
+  // Send initial snapshot
+  const snapshot = toSnapshot(match);
+  console.log(`[Socket] Sending initial snapshot to ${socket.id}:`, { activePlayer: snapshot.activePlayer, turnEndsAt: snapshot.turnEndsAt });
+  socket.emit("snapshot", snapshot);
 
   socket.on("input", ({ matchId: incomingId, chipId, impulse }: { matchId?: string; chipId: string; impulse: { dx: number; dy: number } }) => {
+    console.log(`[Socket] Input received from ${side}: chipId=${chipId}, impulse=`, impulse);
     const state = ensureMatch(incomingId || matchId);
-    if (state.simRunning || !state.awaitingInput) return;
+    if (state.simRunning || !state.awaitingInput) {
+      console.log(`[Socket] Input rejected: simRunning=${state.simRunning}, awaitingInput=${state.awaitingInput}`);
+      return;
+    }
     const chip = state.chips.find((c) => c.id === chipId && c.owner === state.activePlayer);
-    if (!chip) return;
+    if (!chip) {
+      console.log(`[Socket] Chip not found: chipId=${chipId}, activePlayer=${state.activePlayer}`);
+      console.log(`[Socket] Available chips:`, state.chips.map(c => ({ id: c.id, owner: c.owner })));
+      return;
+    }
 
     // Reset timeout counter on successful input
     state.consecutiveTimeouts[state.activePlayer] = 0;
 
-    // Apply impulse with power scaling
-    chip.vx = impulse.dx * POWER;
-    chip.vy = impulse.dy * POWER;
+    // Apply impulse directly (frontend already applied power scaling)
+    chip.vx = impulse.dx;
+    chip.vy = impulse.dy;
     
     // Clamp to max speed
     const speed = Math.hypot(chip.vx, chip.vy);
@@ -374,6 +393,7 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
       chip.vy = (chip.vy / speed) * MAX_SPEED;
     }
     
+    console.log(`[Socket] Chip ${chipId} velocity set to: vx=${chip.vx}, vy=${chip.vy}`);
     state.simStart = Date.now();
     startSimulation(io, state);
   });
@@ -419,6 +439,19 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
     });
     finishTurn(state);
     io.to(state.id).emit("snapshot", toSnapshot(state));
+  });
+
+  // Handle player forfeit (abandonment)
+  socket.on("forfeit", ({ matchId: incomingId }) => {
+    const state = ensureMatch(incomingId || matchId);
+    const winner = side === "creator" ? "challenger" : "creator";
+    
+    // Notify both players
+    io.to(state.id).emit("playerForfeited", { side });
+    io.to(state.id).emit("matchEnded", { winner, reason: "forfeit" });
+    
+    // Clean up match
+    matches.delete(state.id);
   });
 
   socket.on("sync", () => {
@@ -477,12 +510,16 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
     lobbySubscribers.delete(socket.id);
   });
 
-  socket.on("createLobby", ({ matchId: lobbyMatchId, creator, creatorAlias, stake }) => {
+  socket.on("createLobby", ({ matchId: lobbyMatchId, creator, creatorAlias, goals, isFree, stakeAmount }) => {
     const lobby: Lobby = {
-      matchId: lobbyMatchId,
+      id: Number(lobbyMatchId),
       creator,
       creatorAlias,
-      stake,
+      goals,
+      isFree,
+      stakeAmount,
+      stakeToken: "0x0000000000000000000000000000000000000000",
+      open: true,
       createdAt: Date.now(),
       status: "waiting"
     };

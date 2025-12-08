@@ -174,7 +174,7 @@ export function WaitingScreen() {
           {!waitingMatch.isFree && (
             <div className="waiting-info-row">
               <span className="waiting-info-label">Apuesta:</span>
-              <span className="waiting-info-value">{waitingMatch.stakeAmount} MATIC</span>
+              <span className="waiting-info-value">{waitingMatch.stakeAmount} POL</span>
             </div>
           )}
         </div>

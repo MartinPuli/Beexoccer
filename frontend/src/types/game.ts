@@ -14,12 +14,16 @@ export interface MatchConfig {
 export interface MatchLobby {
   id: number;
   creator: string;
+  creatorAlias?: string;
   challenger?: string;
+  challengerAlias?: string;
   goals: GoalTarget;
   isFree: boolean;
   stakeAmount: string;
   stakeToken: string;
   open: boolean;
+  createdAt?: number;
+  status?: "waiting" | "ready" | "playing";
 }
 
 export interface PlayingSnapshot {

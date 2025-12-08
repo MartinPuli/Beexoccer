@@ -165,8 +165,14 @@ export async function createMatch(config: MatchConfig): Promise<{ matchId: numbe
     // Notify via socket so other clients see the new lobby
     const userAddress = walletService.getUserAddress() || "";
     const userAlias = walletService.getAlias();
-    const stakeDisplay = config.isFree ? "GRATIS" : `${config.stakeAmount} POL`;
-    socketService.createLobby(String(matchId), userAddress, userAlias, stakeDisplay);
+    socketService.createLobby(
+      String(matchId), 
+      userAddress, 
+      userAlias, 
+      config.goals,
+      config.isFree,
+      config.isFree ? "0" : config.stakeAmount
+    );
     
     return { matchId };
   } catch (error: unknown) {

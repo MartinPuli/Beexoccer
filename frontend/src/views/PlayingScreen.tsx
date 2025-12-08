@@ -30,15 +30,19 @@ function transformForPlayer(
   ball: { x: number; y: number },
   isChallenger: boolean
 ): { chips: TokenChip[]; ball: { x: number; y: number } } {
-  if (!isChallenger) {
-    // Creator: sus fichas están arriba en el servidor, invertir para verlas abajo
+  // En el servidor: Creator está abajo (y alto), Challenger está arriba (y bajo)
+  // Creator quiere ver sus fichas abajo → no invertir
+  // Challenger quiere ver sus fichas abajo → invertir todo
+  
+  if (isChallenger) {
+    // Challenger: invertir para ver sus fichas abajo
     return {
       chips: chips.map(c => ({
         ...c,
         x: FIELD_WIDTH - c.x,
         y: FIELD_HEIGHT - c.y,
-        // Jugador local = azul, rival = rojo, sin iconos
-        fill: c.owner === "creator" ? "#00a8ff" : "#ff4d5a",
+        // Challenger = azul (yo), Creator = rojo (rival)
+        fill: c.owner === "challenger" ? "#00a8ff" : "#ff4d5a",
         flagEmoji: ""
       })),
       ball: {
@@ -47,12 +51,12 @@ function transformForPlayer(
       }
     };
   }
-  // Challenger: las fichas del servidor ya están abajo para él
+  // Creator: las fichas del servidor ya están correctas (creator abajo)
   return {
     chips: chips.map(c => ({
       ...c,
-      // Jugador local = azul, rival = rojo, sin iconos
-      fill: c.owner === "challenger" ? "#00a8ff" : "#ff4d5a",
+      // Creator = azul (yo), Challenger = rojo (rival)
+      fill: c.owner === "creator" ? "#00a8ff" : "#ff4d5a",
       flagEmoji: ""
     })),
     ball
@@ -95,10 +99,20 @@ export function PlayingScreen() {
   useEffect(() => {
     if (!currentMatchId) return;
 
+    // Primero registrar los listeners, luego conectar
     socketService.connect(currentMatchId, playerSide);
 
     socketService.onSnapshot((snapshot: PlayingSnapshot) => {
       setConnected(true);
+      
+      // Debug: log snapshot received
+      if (import.meta.env.DEV) {
+        console.log("[PlayingScreen] Snapshot received:", { 
+          activePlayer: snapshot.activePlayer, 
+          turnEndsAt: snapshot.turnEndsAt,
+          chipCount: snapshot.chips.length 
+        });
+      }
       
       // Transformar según perspectiva del jugador
       const { chips: transformedChips, ball: transformedBall } = transformForPlayer(
@@ -156,7 +170,37 @@ export function PlayingScreen() {
       }
     });
 
+    // Listen for rival forfeit
+    socketService.onPlayerForfeited((side) => {
+      const myServerSide = isChallenger ? "challenger" : "creator";
+      if (side !== myServerSide) {
+        // Rival forfeited, we win!
+        setWinner("you");
+        setShowEnd(true);
+        setMatchStatus("ended");
+        setCommentary("¡Tu rival abandonó!");
+      }
+    });
+
+    // Listen for match ended
+    socketService.onMatchEnded((data) => {
+      const myServerSide = isChallenger ? "challenger" : "creator";
+      if (data.winner === myServerSide) {
+        setWinner("you");
+      } else {
+        setWinner("rival");
+      }
+      setShowEnd(true);
+      setMatchStatus("ended");
+    });
+
+    // Request sync after listeners are registered to ensure we get the current state
+    const syncTimeout = setTimeout(() => {
+      socketService.requestSync();
+    }, 500);
+
     return () => {
+      clearTimeout(syncTimeout);
       socketService.offAll();
       socketService.disconnect();
     };
@@ -268,8 +312,8 @@ export function PlayingScreen() {
       let impulseX = Math.cos(angle) * dist * POWER;
       let impulseY = Math.sin(angle) * dist * POWER;
 
-      // Si es creator, invertir porque la cancha está rotada para él
-      if (!isChallenger) {
+      // Si es challenger, invertir porque la cancha está rotada para él
+      if (isChallenger) {
         impulseX = -impulseX;
         impulseY = -impulseY;
       }
@@ -292,6 +336,10 @@ export function PlayingScreen() {
   const handleExit = () => setShowExitConfirm(true);
   const confirmExit = () => {
     setShowExitConfirm(false);
+    // If game is not over, forfeit the match
+    if (!showEnd && currentMatchId) {
+      socketService.sendForfeit(currentMatchId);
+    }
     socketService.disconnect();
     setView("home");
   };
@@ -376,7 +424,7 @@ export function PlayingScreen() {
         chips={chips}
         ball={ball}
         highlightId={selectedChipId ?? undefined}
-        activePlayer={isMyTurn ? "creator" : "challenger"}
+        activePlayer={activePlayer}
         isPlayerTurn={isMyTurn}
         aimLine={aim}
         onPointerDown={handlePointerDown}
