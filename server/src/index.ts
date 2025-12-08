@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { Server, Socket } from "socket.io";
 
-// Basic field configuration - SYNCED WITH FRONTEND
+// Basic field configuration - SYNCED WITH FRONTEND (Table Soccer style)
 const FIELD_WIDTH = 600;
 const FIELD_HEIGHT = 900;
 const GOAL_WIDTH = 160;
@@ -9,11 +9,16 @@ const GOAL_HEIGHT = 120;
 const GOAL_X_START = (FIELD_WIDTH - GOAL_WIDTH) / 2;
 const GOAL_X_END = GOAL_X_START + GOAL_WIDTH;
 const TICK_MS = 16;
-const FRICTION = 0.96;
-const EPSILON = 0.1;
-const POWER = 0.3;
-const MAX_SPEED = 15;
-const TURN_MS = 10_000;
+const FRICTION = 0.985;         // Fricción baja - superficie lisa
+const BALL_FRICTION = 0.98;     // Pelota con más fricción
+const EPSILON = 0.15;
+const POWER = 0.45;
+const MAX_SPEED = 28;           // Velocidad máxima controlada
+const RESTITUTION = 0.85;       // Rebote en colisiones (reducido)
+const WALL_RESTITUTION = 0.80;  // Rebote en paredes (reducido)
+const CHIP_MASS = 5;            // Masa de las fichas (pesadas)
+const BALL_MASS = 1.58;         // Masa de la pelota (ajustada)
+const TURN_MS = 12_000;
 const MAX_SIM_MS = 10_000;
 const MAX_CONSECUTIVE_TIMEOUTS = 3;
 
@@ -138,17 +143,17 @@ const matches = new Map<string, MatchState>();
 function defaultChips(): Vec2[] {
   // Creator tiene fichas abajo (y mayor), Challenger tiene fichas arriba
   return [
-    { id: "creator-1", x: 300, y: 750, vx: 0, vy: 0, radius: 28, owner: "creator", flagEmoji: "", color: "#00a8ff" },
-    { id: "creator-2", x: 150, y: 650, vx: 0, vy: 0, radius: 28, owner: "creator", flagEmoji: "", color: "#00a8ff" },
-    { id: "creator-3", x: 450, y: 650, vx: 0, vy: 0, radius: 28, owner: "creator", flagEmoji: "", color: "#00a8ff" },
-    { id: "challenger-1", x: 300, y: 150, vx: 0, vy: 0, radius: 28, owner: "challenger", flagEmoji: "", color: "#ff4d5a" },
-    { id: "challenger-2", x: 150, y: 250, vx: 0, vy: 0, radius: 28, owner: "challenger", flagEmoji: "", color: "#ff4d5a" },
-    { id: "challenger-3", x: 450, y: 250, vx: 0, vy: 0, radius: 28, owner: "challenger", flagEmoji: "", color: "#ff4d5a" }
+    { id: "creator-1", x: 300, y: 750, vx: 0, vy: 0, radius: 32, owner: "creator", flagEmoji: "", color: "#00a8ff" },
+    { id: "creator-2", x: 150, y: 650, vx: 0, vy: 0, radius: 32, owner: "creator", flagEmoji: "", color: "#00a8ff" },
+    { id: "creator-3", x: 450, y: 650, vx: 0, vy: 0, radius: 32, owner: "creator", flagEmoji: "", color: "#00a8ff" },
+    { id: "challenger-1", x: 300, y: 150, vx: 0, vy: 0, radius: 32, owner: "challenger", flagEmoji: "", color: "#ff4d5a" },
+    { id: "challenger-2", x: 150, y: 250, vx: 0, vy: 0, radius: 32, owner: "challenger", flagEmoji: "", color: "#ff4d5a" },
+    { id: "challenger-3", x: 450, y: 250, vx: 0, vy: 0, radius: 32, owner: "challenger", flagEmoji: "", color: "#ff4d5a" }
   ];
 }
 
 function defaultBall(): Ball {
-  return { x: FIELD_WIDTH / 2, y: FIELD_HEIGHT / 2, vx: 0, vy: 0, radius: 14 };
+  return { x: FIELD_WIDTH / 2, y: FIELD_HEIGHT / 2, vx: 0, vy: 0, radius: 20 };
 }
 
 function ensureMatch(matchId: string): MatchState {
@@ -178,23 +183,23 @@ function magnitude(vx: number, vy: number) {
 }
 
 function reflect(entity: { x: number; y: number; vx: number; vy: number; radius: number }) {
-  // Walls left/right
+  // Walls left/right - rebote vivo
   if (entity.x - entity.radius < 0) {
     entity.x = entity.radius;
-    entity.vx = Math.abs(entity.vx);
+    entity.vx = Math.abs(entity.vx) * WALL_RESTITUTION;
   }
   if (entity.x + entity.radius > FIELD_WIDTH) {
     entity.x = FIELD_WIDTH - entity.radius;
-    entity.vx = -Math.abs(entity.vx);
+    entity.vx = -Math.abs(entity.vx) * WALL_RESTITUTION;
   }
   // Walls top/bottom
   if (entity.y - entity.radius < 0) {
     entity.y = entity.radius;
-    entity.vy = Math.abs(entity.vy);
+    entity.vy = Math.abs(entity.vy) * WALL_RESTITUTION;
   }
   if (entity.y + entity.radius > FIELD_HEIGHT) {
     entity.y = FIELD_HEIGHT - entity.radius;
-    entity.vy = -Math.abs(entity.vy);
+    entity.vy = -Math.abs(entity.vy) * WALL_RESTITUTION;
   }
 }
 
@@ -209,20 +214,53 @@ function handleCollision(a: Vec2 | Ball, b: Vec2 | Ball) {
   const overlap = minDist - dist;
   const nx = dx / dist;
   const ny = dy / dist;
-  a.x -= (overlap / 2) * nx;
-  a.y -= (overlap / 2) * ny;
-  b.x += (overlap / 2) * nx;
-  b.y += (overlap / 2) * ny;
+  
+  // Masas: fichas pesadas, pelota ligera
+  const aIsBall = a.radius <= 14;
+  const bIsBall = b.radius <= 14;
+  const ma = aIsBall ? BALL_MASS : CHIP_MASS;
+  const mb = bIsBall ? BALL_MASS : CHIP_MASS;
+  const total = ma + mb;
+  
+  // Separación proporcional a masas
+  a.x -= (overlap * (mb / total)) * nx;
+  a.y -= (overlap * (mb / total)) * ny;
+  b.x += (overlap * (ma / total)) * nx;
+  b.y += (overlap * (ma / total)) * ny;
 
-  // Simple elastic swap along normal
-  const va = a.vx * nx + a.vy * ny;
-  const vb = b.vx * nx + b.vy * ny;
-  const newVa = vb;
-  const newVb = va;
-  a.vx += (newVa - va) * nx;
-  a.vy += (newVa - va) * ny;
-  b.vx += (newVb - vb) * nx;
-  b.vy += (newVb - vb) * ny;
+  // Velocidad relativa a lo largo de la normal
+  const rvx = b.vx - a.vx;
+  const rvy = b.vy - a.vy;
+  const velAlongNormal = rvx * nx + rvy * ny;
+  
+  // Si se están separando, no aplicar impulso
+  if (velAlongNormal > 0) return;
+  
+  // Impulso con restitución alta (colisión elástica)
+  let j = -(1 + RESTITUTION) * velAlongNormal;
+  j = j / (1 / ma + 1 / mb);
+  
+  const impulseX = j * nx;
+  const impulseY = j * ny;
+  
+  a.vx -= impulseX / ma;
+  a.vy -= impulseY / ma;
+  b.vx += impulseX / mb;
+  b.vy += impulseY / mb;
+  
+  // Limitar velocidades
+  const sa = magnitude(a.vx, a.vy);
+  if (sa > MAX_SPEED * 1.2) {
+    const scale = (MAX_SPEED * 1.2) / sa;
+    a.vx *= scale;
+    a.vy *= scale;
+  }
+  const sb = magnitude(b.vx, b.vy);
+  if (sb > MAX_SPEED * 1.2) {
+    const scale = (MAX_SPEED * 1.2) / sb;
+    b.vx *= scale;
+    b.vy *= scale;
+  }
 }
 
 function resetAfterGoal(state: MatchState, conceded: PlayerSide) {
@@ -267,8 +305,13 @@ function toSnapshot(state: MatchState): SnapshotPayload {
 function applyStep(entity: { x: number; y: number; vx: number; vy: number; radius: number }) {
   entity.x += entity.vx;
   entity.y += entity.vy;
-  entity.vx *= FRICTION;
-  entity.vy *= FRICTION;
+  
+  // Fricción diferenciada: pelota rueda más libre
+  const isBall = entity.radius <= 14;
+  const friction = isBall ? BALL_FRICTION : FRICTION;
+  entity.vx *= friction;
+  entity.vy *= friction;
+  
   if (magnitude(entity.vx, entity.vy) < EPSILON) {
     entity.vx = 0;
     entity.vy = 0;

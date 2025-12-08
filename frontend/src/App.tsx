@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import ballImg from "./assets/ball.png";
 
 // Helper para animar favicon
 function setAnimatedFavicon(isLoading: boolean) {
@@ -27,8 +28,8 @@ function setAnimatedFavicon(isLoading: boolean) {
       cancelAnimationFrame((window as any)._faviconAnimFrame);
       (window as any)._faviconAnimFrame = null;
     }
-    favicon!.type = "image/svg+xml";
-    favicon!.href = "/favicon.svg";
+    favicon!.type = "image/png";
+    favicon!.href = "/favicon.png";
   }
 }
 import { useGameStore } from "./hooks/useGameStore";
@@ -221,27 +222,31 @@ export default function App() {
 
           <div style={{ textAlign: "center", zIndex: 2 }}>
 
-            {/* ⭐ PELOTA SVG (no requiere archivo, siempre funciona) */}
+            {/* ⭐ PELOTA PNG extraída del logo BEEXOCCER */}
+            {/* Contenedor exterior para bounce */}
             <div
               style={{
                 width: "120px",
                 height: "120px",
                 margin: "0 auto 1.5rem",
-                animation:
-                  "bounce 1.6s ease-in-out infinite, spin 3s linear infinite",
-                transformOrigin: "center",
-                filter: "drop-shadow(0 0 25px rgba(0,255,120,0.7))"
+                animation: "bounce 1s ease-in-out infinite",
               }}
             >
-              <svg
-                viewBox="0 0 100 100"
-                style={{ width: "100%", height: "100%" }}
+              {/* Contenedor interior para spin */}
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  animation: "spin 2s linear infinite",
+                  filter: "drop-shadow(0 0 25px rgba(0,255,120,0.7))"
+                }}
               >
-                <circle cx="50" cy="50" r="47" fill="#e9e9e9" stroke="#00ff88" strokeWidth="3" />
-                <path d="M50 8 L72 30 L62 55 L38 55 L28 30 Z" fill="#000" />
-                <path d="M72 30 L90 45 L82 70 L62 55 Z" fill="#000" />
-                <path d="M28 30 L10 45 L18 70 L38 55 Z" fill="#000" />
-              </svg>
+                <img 
+                  src={ballImg} 
+                  alt="Loading" 
+                  style={{ width: "100%", height: "100%", objectFit: "contain" }} 
+                />
+              </div>
             </div>
 
             <div
@@ -264,7 +269,7 @@ export default function App() {
 
                 @keyframes bounce {
                   0%, 100% { transform: translateY(0); }
-                  50% { transform: translateY(-22px); }
+                  50% { transform: translateY(-40px); }
                 }
               `}
             </style>

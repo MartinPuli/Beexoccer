@@ -15,9 +15,12 @@ import { TokenChip, PlayingSnapshot } from "../types/game";
 const FIELD_WIDTH = 600;
 const FIELD_HEIGHT = 900;
 const TURN_TIME = 15000;
-const MAX_DRAG_DISTANCE = 300;
-const POWER = 0.3;
+const MAX_DRAG_DISTANCE = 200;  // Distancia máxima de arrastre (estilo Table Soccer)
 const MAX_TIMEOUTS_TO_LOSE = 3;
+
+// Constantes de física estilo Table Soccer (Plato)
+const MIN_SPEED = 3;
+const MAX_SPEED = 28;  // Velocidad máxima controlada
 
 interface AimLine {
   from: { x: number; y: number };
@@ -282,8 +285,10 @@ export function PlayingScreen() {
     const dist = Math.min(Math.hypot(dx, dy), MAX_DRAG_DISTANCE);
     const angle = Math.atan2(dy, dx);
     
-    const power = dist / MAX_DRAG_DISTANCE;
-    setShotPower(power);
+    // Calcular potencia normalizada para feedback visual
+    const normalizedPower = dist / MAX_DRAG_DISTANCE;
+    setShotPower(normalizedPower);
+    (globalThis as Record<string, unknown>).shotPower = normalizedPower;
 
     setAim({
       from: { x: chip.x, y: chip.y },
@@ -308,9 +313,16 @@ export function PlayingScreen() {
     const dist = Math.min(Math.hypot(dx, dy), MAX_DRAG_DISTANCE);
     
     if (dist > 20) {
+      // === SISTEMA DE POTENCIA LINEAL ===
+      // La potencia es directamente proporcional a la longitud del arrastre
+      // 0% arrastre = 0 velocidad, 100% arrastre = MAX_SPEED (36)
+      const normalizedDist = Math.min(1, dist / MAX_DRAG_DISTANCE);
+      const targetSpeed = normalizedDist * MAX_SPEED;
+      
+      // Calcular dirección normalizada
       const angle = Math.atan2(dy, dx);
-      let impulseX = Math.cos(angle) * dist * POWER;
-      let impulseY = Math.sin(angle) * dist * POWER;
+      let impulseX = Math.cos(angle) * targetSpeed;
+      let impulseY = Math.sin(angle) * targetSpeed;
 
       // Si es challenger, invertir porque la cancha está rotada para él
       if (isChallenger) {

@@ -24,14 +24,20 @@ const GOAL_LEFT = 220;
 const GOAL_RIGHT = 380;
 
 /* =========================
-   FÍSICA / TUNING
+   FÍSICA / TUNING - Estilo Table Soccer (Plato)
    ========================= */
-const FRICTION = 0.96;  // Aumentado ligeramente para más deslizamiento
-const EPSILON = 0.1;    // Reducido para detección de parada más sensible
-const POWER = 0.3;      // Aumentado para mejor respuesta
-const MAX_SPEED = 15;   // Aumentado para mayor velocidad máxima
-const MAX_DRAG_DISTANCE = 300;  // Reducido para mejor control
-const TURN_TIME = 10000;
+const FRICTION = 0.985;       // Fricción baja - superficie lisa tipo air hockey
+const BALL_FRICTION = 0.98;   // Pelota con más fricción para moverse menos
+const EPSILON = 0.15;         // Umbral de velocidad mínima
+const POWER = 0.45;           // Factor de potencia base (más responsivo)
+const MAX_SPEED = 28;         // Velocidad máxima controlada
+const MIN_SPEED = 3;          // Velocidad mínima para tiros suaves
+const MAX_DRAG_DISTANCE = 200; // Distancia máxima de arrastre
+const TURN_TIME = 12000;      // 12 segundos por turno
+const RESTITUTION = 0.85;     // Rebote en colisiones (reducido)
+const WALL_RESTITUTION = 0.80; // Rebote en paredes (reducido)
+const CHIP_MASS = 5;          // Masa de las fichas (pesadas)
+const BALL_MASS = 1.58;       // Masa de la pelota (ajustada +7% movimiento)
 
 /* =========================
    TIPOS LOCALES
@@ -46,21 +52,24 @@ interface BallState {
 }
 
 /* =========================
-   INITS
+   INITS - Estilo Table Soccer
    ========================= */
+const CHIP_RADIUS = 32;  // Fichas más grandes
+const BALL_RADIUS = 20;  // Pelota tamaño ajustado
+
 const initPlayerChips = (): MovingChip[] => [
-  { id: "you-1", x: 300, y: 750, radius: 28, fill: "#00a8ff", flagEmoji: "", owner: "creator", vx: 0, vy: 0 },
-  { id: "you-2", x: 150, y: 650, radius: 28, fill: "#00a8ff", flagEmoji: "", owner: "creator", vx: 0, vy: 0 },
-  { id: "you-3", x: 450, y: 650, radius: 28, fill: "#00a8ff", flagEmoji: "", owner: "creator", vx: 0, vy: 0 },
+  { id: "you-1", x: 300, y: 750, radius: CHIP_RADIUS, fill: "#00a8ff", flagEmoji: "", owner: "creator", vx: 0, vy: 0 },
+  { id: "you-2", x: 150, y: 650, radius: CHIP_RADIUS, fill: "#00a8ff", flagEmoji: "", owner: "creator", vx: 0, vy: 0 },
+  { id: "you-3", x: 450, y: 650, radius: CHIP_RADIUS, fill: "#00a8ff", flagEmoji: "", owner: "creator", vx: 0, vy: 0 },
 ];
 
 const initBotChips = (): MovingChip[] => [
-  { id: "bot-1", x: 300, y: 150, radius: 28, fill: "#ff4d5a", flagEmoji: "🤖", owner: "challenger", vx: 0, vy: 0 },
-  { id: "bot-2", x: 150, y: 250, radius: 28, fill: "#ff4d5a", flagEmoji: "🤖", owner: "challenger", vx: 0, vy: 0 },
-  { id: "bot-3", x: 450, y: 250, radius: 28, fill: "#ff4d5a", flagEmoji: "🤖", owner: "challenger", vx: 0, vy: 0 },
+  { id: "bot-1", x: 300, y: 150, radius: CHIP_RADIUS, fill: "#ff4d5a", flagEmoji: "🤖", owner: "challenger", vx: 0, vy: 0 },
+  { id: "bot-2", x: 150, y: 250, radius: CHIP_RADIUS, fill: "#ff4d5a", flagEmoji: "🤖", owner: "challenger", vx: 0, vy: 0 },
+  { id: "bot-3", x: 450, y: 250, radius: CHIP_RADIUS, fill: "#ff4d5a", flagEmoji: "🤖", owner: "challenger", vx: 0, vy: 0 },
 ];
 
-const initBall = (): BallState => ({ x: 300, y: 450, vx: 0, vy: 0, radius: 14 });
+const initBall = (): BallState => ({ x: 300, y: 450, vx: 0, vy: 0, radius: BALL_RADIUS });
 
 /* =========================
    UTILS VECTORIALES
@@ -80,18 +89,19 @@ function safeNumber(n: number, fallback = 0) {
 }
 
 /* =========================
-   REFLECT EN BORDES (GOLES)
+   REFLECT EN BORDES (GOLES) - Estilo Table Soccer
    ========================= */
 function reflectInBounds(entity: { x: number; y: number; vx: number; vy: number; radius: number }, isBall: boolean) {
   const r = entity.radius;
+  const wallBounce = WALL_RESTITUTION; // Rebote vivo en paredes
   
   if (entity.x - r < BOUNDARY_LEFT) {
     entity.x = BOUNDARY_LEFT + r;
-    entity.vx = Math.abs(entity.vx) * 0.8;
+    entity.vx = Math.abs(entity.vx) * wallBounce;
   }
   if (entity.x + r > BOUNDARY_RIGHT) {
     entity.x = BOUNDARY_RIGHT - r;
-    entity.vx = -Math.abs(entity.vx) * 0.8;
+    entity.vx = -Math.abs(entity.vx) * wallBounce;
   }
   
   const inGoalX = entity.x > GOAL_LEFT && entity.x < GOAL_RIGHT;
@@ -99,29 +109,30 @@ function reflectInBounds(entity: { x: number; y: number; vx: number; vy: number;
   if (entity.y - r < BOUNDARY_TOP) {
     if (!isBall || !inGoalX) {
       entity.y = BOUNDARY_TOP + r;
-      entity.vy = Math.abs(entity.vy) * 0.8;
+      entity.vy = Math.abs(entity.vy) * wallBounce;
     }
   }
   
   if (entity.y + r > BOUNDARY_BOTTOM) {
     if (!isBall || !inGoalX) {
       entity.y = BOUNDARY_BOTTOM - r;
-      entity.vy = -Math.abs(entity.vy) * 0.8;
+      entity.vy = -Math.abs(entity.vy) * wallBounce;
     }
   }
 }
 
 /* =========================
-   COLISIONES
-   - Masa proporcional al área -> evita "saltos" raros
-   - Resolución de solapamiento estable
+   COLISIONES - Estilo Table Soccer
+   - Fichas pesadas, pelota ligera
+   - Colisiones elásticas y predecibles
    ========================= */
-function massFromRadius(radius: number) {
-  // Proporcional a área (pi r^2) pero sin la constante pi para mantener relative scales
-  return Math.max(1, radius * radius);
+function massFromRadius(radius: number, isBall: boolean = false) {
+  // En Table Soccer: fichas pesadas, pelota muy ligera
+  if (isBall) return BALL_MASS;
+  return CHIP_MASS;
 }
 
-function handleCollision(a: MovingChip | BallState, b: MovingChip | BallState) {
+function handleCollision(a: MovingChip | BallState, b: MovingChip | BallState, aIsBall: boolean = false, bIsBall: boolean = false) {
   // Evitar NaNs
   a.vx = safeNumber(a.vx);
   a.vy = safeNumber(a.vy);
@@ -141,13 +152,13 @@ function handleCollision(a: MovingChip | BallState, b: MovingChip | BallState) {
 
   // Mover fuera de superposición (proporcional a masas)
   const overlap = minDist - dist;
-  const ma = massFromRadius(a.radius || 7);
-  const mb = massFromRadius(b.radius || 7);
+  const ma = massFromRadius(a.radius || 7, aIsBall);
+  const mb = massFromRadius(b.radius || 7, bIsBall);
   const total = ma + mb || 1;
 
-  // Separación más estable: mover según la proporción de masas
-  const sepA = (overlap * (mb / total)) + 0.001;
-  const sepB = (overlap * (ma / total)) + 0.001;
+  // Separación: la pelota se mueve más, las fichas menos
+  const sepA = (overlap * (mb / total)) + 0.5;
+  const sepB = (overlap * (ma / total)) + 0.5;
 
   a.x -= nx * sepA;
   a.y -= ny * sepA;
@@ -162,8 +173,8 @@ function handleCollision(a: MovingChip | BallState, b: MovingChip | BallState) {
   // Si ya se separan, no aplicar impulso
   if (velAlongNormal > 0) return;
 
-  // Restitución: pequeño rebote conservando energía parcial
-  const restitution = 0.8;
+  // Restitución alta para colisiones elásticas estilo Table Soccer
+  const restitution = RESTITUTION;
 
   // Impulso escalar
   let j = -(1 + restitution) * velAlongNormal;
@@ -178,50 +189,57 @@ function handleCollision(a: MovingChip | BallState, b: MovingChip | BallState) {
   b.vx += (impulseX / mb);
   b.vy += (impulseY / mb);
 
-  // Limitar velocidades para evitar "explosiones"
+  // Limitar velocidades
   const sa = mag(a.vx, a.vy);
-  if (sa > MAX_SPEED) {
-    const scale = MAX_SPEED / sa;
+  if (sa > MAX_SPEED * 1.2) {
+    const scale = (MAX_SPEED * 1.2) / sa;
     a.vx *= scale;
     a.vy *= scale;
   }
   const sb = mag(b.vx, b.vy);
-  if (sb > MAX_SPEED) {
-    const scale = MAX_SPEED / sb;
+  if (sb > MAX_SPEED * 1.2) {
+    const scale = (MAX_SPEED * 1.2) / sb;
     b.vx *= scale;
     b.vy *= scale;
   }
 }
 
 /* =========================
-   STEP ENTITY (universal)
+   STEP ENTITY - Estilo Table Soccer (mesa lisa)
    ========================= */
 function stepEntity<T extends { x: number; y: number; vx: number; vy: number; radius: number }>(entity: T, isBall: boolean) {
-  // Copia por seguridad (llamado desde loop donde se mutan copias)
   const next = { ...entity };
+  
+  // Fricción diferenciada: pelota muy libre, fichas un poco más de roce
+  const frictionFactor = isBall ? BALL_FRICTION : FRICTION;
+  next.vx *= frictionFactor;
+  next.vy *= frictionFactor;
 
-  // Fricción (aplicada exponencialmente)
-  next.vx *= FRICTION;
-  next.vy *= FRICTION;
-
-  // Normalizar pequeños valores a 0
-  if (Math.abs(next.vx) < EPSILON) next.vx = 0;
-  if (Math.abs(next.vy) < EPSILON) next.vy = 0;
-
-  // Limitar velocidad
   const speed = mag(next.vx, next.vy);
+
+  // Detener cuando la velocidad es muy baja (sin efecto césped, es mesa lisa)
+  if (speed < EPSILON) {
+    next.vx = 0;
+    next.vy = 0;
+  }
+
+  // Limitar velocidad máxima
   if (speed > MAX_SPEED) {
     const s = MAX_SPEED / speed;
     next.vx *= s;
     next.vy *= s;
   }
 
-  // Mover
-  next.x += next.vx;
-  next.y += next.vy;
-
-  // Seguridad anti-tunneling muy básica: si se salió mucho, clamp a bordes
-  reflectInBounds(next, isBall);
+  // Movimiento con sub-pasos para colisiones precisas
+  const steps = Math.max(1, Math.ceil(speed / 8));
+  const stepVx = next.vx / steps;
+  const stepVy = next.vy / steps;
+  
+  for (let i = 0; i < steps; i++) {
+    next.x += stepVx;
+    next.y += stepVy;
+    reflectInBounds(next, isBall);
+  }
 
   return next;
 }
@@ -525,51 +543,58 @@ export function BotMatchScreen() {
     // 2. Ejecutar la mejor acción: tiro o pase hacia el objetivo decidido
     let targetX = bestChip.x;
     let targetY = bestChip.y;
-    let powerMultiplier = 1.0;
+    let shotSpeed = 10; // Velocidad base
 
     if (bestAction === 'shoot') {
       const distanceToGoal = Math.hypot(bestTarget.x - bestChip.x, bestTarget.y - bestChip.y);
       const baseAngle = Math.atan2(bestTarget.y - bestChip.y, bestTarget.x - bestChip.x);
-      // Máxima precisión: casi sin ruido angular
-      const angleVariance = Math.max(0.01, 0.06 - distanceToGoal / 2000);
+      
+      // Precisión basada en dificultad y distancia
+      const difficultyFactor = 0.7 + (botAggressionRef.current * 0.3);
+      const angleVariance = Math.max(0.02, 0.12 - (distanceToGoal / 1500) * difficultyFactor);
       const finalAngle = baseAngle + (Math.random() - 0.5) * angleVariance;
 
-      const shootDistance = Math.min(distanceToGoal + 100, 620);
+      const shootDistance = Math.min(distanceToGoal + 80, 550);
       targetX = bestChip.x + Math.cos(finalAngle) * shootDistance;
       targetY = bestChip.y + Math.sin(finalAngle) * shootDistance;
 
-      powerMultiplier = 1.15 + Math.random() * 0.2; // Tiros muy potentes y directos
+      // Velocidad variable según distancia: más lejos = más fuerte
+      const distFactor = Math.min(1.2, distanceToGoal / 400);
+      shotSpeed = MIN_SPEED + (MAX_SPEED - MIN_SPEED) * (0.7 + distFactor * 0.3);
+      
     } else if (bestAction === 'pass' && bestPassTargetX !== null && bestPassTargetY !== null) {
-      // Pases casi perfectos: dispersión mínima
-      targetX = bestPassTargetX + (Math.random() - 0.5) * 8;
-      targetY = bestPassTargetY + (Math.random() - 0.5) * 8;
-      powerMultiplier = 0.82 + Math.random() * 0.18; // Pases tensos y precisos
+      // Pases con precisión variable
+      const passDistance = Math.hypot(bestPassTargetX - bestChip.x, bestPassTargetY - bestChip.y);
+      const passError = Math.max(5, passDistance * 0.05);
+      targetX = bestPassTargetX + (Math.random() - 0.5) * passError;
+      targetY = bestPassTargetY + (Math.random() - 0.5) * passError;
+      
+      // Pases cortos más suaves, pases largos más fuertes
+      const passFactor = Math.min(1, passDistance / 250);
+      shotSpeed = MIN_SPEED + (10 - MIN_SPEED) * passFactor;
+      
+    } else if (bestAction === 'clear') {
+      const side = ballPos.x < FIELD_WIDTH / 2 ? -1 : 1;
+      const safeX = FIELD_WIDTH / 2 + side * (FIELD_WIDTH / 2 - 80);
+      targetX = clamp(safeX, BOUNDARY_LEFT + 40, BOUNDARY_RIGHT - 40);
+      targetY = FIELD_HEIGHT * 0.6 + Math.random() * 100;
+      // Despejes con fuerza media-alta
+      shotSpeed = 8 + Math.random() * 5;
     } else {
-      if (bestAction === 'clear') {
-        const side = ballPos.x < FIELD_WIDTH / 2 ? -1 : 1;
-        const safeX = FIELD_WIDTH / 2 + side * (FIELD_WIDTH / 2 - 80);
-        targetX = clamp(safeX, BOUNDARY_LEFT + 40, BOUNDARY_RIGHT - 40);
-        targetY = FIELD_HEIGHT * 0.6 + Math.random() * 120;
-        powerMultiplier = 1.0;
-      } else {
-        targetX = FIELD_WIDTH / 2 + (Math.random() - 0.5) * 40;
-        targetY = (FIELD_HEIGHT * 3) / 4 + (Math.random() - 0.5) * 40;
-        powerMultiplier = 0.8;
-      }
+      targetX = FIELD_WIDTH / 2 + (Math.random() - 0.5) * 40;
+      targetY = (FIELD_HEIGHT * 3) / 4 + (Math.random() - 0.5) * 40;
+      shotSpeed = 6 + Math.random() * 4;
     }
 
-    // 3. Calcular dirección, potencia y velocidad
+    // 3. Calcular dirección y aplicar velocidad
     const dx = targetX - bestChip.x;
     const dy = targetY - bestChip.y;
     const distance = Math.hypot(dx, dy) || 1;
 
-    const basePower = 9;
-    const distanceFactor = Math.min(1.5, distance / 500);
-    const power = basePower * powerMultiplier * (0.8 + distanceFactor);
-    const speed = Math.min(MAX_SPEED, power);
-
-    const vx = (dx / distance) * speed;
-    const vy = (dy / distance) * speed;
+    // Limitar velocidad final
+    const finalSpeed = clamp(shotSpeed, MIN_SPEED, MAX_SPEED);
+    const vx = (dx / distance) * finalSpeed;
+    const vy = (dy / distance) * finalSpeed;
 
     // 4. Aplicar la velocidad a la ficha seleccionada
     chipsRef.current = chipsRef.current.map(chip =>
@@ -688,13 +713,13 @@ export function BotMatchScreen() {
         const movedChips = currentChips.map(c => stepEntity(c, false));
         const movedBall = stepEntity(currentBall, true);
 
-        // Colisiones entre fichas
+        // Colisiones entre fichas (ninguna es pelota)
         for (let i = 0; i < movedChips.length; i++) {
           for (let j = i + 1; j < movedChips.length; j++) {
-            handleCollision(movedChips[i], movedChips[j]);
+            handleCollision(movedChips[i], movedChips[j], false, false);
           }
-          // con la pelota
-          handleCollision(movedChips[i], movedBall);
+          // Colisión ficha con pelota (segundo es pelota)
+          handleCollision(movedChips[i], movedBall, false, true);
         }
 
         // Actualizar refs (copia)
@@ -875,18 +900,22 @@ export function BotMatchScreen() {
       dist = MAX_DRAG_DISTANCE;
     }
 
-    // Cálculo de potencia con mejor respuesta
-    const normalizedDist = Math.min(1, dist / (MAX_DRAG_DISTANCE * 0.8));
-    const powerCurve = Math.pow(normalizedDist, 1.5);  // Curva más suave al inicio, más pronunciada al final
+    // === SISTEMA DE POTENCIA LINEAL ===
+    // La potencia es directamente proporcional a la longitud del arrastre
+    // 0% arrastre = 0 velocidad, 100% arrastre = MAX_SPEED (36)
+    const normalizedDist = Math.min(1, dist / MAX_DRAG_DISTANCE);
     
-    const minPower = 0.1;   // Mínima potencia para que los tiros sean más consistentes
-    const maxPower = 8.0;   // Reducido para mejor control
-    const effectivePower = minPower + (powerCurve * (maxPower - minPower));
+    // Potencia lineal: velocidad = porcentaje * MAX_SPEED
+    const targetSpeed = normalizedDist * MAX_SPEED;
     
-    // Aplicar vector de dirección con la potencia calculada
-    const powerMultiplier = 0.18;  // Ajuste fino de la sensibilidad
-    const dx = (start.x - x) * effectivePower * powerMultiplier;
-    const dy = (start.y - y) * effectivePower * 0.15;
+    // Calcular dirección normalizada
+    const dirX = start.x - x;
+    const dirY = start.y - y;
+    const dirMag = Math.hypot(dirX, dirY) || 1;
+    
+    // Aplicar velocidad en la dirección del arrastre
+    const dx = (dirX / dirMag) * targetSpeed;
+    const dy = (dirY / dirMag) * targetSpeed;
 
     // Umbral ligeramente más bajo para permitir tiros más suaves
     if (Math.hypot(dx, dy) > 0.3) {

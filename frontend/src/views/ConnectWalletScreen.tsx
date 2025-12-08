@@ -134,7 +134,7 @@ export function ConnectWalletScreen() {
   return (
     <div className="connect-screen">
       <div className="connect-logo" style={{ marginBottom: 32 }}>
-        <img src={logoSvg} alt="Beexoccer" style={{ width: 68, height: 68, opacity: 0.92 }} />
+        <img src={logoImg} alt="Beexoccer" style={{ width: 68, height: 68, opacity: 0.92 }} />
       </div>
 
       {/* Título */}

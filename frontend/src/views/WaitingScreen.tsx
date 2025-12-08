@@ -3,6 +3,7 @@ import { useGameStore } from "../hooks/useGameStore";
 import { cancelMatch, checkMatchStatus } from "../services/matchService";
 import { toast } from "../components/Toast";
 import { ConfirmModal } from "../components/ConfirmModal";
+import ballImg from "../assets/ball.png";
 
 export function WaitingScreen() {
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -157,7 +158,7 @@ export function WaitingScreen() {
       <div className="waiting-content">
         {/* Animación de pelota */}
         <div className="waiting-ball-container">
-          <div className="waiting-ball">⚽</div>
+          <img src={ballImg} alt="Ball" className="waiting-ball" />
         </div>
 
         <h2 className="waiting-message">Buscando oponente{dots}</h2>

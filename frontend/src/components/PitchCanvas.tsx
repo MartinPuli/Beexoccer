@@ -1,9 +1,9 @@
-import React, { ReactNode } from "react";
+import React, { ReactNode, useRef, useEffect, useState, useCallback } from "react";
 import { TokenChip } from "../types/game";
 
 interface PitchCanvasProps {
   chips: TokenChip[];
-  ball: { x: number; y: number };
+  ball: { x: number; y: number; vx?: number; vy?: number };
   highlightId?: string;
   activePlayer?: "creator" | "challenger";
   isPlayerTurn?: boolean;
@@ -15,25 +15,314 @@ interface PitchCanvasProps {
   onPointerCancel?: (event: React.PointerEvent<SVGSVGElement>) => void;
 }
 
+// Componente de esfera 3D real usando Canvas 2D con proyección 3D mejorada
+function SoccerBall3DCanvas({ rotateX, rotateY, size = 40 }: { rotateX: number; rotateY: number; size?: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  const drawBall = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const w = canvas.width;
+    const h = canvas.height;
+    const cx = w / 2;
+    const cy = h / 2;
+    const radius = (Math.min(w, h) / 2) - 4;
+    
+    // Limpiar canvas
+    ctx.clearRect(0, 0, w, h);
+    
+    // Convertir ángulos a radianes
+    const rx = (rotateX * Math.PI) / 180;
+    const ry = (rotateY * Math.PI) / 180;
+    
+    // Función para rotar un punto 3D (orden: Y primero, luego X)
+    const rotate3D = (x: number, y: number, z: number) => {
+      // Rotar en Y (horizontal)
+      const cosY = Math.cos(ry);
+      const sinY = Math.sin(ry);
+      const x1 = x * cosY - z * sinY;
+      const z1 = x * sinY + z * cosY;
+      
+      // Rotar en X (vertical)
+      const cosX = Math.cos(rx);
+      const sinX = Math.sin(rx);
+      const y1 = y * cosX - z1 * sinX;
+      const z2 = y * sinX + z1 * cosX;
+      
+      return { x: x1, y: y1, z: z2 };
+    };
+    
+    // Proyección 3D a 2D con perspectiva
+    const project = (x: number, y: number, z: number) => {
+      const fov = 300;
+      const scale = fov / (fov + z);
+      return {
+        x: cx + x * scale,
+        y: cy + y * scale,
+        scale,
+        depth: z
+      };
+    };
+    
+    // Dibujar sombra debajo de la pelota
+    ctx.beginPath();
+    ctx.ellipse(cx + 3, cy + radius + 5, radius * 0.7, radius * 0.15, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.fill();
+    
+    // Dibujar la esfera base con gradiente esférico mejorado
+    const baseGradient = ctx.createRadialGradient(
+      cx - radius * 0.35, cy - radius * 0.35, 0,
+      cx, cy, radius * 1.1
+    );
+    baseGradient.addColorStop(0, '#ffffff');
+    baseGradient.addColorStop(0.2, '#fafafa');
+    baseGradient.addColorStop(0.5, '#e8e8e8');
+    baseGradient.addColorStop(0.8, '#c0c0c0');
+    baseGradient.addColorStop(1, '#909090');
+    
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = baseGradient;
+    ctx.fill();
+    
+    // Posiciones de los 12 pentágonos (vértices de icosaedro)
+    const phi = (1 + Math.sqrt(5)) / 2;
+    const pentagonCenters = [
+      [0, 1, phi], [0, -1, phi], [0, 1, -phi], [0, -1, -phi],
+      [1, phi, 0], [-1, phi, 0], [1, -phi, 0], [-1, -phi, 0],
+      [phi, 0, 1], [phi, 0, -1], [-phi, 0, 1], [-phi, 0, -1],
+    ];
+    
+    // Posiciones de los 20 hexágonos (caras del icosaedro)
+    const hexagonCenters = [
+      [1, 1, 1], [1, 1, -1], [1, -1, 1], [1, -1, -1],
+      [-1, 1, 1], [-1, 1, -1], [-1, -1, 1], [-1, -1, -1],
+      [0, phi, 1/phi], [0, phi, -1/phi], [0, -phi, 1/phi], [0, -phi, -1/phi],
+      [1/phi, 0, phi], [-1/phi, 0, phi], [1/phi, 0, -phi], [-1/phi, 0, -phi],
+      [phi, 1/phi, 0], [phi, -1/phi, 0], [-phi, 1/phi, 0], [-phi, -1/phi, 0],
+    ];
+    
+    // Normalizar y transformar pentágonos
+    const transformedPentagons = pentagonCenters.map(([px, py, pz]) => {
+      const len = Math.sqrt(px * px + py * py + pz * pz);
+      const nx = (px / len) * radius * 0.92;
+      const ny = (py / len) * radius * 0.92;
+      const nz = (pz / len) * radius * 0.92;
+      const rotated = rotate3D(nx, ny, nz);
+      const projected = project(rotated.x, rotated.y, rotated.z);
+      return { rotated, projected, type: 'pentagon' as const };
+    });
+    
+    // Normalizar y transformar hexágonos
+    const transformedHexagons = hexagonCenters.map(([px, py, pz]) => {
+      const len = Math.sqrt(px * px + py * py + pz * pz);
+      const nx = (px / len) * radius * 0.92;
+      const ny = (py / len) * radius * 0.92;
+      const nz = (pz / len) * radius * 0.92;
+      const rotated = rotate3D(nx, ny, nz);
+      const projected = project(rotated.x, rotated.y, rotated.z);
+      return { rotated, projected, type: 'hexagon' as const };
+    });
+    
+    // Combinar y ordenar por profundidad
+    const allShapes = [...transformedPentagons, ...transformedHexagons]
+      .filter(shape => shape.rotated.z > -radius * 0.3)
+      .sort((a, b) => a.rotated.z - b.rotated.z);
+    
+    // Dibujar formas
+    allShapes.forEach(shape => {
+      const { rotated, projected, type } = shape;
+      const sides = type === 'pentagon' ? 5 : 6;
+      const shapeRadius = radius * (type === 'pentagon' ? 0.18 : 0.14) * projected.scale;
+      
+      // Calcular iluminación basada en la normal
+      const lightDir = { x: -0.5, y: -0.5, z: 1 };
+      const normal = { 
+        x: rotated.x / radius, 
+        y: rotated.y / radius, 
+        z: rotated.z / radius 
+      };
+      const lightIntensity = Math.max(0, 
+        normal.x * lightDir.x + normal.y * lightDir.y + normal.z * lightDir.z
+      );
+      
+      // Opacidad basada en profundidad y visibilidad
+      const depthFactor = (rotated.z + radius) / (radius * 2);
+      const opacity = Math.max(0.2, Math.min(1, depthFactor * 1.2));
+      
+      // Dibujar la forma
+      ctx.beginPath();
+      const rotationOffset = type === 'pentagon' ? -Math.PI / 2 : 0;
+      for (let i = 0; i < sides; i++) {
+        const angle = (i * 2 * Math.PI) / sides + rotationOffset;
+        const px = projected.x + Math.cos(angle) * shapeRadius;
+        const py = projected.y + Math.sin(angle) * shapeRadius;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      
+      if (type === 'pentagon') {
+        // Pentágonos negros con gradiente
+        const brightness = Math.floor(20 + lightIntensity * 30);
+        ctx.fillStyle = `rgba(${brightness}, ${brightness}, ${brightness}, ${opacity})`;
+        ctx.fill();
+        ctx.strokeStyle = `rgba(0, 0, 0, ${opacity * 0.6})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      } else {
+        // Hexágonos blancos (solo borde)
+        ctx.strokeStyle = `rgba(60, 60, 60, ${opacity * 0.4})`;
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+      }
+    });
+    
+    // Dibujar costuras adicionales entre las formas
+    ctx.strokeStyle = 'rgba(100, 100, 100, 0.25)';
+    ctx.lineWidth = 0.5;
+    
+    // Líneas de costura en latitudes
+    for (let lat = 1; lat <= 4; lat++) {
+      const latAngle = (lat / 5) * Math.PI;
+      const y = Math.cos(latAngle) * radius * 0.9;
+      const ringRadius = Math.sin(latAngle) * radius * 0.9;
+      
+      ctx.beginPath();
+      for (let lon = 0; lon <= 32; lon++) {
+        const lonAngle = (lon / 32) * Math.PI * 2;
+        const point = rotate3D(
+          Math.cos(lonAngle) * ringRadius,
+          y,
+          Math.sin(lonAngle) * ringRadius
+        );
+        
+        if (point.z > -radius * 0.2) {
+          const proj = project(point.x, point.y, point.z);
+          if (lon === 0 || point.z <= -radius * 0.2) {
+            ctx.moveTo(proj.x, proj.y);
+          } else {
+            ctx.lineTo(proj.x, proj.y);
+          }
+        }
+      }
+      ctx.stroke();
+    }
+    
+    // Brillo especular principal
+    const highlightGradient = ctx.createRadialGradient(
+      cx - radius * 0.4, cy - radius * 0.4, 0,
+      cx - radius * 0.4, cy - radius * 0.4, radius * 0.5
+    );
+    highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+    highlightGradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.4)');
+    highlightGradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.1)');
+    highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = highlightGradient;
+    ctx.fill();
+    
+    // Brillo secundario pequeño
+    ctx.beginPath();
+    ctx.ellipse(cx - radius * 0.25, cy - radius * 0.3, radius * 0.15, radius * 0.08, -0.5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.fill();
+    
+    // Borde sutil de la esfera
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+  }, [rotateX, rotateY]);
+  
+  useEffect(() => {
+    drawBall();
+  }, [drawBall]);
+  
+  return (
+    <canvas
+      ref={canvasRef}
+      width={size * 2}
+      height={size * 2}
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        filter: 'drop-shadow(2px 3px 4px rgba(0,0,0,0.4))',
+      }}
+    />
+  );
+}
+
 export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTurn, children, aimLine, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }: Readonly<PitchCanvasProps>) {
+  // Sistema de rotación 3D realista para la pelota
+  const lastBallPosRef = useRef({ x: ball.x, y: ball.y });
+  const [ballRotation, setBallRotation] = useState({ rotateX: 0, rotateY: 0 });
+  
+  // Calcular rotación 3D basada en movimiento - efecto mejorado
+  useEffect(() => {
+    const dx = ball.x - lastBallPosRef.current.x;
+    const dy = ball.y - lastBallPosRef.current.y;
+    const distance = Math.hypot(dx, dy);
+    
+    if (distance > 0.2) {
+      // Radio visual de la pelota
+      const ballRadius = 20;
+      // Circunferencia = 2 * PI * radio
+      const circumference = 2 * Math.PI * ballRadius;
+      // Grados por pixel de movimiento (una vuelta completa = circunferencia)
+      const degreesPerPixel = 360 / circumference;
+      
+      // Multiplicador para hacer la rotación más visible
+      const visualMultiplier = 2.5;
+      
+      // Rotación física correcta:
+      // - Movimiento en Y (arriba/abajo) -> rota en eje X (rueda hacia adelante/atrás)
+      // - Movimiento en X (izq/der) -> rota en eje Y (rueda hacia los lados)
+      setBallRotation(prev => ({
+        rotateX: prev.rotateX + dy * degreesPerPixel * visualMultiplier,
+        rotateY: prev.rotateY - dx * degreesPerPixel * visualMultiplier,
+      }));
+    }
+    
+    lastBallPosRef.current = { x: ball.x, y: ball.y };
+  }, [ball.x, ball.y]);
+  
   // Obtener la potencia del tiro desde props globales
   const shotPower = (globalThis as Record<string, unknown>).shotPower as number || 0;
   
-  // Calcular el color de la línea de tiro basado en la potencia
+  // Sistema de colores mejorado según potencia
   const getAimLineColor = (power: number) => {
-    if (power < 0.3) return '#4CAF50'; // Verde para tiros suaves
-    if (power < 0.7) return '#FFC107'; // Amarillo para tiros medios
-    return '#F44336'; // Rojo para tiros potentes
+    if (power < 0.25) return '#22c55e'; // Verde brillante - tiro suave
+    if (power < 0.5) return '#eab308';  // Amarillo - tiro medio
+    if (power < 0.75) return '#f97316'; // Naranja - tiro fuerte
+    return '#ef4444'; // Rojo - tiro máximo
   };
   
-  // Calcular el ancho de la línea basado en la potencia
+  // Ancho progresivo de la línea
   const getAimLineWidth = (power: number) => {
-    return 2 + (power * 6); // Ancho entre 2 y 8
+    return 3 + (power * 8); // Ancho entre 3 y 11
   };
   
-  // Calcular la opacidad basada en la potencia
+  // Opacidad alta siempre para mejor visibilidad
   const getAimLineOpacity = (power: number) => {
-    return 0.5 + (power * 0.5); // Opacidad entre 0.5 y 1
+    return 0.7 + (power * 0.3); // Opacidad entre 0.7 y 1
+  };
+  
+  // Obtener texto de potencia
+  const getPowerLabel = (power: number) => {
+    if (power < 0.25) return 'SUAVE';
+    if (power < 0.5) return 'MEDIO';
+    if (power < 0.75) return 'FUERTE';
+    return 'MÁXIMO';
   };
   
   return (
@@ -118,20 +407,20 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
         {/* Arco inferior - portería */}
         <rect x="220" y="850" width="160" height="35" fill="rgba(0,255,106,0.15)" stroke="var(--neon-green, #00ff6a)" strokeWidth="3" rx="2" filter="url(#neonGlow)" />
 
-        {/* Línea de tiro (aiming) con indicador de potencia */}
+        {/* Línea de tiro (aiming) con indicador de potencia mejorado */}
         {aimLine && (
           <>
-            {/* Línea de fondo (sombra) */}
+            {/* Línea punteada de fondo para mejor contraste */}
             <line
               x1={aimLine.from.x}
               y1={aimLine.from.y}
               x2={aimLine.to.x}
               y2={aimLine.to.y}
-              stroke="rgba(0,0,0,0.3)"
-              strokeWidth={getAimLineWidth(shotPower) + 4}
+              stroke="rgba(0,0,0,0.5)"
+              strokeWidth={getAimLineWidth(shotPower) + 6}
               strokeLinecap="round"
             />
-            {/* Línea principal con efecto de potencia */}
+            {/* Línea principal con gradiente de potencia */}
             <line
               x1={aimLine.from.x}
               y1={aimLine.from.y}
@@ -143,13 +432,51 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
               opacity={getAimLineOpacity(shotPower)}
               filter="url(#neonGlow)"
             />
-            {/* Indicador de potencia (círculo al final) */}
+            {/* Línea interior blanca para efecto 3D */}
+            <line
+              x1={aimLine.from.x}
+              y1={aimLine.from.y}
+              x2={aimLine.to.x}
+              y2={aimLine.to.y}
+              stroke="rgba(255,255,255,0.4)"
+              strokeWidth={Math.max(1, getAimLineWidth(shotPower) - 4)}
+              strokeLinecap="round"
+            />
+            {/* Flecha direccional al final */}
             <circle
               cx={aimLine.to.x}
               cy={aimLine.to.y}
-              r={4 + (shotPower * 6)}
+              r={6 + (shotPower * 10)}
               fill={getAimLineColor(shotPower)}
               opacity={getAimLineOpacity(shotPower)}
+              filter="url(#neonGlow)"
+            >
+              <animate attributeName="r" values={`${6 + shotPower * 8};${8 + shotPower * 12};${6 + shotPower * 8}`} dur="0.5s" repeatCount="indefinite" />
+            </circle>
+            {/* Círculo interior pulsante */}
+            <circle
+              cx={aimLine.to.x}
+              cy={aimLine.to.y}
+              r={3 + (shotPower * 4)}
+              fill="white"
+              opacity="0.8"
+            />
+            {/* Barra de potencia visual */}
+            <rect
+              x={aimLine.from.x - 15}
+              y={aimLine.from.y - 45}
+              width="30"
+              height="12"
+              rx="6"
+              fill="rgba(0,0,0,0.7)"
+            />
+            <rect
+              x={aimLine.from.x - 14}
+              y={aimLine.from.y - 44}
+              width={28 * shotPower}
+              height="10"
+              rx="5"
+              fill="#ffffff"
             />
           </>
         )}
@@ -221,12 +548,20 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
           );
         })}
 
-        {/* Pelota neón */}
-        <g filter="url(#neonGlow)">
-          <circle cx={ball.x} cy={ball.y} r={16} fill="#ffffff" stroke="#dddddd" strokeWidth="2" />
-          <circle cx={ball.x} cy={ball.y} r={6} fill="#333333" />
-          <circle cx={ball.x - 4} cy={ball.y - 4} r={4} fill="rgba(255,255,255,0.7)" />
-        </g>
+        {/* Pelota 3D real usando Canvas con proyección 3D */}
+        <foreignObject
+          x={ball.x - 20}
+          y={ball.y - 20}
+          width="40"
+          height="40"
+          style={{ overflow: 'visible' }}
+        >
+          <SoccerBall3DCanvas 
+            rotateX={ballRotation.rotateX} 
+            rotateY={ballRotation.rotateY}
+            size={40}
+          />
+        </foreignObject>
       </svg>
       {children}
     </>
