@@ -1,22 +1,24 @@
 /**
- * ConnectBeexoScreen - Pantalla para conectar con Beexo Wallet via XO Connect
- * El usuario puede conectar desde cualquier browser usando XO Connect
+ * ConnectWalletScreen - Pantalla para conectar con Beexo Wallet o MetaMask
+ * - Beexo: Alias del usuario desde XO Connect
+ * - MetaMask: Dirección abreviada como alias
  */
 
 import React, { useState } from "react";
-import { xoConnectService } from "../services/xoConnectService";
+import { walletService } from "../services/walletService";
 import { useGameStore } from "../hooks/useGameStore";
 
-// URLs oficiales de Beexo
 const BEEXO_DOWNLOAD_URL = "https://share.beexo.com/?type=download";
 const BEEXO_LOGO_URL = "https://beexo.com/logo-beexo.svg";
+const METAMASK_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg";
 
-interface ConnectBeexoScreenProps {
+interface ConnectWalletScreenProps {
   onConnected?: () => void;
 }
 
-export const NeedBeexoScreen: React.FC<ConnectBeexoScreenProps> = ({ onConnected }) => {
+export const NeedBeexoScreen: React.FC<ConnectWalletScreenProps> = ({ onConnected }) => {
   const [isConnecting, setIsConnecting] = useState(false);
+  const [connectingType, setConnectingType] = useState<"beexo" | "metamask" | null>(null);
   const [error, setError] = useState<string | null>(null);
   
   const setAlias = useGameStore((state) => state.setAlias);
@@ -25,42 +27,74 @@ export const NeedBeexoScreen: React.FC<ConnectBeexoScreenProps> = ({ onConnected
   const setView = useGameStore((state) => state.setView);
 
   const handlePlayWithBot = () => {
-    // Establecer valores por defecto para jugar con bot
     setAlias("Jugador Local");
     setBalance("0 POL");
-    setUserAddress("0x" + "0".repeat(40)); // Dirección vacía
-    setView("createBot"); // Navegar a la pantalla de crear partida contra bot
+    setUserAddress("0x" + "0".repeat(40));
+    setView("createBot");
   };
 
-  const handleConnect = async () => {
+  const handleConnectBeexo = async () => {
     setIsConnecting(true);
+    setConnectingType("beexo");
     setError(null);
     
     try {
-      console.log("🐝 Iniciando conexión con Beexo via XO Connect...");
-      const success = await xoConnectService.connect();
+      const success = await walletService.connectBeexo();
       
       if (success) {
-        const address = xoConnectService.getUserAddress();
-        setAlias(xoConnectService.getAlias());
-        setBalance(xoConnectService.getTokenBalance("POL") + " POL");
+        const address = walletService.getUserAddress();
+        setAlias(walletService.getAlias());
+        setBalance(walletService.getTokenBalance("POL") + " POL");
         setUserAddress(address);
-        
-        console.log("✅ Conectado con Beexo:", address);
         
         if (onConnected) {
           onConnected();
         } else {
-          setView("home"); // Cambiado de "lobby" a "home"
+          setView("home");
         }
       } else {
-        setError(xoConnectService.getConnectionError() || "No se pudo conectar");
+        setError(walletService.getConnectionError() || "No se pudo conectar con Beexo");
       }
     } catch (err) {
-      console.error("❌ Error conectando:", err);
       setError(err instanceof Error ? err.message : "Error de conexión");
     } finally {
       setIsConnecting(false);
+      setConnectingType(null);
+    }
+  };
+
+  const handleConnectMetaMask = async () => {
+    if (!walletService.isMetaMaskAvailable()) {
+      setError("MetaMask no está instalado. Descárgalo desde metamask.io");
+      return;
+    }
+    
+    setIsConnecting(true);
+    setConnectingType("metamask");
+    setError(null);
+    
+    try {
+      const success = await walletService.connectMetaMask();
+      
+      if (success) {
+        const address = walletService.getUserAddress();
+        setAlias(walletService.getAlias());
+        setBalance(walletService.getTokenBalance("POL") + " POL");
+        setUserAddress(address);
+        
+        if (onConnected) {
+          onConnected();
+        } else {
+          setView("home");
+        }
+      } else {
+        setError(walletService.getConnectionError() || "No se pudo conectar con MetaMask");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error de conexión");
+    } finally {
+      setIsConnecting(false);
+      setConnectingType(null);
     }
   };
 
@@ -77,21 +111,20 @@ export const NeedBeexoScreen: React.FC<ConnectBeexoScreenProps> = ({ onConnected
         </div>
         
         <h1 className="connect-title">
-          Conectá tu <span className="highlight">Beexo Wallet</span>
+          Conectá tu <span className="highlight">Wallet</span>
         </h1>
         
         <p className="connect-description">
-          Beexoccer usa <strong>XO Connect</strong> para conectar con tu wallet.
-          <br />
-          Firmá transacciones on-chain de forma segura ⚽
+          Elegí cómo conectar para jugar partidas online
         </p>
         
+        {/* Botón Beexo */}
         <button 
-          className={`connect-btn ${isConnecting ? 'connecting' : ''}`}
-          onClick={handleConnect}
+          className={`connect-btn beexo-btn ${connectingType === "beexo" ? 'connecting' : ''}`}
+          onClick={handleConnectBeexo}
           disabled={isConnecting}
         >
-          {isConnecting ? (
+          {connectingType === "beexo" ? (
             <div className="button-content">
               <div className="soccer-ball-container">
                 <span className="soccer-ball">⚽</span>
@@ -100,8 +133,29 @@ export const NeedBeexoScreen: React.FC<ConnectBeexoScreenProps> = ({ onConnected
             </div>
           ) : (
             <div className="button-content">
-              <span className="btn-icon">⚽</span>
+              <span className="btn-icon">🐝</span>
               <span>Conectar con Beexo</span>
+            </div>
+          )}
+        </button>
+        
+        {/* Botón MetaMask */}
+        <button 
+          className={`connect-btn metamask-btn ${connectingType === "metamask" ? 'connecting' : ''}`}
+          onClick={handleConnectMetaMask}
+          disabled={isConnecting}
+        >
+          {connectingType === "metamask" ? (
+            <div className="button-content">
+              <div className="soccer-ball-container">
+                <span className="soccer-ball">⚽</span>
+              </div>
+              <span>Conectando...</span>
+            </div>
+          ) : (
+            <div className="button-content">
+              <img src={METAMASK_LOGO_URL} alt="MetaMask" className="wallet-icon" />
+              <span>Conectar con MetaMask</span>
             </div>
           )}
         </button>
@@ -112,32 +166,32 @@ export const NeedBeexoScreen: React.FC<ConnectBeexoScreenProps> = ({ onConnected
           </div>
         )}
         
-        <div className="xo-connect-info">
+        <div className="wallet-info">
           <div className="info-item">
-            <span className="info-icon">📱</span>
+            <span className="info-icon">🐝</span>
             <div>
-              <strong>Desde celular</strong>
-              <p>Se abre Beexo Wallet automáticamente</p>
+              <strong>Beexo Wallet</strong>
+              <p>Tu alias aparece en el juego</p>
             </div>
           </div>
           <div className="info-item">
-            <span className="info-icon">💻</span>
+            <img src={METAMASK_LOGO_URL} alt="" className="info-icon-img" />
             <div>
-              <strong>Desde computadora</strong>
-              <p>Escaneá el QR con tu Beexo Wallet</p>
+              <strong>MetaMask</strong>
+              <p>Tu dirección abreviada como alias</p>
             </div>
           </div>
         </div>
         
         <div className="download-section">
-          <p>¿No tenés Beexo Wallet?</p>
+          <p>¿No tenés wallet?</p>
           <a 
             href={BEEXO_DOWNLOAD_URL} 
             target="_blank" 
             rel="noopener noreferrer"
             className="download-link"
           >
-            Descargala gratis →
+            Descargar Beexo →
           </a>
         </div>
         
@@ -150,21 +204,15 @@ export const NeedBeexoScreen: React.FC<ConnectBeexoScreenProps> = ({ onConnected
           onClick={handlePlayWithBot}
         >
           <span className="btn-icon">🤖</span>
-          <span>Jugar contra el Bot (Sin conexión)</span>
+          <span>Jugar contra el Bot (sin wallet)</span>
         </button>
 
         <div className="beexo-footer">
-          <span>Powered by</span>
-          <img src={BEEXO_LOGO_URL} alt="Beexo" className="footer-logo" />
-          <span className="xo-connect-badge">XO Connect</span>
+          <span>Red: Polygon Amoy Testnet</span>
         </div>
       </div>
       
       <style>{`
-        /* ————————————————————————————————
-         🔥 NUEVA ESTÉTICA (solo CSS)
-        ———————————————————————————————— */
-
         .connect-beexo-screen {
           min-height: 100vh;
           min-height: 100dvh;
@@ -177,7 +225,6 @@ export const NeedBeexoScreen: React.FC<ConnectBeexoScreenProps> = ({ onConnected
           overflow: hidden;
         }
 
-        /* partículas */
         .connect-beexo-screen::before {
           content: "";
           position: absolute;
@@ -196,11 +243,14 @@ export const NeedBeexoScreen: React.FC<ConnectBeexoScreenProps> = ({ onConnected
           border: 1px solid rgba(0, 255, 100, 0.25);
           box-shadow: 0 0 25px rgba(0, 255, 100, 0.18);
           backdrop-filter: blur(18px);
+          position: relative;
+          z-index: 1;
         }
 
         .beexo-logo-img {
-          width: 140px;
+          width: 120px;
           filter: drop-shadow(0 0 25px rgba(0, 255, 120, 0.4));
+          margin-bottom: 20px;
         }
 
         .connect-title {
@@ -221,32 +271,54 @@ export const NeedBeexoScreen: React.FC<ConnectBeexoScreenProps> = ({ onConnected
           margin-bottom: 28px;
         }
 
-        .connect-description strong {
-          color: #00FF88;
-        }
-
         .connect-btn {
+          width: 100%;
+          padding: 16px;
+          border-radius: 12px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          border: none;
+          margin-bottom: 12px;
+        }
+        
+        .beexo-btn {
           background: linear-gradient(135deg, #00FF88, #009944);
           color: black;
-          font-weight: 700;
           box-shadow: 0 0 20px rgba(0, 255, 120, 0.35);
-          transition: 0.2s;
         }
 
-        .connect-btn:hover:not(:disabled) {
-          transform: scale(1.03);
+        .beexo-btn:hover:not(:disabled) {
+          transform: scale(1.02);
           box-shadow: 0 0 30px rgba(0, 255, 120, 0.5);
+        }
+        
+        .metamask-btn {
+          background: linear-gradient(135deg, #F6851B, #E2761B);
+          color: white;
+          box-shadow: 0 0 20px rgba(246, 133, 27, 0.35);
+        }
+
+        .metamask-btn:hover:not(:disabled) {
+          transform: scale(1.02);
+          box-shadow: 0 0 30px rgba(246, 133, 27, 0.5);
         }
 
         .connect-btn.connecting {
-          background: linear-gradient(135deg, #00CC66, #007733);
+          opacity: 0.7;
         }
 
         .button-content {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
+          gap: 10px;
+        }
+        
+        .wallet-icon {
+          width: 24px;
+          height: 24px;
         }
 
         .soccer-ball-container {
@@ -255,67 +327,73 @@ export const NeedBeexoScreen: React.FC<ConnectBeexoScreenProps> = ({ onConnected
           justify-content: center;
           width: 24px;
           height: 24px;
-          position: relative;
         }
 
         .soccer-ball {
-          display: block;
           font-size: 20px;
-          line-height: 1;
           animation: bounce 1s ease-in-out infinite;
-        }
-
-        .soccer-ball-container::after {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: transparent;
-          border-radius: 50%;
-          border: 2px solid #00FF88;
-          opacity: 0;
-          animation: pulse 1.5s ease-out infinite;
         }
 
         @keyframes bounce {
           0%, 100% { transform: translateY(0) rotate(0deg); }
-          25% { transform: translateY(-8px) rotate(90deg); }
-          50% { transform: translateY(0) rotate(180deg); }
-          75% { transform: translateY(-4px) rotate(270deg); }
-          100% { transform: translateY(0) rotate(360deg); }
-        }
-
-        @keyframes pulse {
-          0% { transform: scale(0.8); opacity: 0.7; }
-          70% { transform: scale(1.5); opacity: 0; }
-          100% { transform: scale(0.8); opacity: 0; }
+          50% { transform: translateY(-8px) rotate(180deg); }
         }
 
         .error-message {
           background: rgba(255, 0, 0, 0.15);
           border: 1px solid rgba(255, 0, 0, 0.3);
           color: #FF6666;
+          padding: 12px;
+          border-radius: 8px;
+          margin-bottom: 16px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          justify-content: center;
+        }
+
+        .wallet-info {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          margin: 24px 0;
         }
 
         .info-item {
           background: rgba(0, 255, 120, 0.05);
           border: 1px solid rgba(0, 255, 120, 0.1);
+          padding: 12px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          text-align: left;
+        }
+
+        .info-icon {
+          font-size: 24px;
+        }
+        
+        .info-icon-img {
+          width: 24px;
+          height: 24px;
         }
 
         .info-item strong {
           color: #AAFFAA;
+          display: block;
         }
 
         .info-item p {
           color: #66CC66;
+          font-size: 13px;
+          margin: 0;
         }
 
         .or-divider {
           display: flex;
           align-items: center;
-          margin: 24px 0;
+          margin: 20px 0;
           color: #66CC66;
           font-size: 14px;
         }
@@ -331,18 +409,18 @@ export const NeedBeexoScreen: React.FC<ConnectBeexoScreenProps> = ({ onConnected
 
         .play-offline-btn {
           width: 100%;
-          padding: 16px;
+          padding: 14px;
           background: rgba(255, 255, 255, 0.05);
           border: 1px solid rgba(255, 255, 255, 0.1);
           color: #CCCCCC;
           border-radius: 12px;
-          font-size: 16px;
+          font-size: 15px;
           font-weight: 500;
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 10px;
-          margin-bottom: 24px;
+          margin-bottom: 20px;
           transition: all 0.2s ease;
           cursor: pointer;
         }
@@ -352,27 +430,24 @@ export const NeedBeexoScreen: React.FC<ConnectBeexoScreenProps> = ({ onConnected
           transform: translateY(-1px);
         }
 
-        .play-offline-btn .btn-icon {
-          font-size: 20px;
+        .download-section {
+          margin: 16px 0;
         }
-
-        .beexo-footer {
-          background: rgba(0, 40, 0, 0.4);
+        
+        .download-section p {
+          color: #888;
+          margin-bottom: 4px;
         }
 
         .download-link {
           color: #00FF88;
-          text-shadow: 0 0 6px #00FF88;
+          text-decoration: none;
         }
 
-        .beexo-footer span,
-        .footer-logo {
-          opacity: 0.7;
-        }
-
-        .xo-connect-badge {
-          color: #00FF88;
-          text-shadow: 0 0 6px #00FF88;
+        .beexo-footer {
+          color: #555;
+          font-size: 12px;
+          margin-top: 16px;
         }
       `}</style>
     </div>

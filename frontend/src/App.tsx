@@ -10,7 +10,7 @@ import {
   WaitingScreen
 } from "./views";
 import { NeedBeexoScreen } from "./views/NeedBeexoScreen";
-import { xoConnectService } from "./services/xoConnectService";
+import { walletService } from "./services/walletService";
 import { ToastContainer, useToast, toast } from "./components/Toast";
 import { cancelMatch, checkMatchStatus } from "./services/matchService";
 
@@ -49,22 +49,27 @@ export default function App() {
 
     void (async () => {
       try {
-        const existingSession = await xoConnectService.checkExistingConnection();
+        const existingType = await walletService.checkExistingConnection();
 
-        if (existingSession) {
-          const success = await xoConnectService.connect();
+        if (existingType) {
+          let success = false;
+          if (existingType === "beexo") {
+            success = await walletService.connectBeexo();
+          } else if (existingType === "metamask") {
+            success = await walletService.connectMetaMask();
+          }
 
           if (success) {
-            const address = xoConnectService.getUserAddress();
-            setAlias(xoConnectService.getAlias());
-            setBalance(xoConnectService.getTokenBalance("POL") + " POL");
+            const address = walletService.getUserAddress();
+            setAlias(walletService.getAlias());
+            setBalance(walletService.getTokenBalance("POL") + " POL");
             setUserAddress(address);
             setShowConnectScreen(false);
 
             if (!toastShownRef.current) {
               toastShownRef.current = true;
               toast.success(
-                "Beexo Wallet conectada",
+                "Wallet conectada",
                 `${address.slice(0, 6)}...${address.slice(-4)}`
               );
             }
@@ -74,8 +79,7 @@ export default function App() {
         }
 
         setIsCheckingSession(false);
-      } catch (error) {
-        console.error("❌ Error verificando sesión:", error);
+      } catch {
         setIsCheckingSession(false);
       }
     })();
@@ -114,7 +118,7 @@ export default function App() {
 
   const handleConnected = () => {
     setShowConnectScreen(false);
-    toast.success("Beexo Wallet conectada", xoConnectService.getAlias());
+    toast.success("Wallet conectada", walletService.getAlias());
   };
 
   useEffect(() => {
@@ -123,7 +127,7 @@ export default function App() {
         e.preventDefault();
         e.returnValue =
           "Tienes una partida esperando. Si sales, se cancelará.";
-        cancelMatch(waitingMatch.matchId).catch(console.warn);
+        cancelMatch(waitingMatch.matchId).catch(() => {});
       }
     };
 

@@ -1,13 +1,13 @@
 /**
- * Central place for reading Vite env vars with explicit defaults so local
- * development remains ergonomic.
+ * Configuración de producción para Beexoccer
  */
 export const env = {
-  xoProjectId: import.meta.env.VITE_XO_CONNECT_PROJECT_ID ?? "demo-project",
-  polygonRpc: import.meta.env.VITE_POLYGON_AMOY_RPC ?? "https://polygon-amoy.g.alchemy.com/v2/demo",
-  matchManagerAddress:
-    import.meta.env.VITE_MATCH_MANAGER_ADDRESS ?? "0x0000000000000000000000000000000000000000",
-  realtimeUrl: import.meta.env.VITE_REALTIME_URL ?? "http://localhost:4000",
-  // Deshabilitar sockets en desarrollo si no hay servidor
-  enableRealtime: import.meta.env.VITE_ENABLE_REALTIME === "true"
+  // Red Polygon Amoy
+  polygonRpc: "https://polygon-amoy.drpc.org",
+  
+  // Dirección del contrato MatchManager (actualizar con la dirección de producción)
+  matchManagerAddress: "0x1234567890123456789012345678901234567890",
+  
+  // URL del servidor de tiempo real
+  realtimeUrl: "https://beexoccer-server.onrender.com"
 };

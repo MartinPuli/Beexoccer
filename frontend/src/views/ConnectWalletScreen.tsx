@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { xoConnectService } from "../services/xoConnectService";
+import { walletService } from "../services/walletService";
 import { useGameStore } from "../hooks/useGameStore";
 import { checkMatchStatus } from "../services/matchService";
 import { toast } from "../components/Toast";
@@ -32,27 +32,24 @@ export function ConnectWalletScreen() {
     setError(null);
     
     try {
-      console.log("🐝 Iniciando conexión con Beexo via XO Connect...");
-      
-      // Conectar usando XO Connect (siguiendo ejemplo de la doc)
-      const success = await xoConnectService.connect();
+      // Conectar usando Beexo Wallet
+      const success = await walletService.connectBeexo();
       
       if (!success) {
-        setError(xoConnectService.getConnectionError() || "No se pudo conectar con Beexo Wallet");
+        setError(walletService.getConnectionError() || "No se pudo conectar con Beexo Wallet");
         return;
       }
       
-      const address = xoConnectService.getUserAddress();
+      const address = walletService.getUserAddress();
       
       if (address && address !== "0x" + "0".repeat(40)) {
-        setAlias(xoConnectService.getAlias());
-        setBalance(xoConnectService.getTokenBalance("POL") + " POL");
+        setAlias(walletService.getAlias());
+        setBalance(walletService.getTokenBalance("POL") + " POL");
         setUserAddress(address);
         toast.success("Beexo conectada", `${address.slice(0, 6)}...${address.slice(-4)}`);
         
         // Verificar si hay partida PENDIENTE para esta wallet
         if (waitingMatch && waitingMatch.creatorAddress?.toLowerCase() === address.toLowerCase()) {
-          console.log("🔄 Restaurando partida en espera:", waitingMatch.matchId);
           try {
             const status = await checkMatchStatus(waitingMatch.matchId);
             if (status.hasChallenger) {
@@ -75,15 +72,13 @@ export function ConnectWalletScreen() {
               setView("waiting");
               return;
             }
-          } catch (err) {
-            console.warn("Error verificando partida pendiente:", err);
+          } catch {
             setWaitingMatch(undefined);
           }
         }
         
         // Verificar si hay partida ACTIVA para esta wallet
         if (activeMatch && activeMatch.userAddress?.toLowerCase() === address.toLowerCase()) {
-          console.log("🔄 Restaurando partida activa:", activeMatch.matchId);
           toast.info("Partida en curso", "Volviendo a tu partida");
           setCurrentMatchId(activeMatch.matchId);
           setPlayerSide(activeMatch.playerSide);
@@ -99,7 +94,6 @@ export function ConnectWalletScreen() {
         setError("No se pudo obtener la dirección de la wallet");
       }
     } catch (err) {
-      console.error("❌ Error conectando wallet:", err);
       const message = err instanceof Error ? err.message : "Error desconocido";
       setError(message);
     } finally {
