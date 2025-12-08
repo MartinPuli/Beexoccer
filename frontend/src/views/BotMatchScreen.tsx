@@ -1431,6 +1431,7 @@ export function BotMatchScreen() {
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerCancel}
+          lowPerf={false}
         />
       </div>
 
