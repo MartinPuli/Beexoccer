@@ -20,6 +20,7 @@ type ClientToServerEvents = {
   input: (payload: { matchId: string; impulse: { dx: number; dy: number }; chipId: string }) => void;
   sync: () => void;
   requestRematch: () => void;
+  turnTimeout: (payload: { matchId: string }) => void;
   subscribeLobbies: () => void;
   unsubscribeLobbies: () => void;
   createLobby: (payload: { matchId: string; creator: string; creatorAlias: string; stake: string }) => void;
@@ -165,6 +166,10 @@ class SocketService {
 
   requestRematch() {
     this.socket?.emit("requestRematch");
+  }
+
+  sendTimeout(matchId: string) {
+    this.socket?.emit("turnTimeout", { matchId });
   }
 
   // Lobby management methods

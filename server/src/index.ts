@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { Server, Socket } from "socket.io";
 
-// Basic field configuration
+// Basic field configuration - SYNCED WITH FRONTEND
 const FIELD_WIDTH = 600;
 const FIELD_HEIGHT = 900;
 const GOAL_WIDTH = 160;
@@ -9,10 +9,13 @@ const GOAL_HEIGHT = 120;
 const GOAL_X_START = (FIELD_WIDTH - GOAL_WIDTH) / 2;
 const GOAL_X_END = GOAL_X_START + GOAL_WIDTH;
 const TICK_MS = 16;
-const FRICTION = 0.985;
-const EPSILON = 0.05;
-const TURN_MS = 15_000;
+const FRICTION = 0.96;
+const EPSILON = 0.1;
+const POWER = 0.3;
+const MAX_SPEED = 15;
+const TURN_MS = 10_000;
 const MAX_SIM_MS = 10_000;
+const MAX_CONSECUTIVE_TIMEOUTS = 3;
 
 type PlayerSide = "creator" | "challenger";
 
@@ -61,6 +64,7 @@ interface ClientToServerEvents {
   input: (payload: { matchId?: string; chipId: string; impulse: { dx: number; dy: number } }) => void;
   sync: () => void;
   requestRematch: () => void;
+  turnTimeout: (payload: { matchId?: string }) => void;
   subscribeLobbies: () => void;
   unsubscribeLobbies: () => void;
   createLobby: (payload: { matchId: string; creator: string; creatorAlias: string; stake: string }) => void;
@@ -76,6 +80,7 @@ interface ServerToClientEvents {
   lobbyJoined: (data: { matchId: string; challenger: string; challengerAlias: string }) => void;
   matchReady: (data: { matchId: string }) => void;
   lobbyCancelled: (data: { matchId: string }) => void;
+  matchEnded: (data: { winner: PlayerSide; reason: string }) => void;
 }
 
 interface InterServerEvents {}
@@ -119,23 +124,25 @@ interface MatchState {
   simStart: number;
   awaitingInput: boolean;
   rematch: { creator: boolean; challenger: boolean };
+  consecutiveTimeouts: { creator: number; challenger: number };
 }
 
 const matches = new Map<string, MatchState>();
 
 function defaultChips(): Vec2[] {
+  // Creator tiene fichas abajo (y mayor), Challenger tiene fichas arriba
   return [
-    { id: "creator-1", x: 300, y: 180, vx: 0, vy: 0, radius: 26, owner: "creator", flagEmoji: "🏠", color: "#2dd673" },
-    { id: "creator-2", x: 220, y: 240, vx: 0, vy: 0, radius: 26, owner: "creator", flagEmoji: "🏠", color: "#2dd673" },
-    { id: "creator-3", x: 380, y: 240, vx: 0, vy: 0, radius: 26, owner: "creator", flagEmoji: "🏠", color: "#2dd673" },
-    { id: "challenger-1", x: 300, y: 720, vx: 0, vy: 0, radius: 26, owner: "challenger", flagEmoji: "🚩", color: "#ffe45b" },
-    { id: "challenger-2", x: 220, y: 660, vx: 0, vy: 0, radius: 26, owner: "challenger", flagEmoji: "🚩", color: "#ffe45b" },
-    { id: "challenger-3", x: 380, y: 660, vx: 0, vy: 0, radius: 26, owner: "challenger", flagEmoji: "🚩", color: "#ffe45b" }
+    { id: "creator-1", x: 300, y: 750, vx: 0, vy: 0, radius: 28, owner: "creator", flagEmoji: "", color: "#00a8ff" },
+    { id: "creator-2", x: 150, y: 650, vx: 0, vy: 0, radius: 28, owner: "creator", flagEmoji: "", color: "#00a8ff" },
+    { id: "creator-3", x: 450, y: 650, vx: 0, vy: 0, radius: 28, owner: "creator", flagEmoji: "", color: "#00a8ff" },
+    { id: "challenger-1", x: 300, y: 150, vx: 0, vy: 0, radius: 28, owner: "challenger", flagEmoji: "", color: "#ff4d5a" },
+    { id: "challenger-2", x: 150, y: 250, vx: 0, vy: 0, radius: 28, owner: "challenger", flagEmoji: "", color: "#ff4d5a" },
+    { id: "challenger-3", x: 450, y: 250, vx: 0, vy: 0, radius: 28, owner: "challenger", flagEmoji: "", color: "#ff4d5a" }
   ];
 }
 
 function defaultBall(): Ball {
-  return { x: FIELD_WIDTH / 2, y: FIELD_HEIGHT / 2, vx: 0, vy: 0, radius: 12 };
+  return { x: FIELD_WIDTH / 2, y: FIELD_HEIGHT / 2, vx: 0, vy: 0, radius: 14 };
 }
 
 function ensureMatch(matchId: string): MatchState {
@@ -152,7 +159,8 @@ function ensureMatch(matchId: string): MatchState {
       simRunning: false,
       simStart: 0,
       awaitingInput: true,
-      rematch: { creator: false, challenger: false }
+      rematch: { creator: false, challenger: false },
+      consecutiveTimeouts: { creator: 0, challenger: 0 }
     };
     matches.set(matchId, state);
   }
@@ -352,10 +360,65 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
     const chip = state.chips.find((c) => c.id === chipId && c.owner === state.activePlayer);
     if (!chip) return;
 
-    chip.vx = impulse.dx;
-    chip.vy = impulse.dy;
+    // Reset timeout counter on successful input
+    state.consecutiveTimeouts[state.activePlayer] = 0;
+
+    // Apply impulse with power scaling
+    chip.vx = impulse.dx * POWER;
+    chip.vy = impulse.dy * POWER;
+    
+    // Clamp to max speed
+    const speed = Math.hypot(chip.vx, chip.vy);
+    if (speed > MAX_SPEED) {
+      chip.vx = (chip.vx / speed) * MAX_SPEED;
+      chip.vy = (chip.vy / speed) * MAX_SPEED;
+    }
+    
     state.simStart = Date.now();
     startSimulation(io, state);
+  });
+
+  // Handle turn timeout - called by client when time runs out
+  socket.on("turnTimeout", ({ matchId: incomingId }) => {
+    const state = ensureMatch(incomingId || matchId);
+    if (state.simRunning || !state.awaitingInput) return;
+    if (state.activePlayer !== side) return; // Only the active player can timeout
+    
+    // Increment consecutive timeouts
+    state.consecutiveTimeouts[side]++;
+    
+    // Check for auto-lose (3 consecutive timeouts)
+    if (state.consecutiveTimeouts[side] >= MAX_CONSECUTIVE_TIMEOUTS) {
+      const winner = side === "creator" ? "challenger" : "creator";
+      io.to(state.id).emit("event", {
+        type: "timeout",
+        message: `${side === "creator" ? "Creador" : "Retador"} pierde por inactividad`,
+        accent: "#ff4f64",
+        timestamp: Date.now()
+      });
+      
+      // End match - winner gets max score
+      if (winner === "creator") {
+        state.creatorScore = 5;
+        state.challengerScore = 0;
+      } else {
+        state.challengerScore = 5;
+        state.creatorScore = 0;
+      }
+      io.to(state.id).emit("matchEnded", { winner, reason: "timeout" });
+      io.to(state.id).emit("snapshot", toSnapshot(state));
+      return;
+    }
+    
+    // Just skip turn
+    io.to(state.id).emit("event", {
+      type: "timeout",
+      message: "Tiempo agotado",
+      accent: "#ffa500",
+      timestamp: Date.now()
+    });
+    finishTurn(state);
+    io.to(state.id).emit("snapshot", toSnapshot(state));
   });
 
   socket.on("sync", () => {
