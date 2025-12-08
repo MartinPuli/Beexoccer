@@ -1,9 +1,18 @@
 import { io, Socket } from "socket.io-client";
-import { PlayingSnapshot, MatchEvent, MatchLobby } from "../types/game";
+import { PlayingSnapshot, MatchEvent, MatchLobby, GoalTarget } from "../types/game";
 import { env } from "../config/env";
 
 // URL del servidor de tiempo real
 const REALTIME_URL = env.realtimeUrl;
+
+// Tipo para lobbies gratuitos (solo socket, sin blockchain)
+interface FreeLobby {
+  id: string;
+  creator: string;
+  creatorAlias: string;
+  goals: GoalTarget;
+  createdAt: number;
+}
 
 type ServerToClientEvents = {
   snapshot: (payload: PlayingSnapshot) => void;
@@ -16,6 +25,10 @@ type ServerToClientEvents = {
   matchEnded: (data: { winner: "creator" | "challenger"; reason: string }) => void;
   playerForfeited: (data: { side: "creator" | "challenger" }) => void;
   pong: () => void;
+  // Free lobbies events
+  freeLobbiesUpdate: (lobbies: FreeLobby[]) => void;
+  freeMatchReady: (data: { matchId: string; rivalAlias: string }) => void;
+  freeLobbyRemoved: (lobbyId: string) => void;
 };
 
 type ClientToServerEvents = {
@@ -31,6 +44,12 @@ type ClientToServerEvents = {
   joinLobby: (payload: { matchId: string; challenger: string; challengerAlias: string }) => void;
   cancelLobby: (payload: { matchId: string }) => void;
   ping: () => void;
+  // Free lobbies events
+  subscribeFreeLobbies: () => void;
+  unsubscribeFreeLobbies: () => void;
+  createFreeLobby: (lobby: FreeLobby) => void;
+  joinFreeLobby: (payload: { lobbyId: string; odUserId: string; alias: string }) => void;
+  cancelFreeLobby: (lobbyId: string) => void;
 };
 
 class SocketService {
@@ -41,6 +60,11 @@ class SocketService {
   private snapshotCallbacks: ((payload: PlayingSnapshot) => void)[] = [];
   private eventCallbacks: ((payload: MatchEvent) => void)[] = [];
   private connectionCallbacks: ((connected: boolean) => void)[] = [];
+  // Free lobbies callbacks
+  private freeLobbiesCallbacks: ((lobbies: FreeLobby[]) => void)[] = [];
+  private freeMatchReadyCallbacks: ((data: { matchId: string; rivalAlias: string }) => void)[] = [];
+  private freeLobbyRemovedCallbacks: ((lobbyId: string) => void)[] = [];
+  
   private retryCount = 0;
   private readonly maxRetries = 10;
   private currentMatchId?: string;
@@ -333,6 +357,98 @@ class SocketService {
 
   isConnected(): boolean {
     return this.socket?.connected ?? false;
+  }
+
+  // ========== FREE LOBBIES (sin blockchain) ==========
+
+  connectFreeLobbies() {
+    if (this.socket?.connected) {
+      this.socket.emit("subscribeFreeLobbies");
+      return;
+    }
+    
+    try {
+      this.socket = io(REALTIME_URL, { 
+        transports: ["websocket", "polling"],
+        timeout: 10000,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
+      });
+      
+      this.socket.on("connect", () => {
+        this.retryCount = 0;
+        this.socket?.emit("subscribeFreeLobbies");
+      });
+    
+      this.socket.on("freeLobbiesUpdate", (lobbies) => {
+        for (const cb of this.freeLobbiesCallbacks) cb(lobbies);
+      });
+      
+      this.socket.on("freeMatchReady", (data) => {
+        for (const cb of this.freeMatchReadyCallbacks) cb(data);
+      });
+      
+      this.socket.on("freeLobbyRemoved", (lobbyId) => {
+        for (const cb of this.freeLobbyRemovedCallbacks) cb(lobbyId);
+      });
+    } catch {
+      // Silently fail
+    }
+  }
+
+  disconnectFreeLobbies() {
+    this.socket?.emit("unsubscribeFreeLobbies");
+    this.freeLobbiesCallbacks = [];
+    this.freeMatchReadyCallbacks = [];
+    this.freeLobbyRemovedCallbacks = [];
+    this.socket?.off("freeLobbiesUpdate");
+    this.socket?.off("freeMatchReady");
+    this.socket?.off("freeLobbyRemoved");
+  }
+
+  onFreeLobbiesUpdate(cb: (lobbies: FreeLobby[]) => void) {
+    this.freeLobbiesCallbacks.push(cb);
+  }
+
+  onFreeMatchReady(cb: (data: { matchId: string; rivalAlias: string }) => void) {
+    this.freeMatchReadyCallbacks.push(cb);
+  }
+
+  onFreeLobbyRemoved(cb: (lobbyId: string) => void) {
+    this.freeLobbyRemovedCallbacks.push(cb);
+  }
+
+  createFreeLobby(lobby: FreeLobby) {
+    if (!this.socket?.connected) {
+      this.connectFreeLobbies();
+      this.socket?.once("connect", () => {
+        this.socket?.emit("createFreeLobby", lobby);
+      });
+    } else {
+      this.socket.emit("createFreeLobby", lobby);
+    }
+  }
+
+  joinFreeLobby(lobbyId: string, data: { odUserId: string; alias: string }) {
+    if (!this.socket?.connected) {
+      this.connectFreeLobbies();
+      this.socket?.once("connect", () => {
+        this.socket?.emit("joinFreeLobby", { lobbyId, ...data });
+      });
+    } else {
+      this.socket.emit("joinFreeLobby", { lobbyId, ...data });
+    }
+  }
+
+  cancelFreeLobby(lobbyId: string) {
+    if (!this.socket?.connected) {
+      this.connectFreeLobbies();
+      this.socket?.once("connect", () => {
+        this.socket?.emit("cancelFreeLobby", lobbyId);
+      });
+    } else {
+      this.socket.emit("cancelFreeLobby", lobbyId);
+    }
   }
 }
 

@@ -45,12 +45,16 @@ export function HomeScreen() {
       }</style>
 
       {/* Botones principales */}
-      <button className="home-btn primary" onClick={() => setView("accept")}>
-        JUGAR 1 VS 1
+      <button className="home-btn primary" onClick={() => setView("freeOnline")}>
+        🎮 ONLINE GRATIS
       </button>
 
-      <button className="home-btn primary" onClick={() => setView("createBot")}>
-        JUGAR CONTRA BOT
+      <button className="home-btn secondary" onClick={() => setView("accept")}>
+        💰 JUGAR CON APUESTA
+      </button>
+
+      <button className="home-btn secondary" onClick={() => setView("createBot")}>
+        🤖 JUGAR CONTRA BOT
       </button>
 
       {/* Torneos como en el mock */}
