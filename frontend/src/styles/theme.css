@@ -1263,6 +1263,27 @@ body {
   border-color: var(--accent-red);
 }
 
+/* ===== MUTE BUTTON ===== */
+.mute-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--border-green);
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mute-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
 /* ===== CONFIRM MODAL ===== */
 .confirm-overlay {
   position: fixed;

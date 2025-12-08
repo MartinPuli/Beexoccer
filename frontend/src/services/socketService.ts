@@ -15,6 +15,7 @@ type ServerToClientEvents = {
   lobbyCancelled: (data: { matchId: string }) => void;
   matchEnded: (data: { winner: "creator" | "challenger"; reason: string }) => void;
   playerForfeited: (data: { side: "creator" | "challenger" }) => void;
+  pong: () => void;
 };
 
 type ClientToServerEvents = {
@@ -29,6 +30,7 @@ type ClientToServerEvents = {
   createLobby: (payload: { matchId: string; creator: string; creatorAlias: string; goals: number; isFree: boolean; stakeAmount: string }) => void;
   joinLobby: (payload: { matchId: string; challenger: string; challengerAlias: string }) => void;
   cancelLobby: (payload: { matchId: string }) => void;
+  ping: () => void;
 };
 
 class SocketService {
@@ -36,41 +38,130 @@ class SocketService {
   private lobbiesCallbacks: ((lobbies: MatchLobby[]) => void)[] = [];
   private lobbyCreatedCallbacks: ((lobby: MatchLobby) => void)[] = [];
   private matchReadyCallbacks: ((matchId: string) => void)[] = [];
+  private snapshotCallbacks: ((payload: PlayingSnapshot) => void)[] = [];
+  private eventCallbacks: ((payload: MatchEvent) => void)[] = [];
+  private connectionCallbacks: ((connected: boolean) => void)[] = [];
   private retryCount = 0;
-  private readonly maxRetries = 5;
+  private readonly maxRetries = 10;
   private currentMatchId?: string;
   private currentSide?: "creator" | "challenger";
+  private reconnecting = false;
+  private latency = 0;
+  private pingInterval?: ReturnType<typeof setInterval>;
 
   connect(matchId: string, side: "creator" | "challenger") {
+    if (this.socket?.connected && this.currentMatchId === matchId) {
+      return; // Ya conectado a este match
+    }
+    
     if (this.socket) {
       this.socket.disconnect();
     }
     
     this.currentMatchId = matchId;
     this.currentSide = side;
+    this.retryCount = 0;
     
     try {
       this.socket = io(REALTIME_URL, { 
         transports: ["websocket", "polling"], 
         query: { matchId, side },
-        timeout: 10000,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000
+        timeout: 15000,
+        reconnection: true,
+        reconnectionAttempts: this.maxRetries,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000
       });
       
-      this.socket.on("connect_error", () => {
+      this.socket.on("connect_error", (err) => {
+        console.warn("[Socket] Connection error:", err.message);
         this.retryCount++;
+        this.notifyConnection(false);
         if (this.retryCount >= this.maxRetries) {
+          console.error("[Socket] Max retries reached, giving up");
           this.socket?.disconnect();
         }
       });
       
       this.socket.on("connect", () => {
+        console.log("[Socket] Connected to server");
         this.retryCount = 0;
+        this.reconnecting = false;
+        this.notifyConnection(true);
+        this.startPing();
+        // Solicitar sync inmediatamente
+        setTimeout(() => this.requestSync(), 100);
       });
-    } catch {
-      // Silently fail
+      
+      this.socket.on("disconnect", (reason) => {
+        console.warn("[Socket] Disconnected:", reason);
+        this.notifyConnection(false);
+        this.stopPing();
+        
+        // Intentar reconectar automáticamente si fue desconexión inesperada
+        if (reason === "io server disconnect" || reason === "transport close") {
+          this.reconnecting = true;
+          setTimeout(() => {
+            if (this.currentMatchId && this.currentSide && !this.socket?.connected) {
+              this.connect(this.currentMatchId, this.currentSide);
+            }
+          }, 1000);
+        }
+      });
+      
+      // Re-registrar callbacks de snapshot
+      this.socket.on("snapshot", (payload) => {
+        for (const cb of this.snapshotCallbacks) cb(payload);
+      });
+      
+      this.socket.on("event", (payload) => {
+        for (const cb of this.eventCallbacks) cb(payload);
+      });
+      
+      // Ping/pong para medir latencia
+      this.socket.on("pong", () => {
+        // Latencia calculada en startPing
+      });
+      
+    } catch (err) {
+      console.error("[Socket] Failed to create socket:", err);
     }
+  }
+  
+  private startPing() {
+    this.stopPing();
+    this.pingInterval = setInterval(() => {
+      if (this.socket?.connected) {
+        const start = Date.now();
+        this.socket.emit("ping");
+        this.socket.once("pong", () => {
+          this.latency = Date.now() - start;
+        });
+      }
+    }, 5000);
+  }
+  
+  private stopPing() {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = undefined;
+    }
+  }
+  
+  private notifyConnection(connected: boolean) {
+    for (const cb of this.connectionCallbacks) cb(connected);
+  }
+  
+  onConnectionChange(cb: (connected: boolean) => void) {
+    this.connectionCallbacks.push(cb);
+  }
+  
+  getLatency(): number {
+    return this.latency;
+  }
+  
+  isReconnecting(): boolean {
+    return this.reconnecting;
   }
 
   connectLobbies() {
@@ -138,21 +229,29 @@ class SocketService {
   }
 
   disconnect() {
+    this.stopPing();
     this.socket?.disconnect();
     this.socket = undefined;
     this.currentMatchId = undefined;
     this.currentSide = undefined;
+    this.reconnecting = false;
   }
 
   onSnapshot(cb: (payload: PlayingSnapshot) => void) {
+    this.snapshotCallbacks.push(cb);
+    // También registrar directamente si el socket ya existe
     this.socket?.on("snapshot", cb);
   }
 
   onEvent(cb: (payload: MatchEvent) => void) {
+    this.eventCallbacks.push(cb);
     this.socket?.on("event", cb);
   }
 
   offAll() {
+    this.snapshotCallbacks = [];
+    this.eventCallbacks = [];
+    this.connectionCallbacks = [];
     this.socket?.off("snapshot");
     this.socket?.off("event");
     this.socket?.off("matchReady");
