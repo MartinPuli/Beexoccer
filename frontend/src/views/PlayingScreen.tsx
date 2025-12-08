@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { PitchCanvas } from "../components/PitchCanvas";
 import { useGameStore } from "../hooks/useGameStore";
 import { socketService } from "../services/socketService";
-import { audioService } from "../services/audioService";
+import { reportResult } from "../services/matchService";
 import { TokenChip, PlayingSnapshot } from "../types/game";
 
 /**
@@ -73,6 +73,8 @@ export function PlayingScreen() {
   const goalTarget = useGameStore((s) => s.matchGoalTarget);
   const setView = useGameStore((s) => s.setView);
   const setMatchStatus = useGameStore((s) => s.setMatchStatus);
+  const setCurrentMatchId = useGameStore((s) => s.setCurrentMatchId);
+  const setActiveMatch = useGameStore((s) => s.setActiveMatch);
   const alias = useGameStore((s) => s.alias);
 
   const isChallenger = playerSide === "challenger";
@@ -91,23 +93,36 @@ export function PlayingScreen() {
   const [commentary, setCommentary] = useState("Conectando...");
   const [connected, setConnected] = useState(false);
   const [shotPower, setShotPower] = useState(0);
-  const [latency, setLatency] = useState(0);
-  const [reconnecting, setReconnecting] = useState(false);
   const [goalAnimation, setGoalAnimation] = useState<"you" | "rival" | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [audioInitialized, setAudioInitialized] = useState(false);
+  const [turnLostAnimation, setTurnLostAnimation] = useState(false);
 
   const dragRef = useRef<{ chipId: string; start: { x: number; y: number } } | null>(null);
   const turnEndRef = useRef<number>(Date.now() + TURN_TIME);
   const consecutiveTimeoutsRef = useRef(0);
   const lastTurnPlayerRef = useRef<"creator" | "challenger" | null>(null);
-  
-  // Refs para interpolación suave
-  const targetChipsRef = useRef<TokenChip[]>([]);
-  const targetBallRef = useRef({ x: 300, y: 450 });
-  const lastUpdateRef = useRef(Date.now());
+  const resultReportedRef = useRef(false);
 
   const isMyTurn = (isChallenger && activePlayer === "challenger") || (!isChallenger && activePlayer === "creator");
+
+  // Reportar resultado al contrato cuando la partida termina
+  useEffect(() => {
+    if (!showEnd || !winner || !currentMatchId || resultReportedRef.current) return;
+    
+    // Solo el ganador reporta el resultado para evitar doble llamada
+    if (winner === "you") {
+      resultReportedRef.current = true;
+      const matchIdNum = Number.parseInt(currentMatchId, 10);
+      const userAddress = useGameStore.getState().userAddress;
+      
+      if (matchIdNum && userAddress) {
+        console.log("[PlayingScreen] Reporting result to contract:", { matchId: matchIdNum, winner: userAddress });
+        reportResult(matchIdNum, userAddress).catch((err) => {
+          console.error("[PlayingScreen] Error reporting result:", err);
+          // El error puede ser porque la partida es gratis o ya se reportó
+        });
+      }
+    }
+  }, [showEnd, winner, currentMatchId]);
 
   // Conectar al servidor de tiempo real
   useEffect(() => {
@@ -115,20 +130,9 @@ export function PlayingScreen() {
 
     // Primero registrar los listeners, luego conectar
     socketService.connect(currentMatchId, playerSide);
-    
-    // Monitorear estado de conexión
-    socketService.onConnectionChange((isConnected) => {
-      setConnected(isConnected);
-      setReconnecting(socketService.isReconnecting());
-    });
 
     socketService.onSnapshot((snapshot: PlayingSnapshot) => {
       setConnected(true);
-      setReconnecting(false);
-      lastUpdateRef.current = Date.now();
-      
-      // Actualizar latencia
-      setLatency(socketService.getLatency());
       
       // Debug: log snapshot received
       if (import.meta.env.DEV) {
@@ -146,11 +150,6 @@ export function PlayingScreen() {
         isChallenger
       );
 
-      // Guardar targets para interpolación
-      targetChipsRef.current = transformedChips;
-      targetBallRef.current = transformedBall;
-      
-      // Actualizar inmediatamente para responsive
       setChips(transformedChips);
       setBall(transformedBall);
       
@@ -168,7 +167,7 @@ export function PlayingScreen() {
       }
       lastTurnPlayerRef.current = snapshot.activePlayer;
       
-      // Scores desde perspectiva local (goles se manejan via evento)
+      // Scores desde perspectiva local
       if (isChallenger) {
         setMyScore(snapshot.challengerScore);
         setRivalScore(snapshot.creatorScore);
@@ -182,26 +181,20 @@ export function PlayingScreen() {
     });
 
     socketService.onEvent((event) => {
-      const myServerSide = isChallenger ? "challenger" : "creator";
-      
-      if (event.type === "goal-self" && event.from) {
-        // Interpretar desde la perspectiva del jugador
-        const iScored = event.from === myServerSide;
-        if (iScored) {
-          setCommentary("¡GOOOL!");
-          setGoalAnimation("you");
-          audioService.playGoalSound(true);
-        } else {
-          setCommentary("Gol rival...");
-          setGoalAnimation("rival");
-          audioService.playGoalSound(false);
-        }
-        // Pitido de árbitro para sacar del medio después del gol
-        setTimeout(() => {
-          audioService.playWhistle();
-        }, 1500);
+      if (event.type === "goal-self") {
+        // goal-self = el jugador activo metió gol
+        setGoalAnimation("you");
+        setCommentary("¡GOOOL!");
+        setTimeout(() => setGoalAnimation(null), 2000);
+      } else if (event.type === "goal-rival") {
+        setGoalAnimation("rival");
+        setCommentary("Gol rival...");
         setTimeout(() => setGoalAnimation(null), 2000);
       } else if (event.type === "timeout") {
+        // Mostrar animación de turno perdido
+        setTurnLostAnimation(true);
+        setTimeout(() => setTurnLostAnimation(false), 1500);
+        const myServerSide = isChallenger ? "challenger" : "creator";
         if (event.from === myServerSide) {
           consecutiveTimeoutsRef.current += 1;
           if (consecutiveTimeoutsRef.current >= MAX_TIMEOUTS_TO_LOSE) {
@@ -223,8 +216,6 @@ export function PlayingScreen() {
         setShowEnd(true);
         setMatchStatus("ended");
         setCommentary("¡Tu rival abandonó!");
-        audioService.playVictory();
-        audioService.stopCrowdAmbience();
       }
     });
 
@@ -233,14 +224,11 @@ export function PlayingScreen() {
       const myServerSide = isChallenger ? "challenger" : "creator";
       if (data.winner === myServerSide) {
         setWinner("you");
-        audioService.playVictory();
       } else {
         setWinner("rival");
-        audioService.playDefeat();
       }
       setShowEnd(true);
       setMatchStatus("ended");
-      audioService.stopCrowdAmbience();
     });
 
     // Request sync after listeners are registered to ensure we get the current state
@@ -278,31 +266,6 @@ export function PlayingScreen() {
     timeoutSentRef.current = false;
   }, [activePlayer]);
 
-  // Inicialización del audio con interacción del usuario
-  useEffect(() => {
-    const handleFirstInteraction = () => {
-      if (!audioInitialized) {
-        audioService.init();
-        audioService.startCrowdAmbience();
-        audioService.playWhistle(); // Pitido inicial del partido
-        setAudioInitialized(true);
-      }
-      document.removeEventListener("pointerdown", handleFirstInteraction);
-    };
-    
-    document.addEventListener("pointerdown", handleFirstInteraction);
-    
-    return () => {
-      document.removeEventListener("pointerdown", handleFirstInteraction);
-      audioService.stopCrowdAmbience();
-    };
-  }, [audioInitialized]);
-
-  // Manejar mute/unmute
-  useEffect(() => {
-    audioService.toggleMute(isMuted);
-  }, [isMuted]);
-
   // Verificar victoria por goles
   useEffect(() => {
     if (showEnd) return;
@@ -310,14 +273,10 @@ export function PlayingScreen() {
       setWinner("you");
       setShowEnd(true);
       setMatchStatus("ended");
-      audioService.playVictory();
-      audioService.stopCrowdAmbience();
     } else if (rivalScore >= goalTarget) {
       setWinner("rival");
       setShowEnd(true);
       setMatchStatus("ended");
-      audioService.playDefeat();
-      audioService.stopCrowdAmbience();
     }
   }, [myScore, rivalScore, goalTarget, setMatchStatus, showEnd]);
 
@@ -365,14 +324,17 @@ export function PlayingScreen() {
     setShotPower(normalizedPower);
     (globalThis as Record<string, unknown>).shotPower = normalizedPower;
 
+    // La línea de apuntado muestra hacia dónde IRÁ la ficha
+    // Para el challenger, el impulso se invierte, así que la aim line también
+    const aimAngle = isChallenger ? angle + Math.PI : angle;
     setAim({
       from: { x: chip.x, y: chip.y },
       to: {
-        x: chip.x + Math.cos(angle) * dist,
-        y: chip.y + Math.sin(angle) * dist
+        x: chip.x + Math.cos(aimAngle) * dist * 1.5,
+        y: chip.y + Math.sin(aimAngle) * dist * 1.5
       }
     });
-  }, [chips, getSvgPoint]);
+  }, [chips, getSvgPoint, isChallenger]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (!dragRef.current || !currentMatchId) {
@@ -408,9 +370,6 @@ export function PlayingScreen() {
       // Resetear timeout counter porque hicimos una jugada
       consecutiveTimeoutsRef.current = 0;
 
-      // Reproducir sonido de tiro
-      audioService.playKick(normalizedDist);
-
       socketService.sendInput(currentMatchId, dragRef.current.chipId, {
         dx: impulseX,
         dy: impulseY
@@ -431,6 +390,10 @@ export function PlayingScreen() {
       socketService.sendForfeit(currentMatchId);
     }
     socketService.disconnect();
+    // Limpiar estado del store
+    setCurrentMatchId(undefined);
+    setActiveMatch(undefined);
+    setMatchStatus("idle");
     setView("home");
   };
   const cancelExit = () => setShowExitConfirm(false);
@@ -442,42 +405,19 @@ export function PlayingScreen() {
 
   const handleGoHome = () => {
     socketService.disconnect();
+    // Limpiar estado del store
+    setCurrentMatchId(undefined);
+    setActiveMatch(undefined);
+    setMatchStatus("idle");
     setView("home");
   };
 
   // Momentum bar como en BotMatchScreen
   const momentum = myScore - rivalScore;
   const momentumPercent = 50 + (momentum / Math.max(1, goalTarget)) * 50;
-  
-  // Indicador de calidad de conexión
-  const getConnectionQuality = () => {
-    if (!connected) return { color: '#ff4444', text: 'Desconectado' };
-    if (reconnecting) return { color: '#ffaa00', text: 'Reconectando...' };
-    if (latency < 50) return { color: '#00ff6a', text: `${latency}ms` };
-    if (latency < 100) return { color: '#88ff00', text: `${latency}ms` };
-    if (latency < 200) return { color: '#ffaa00', text: `${latency}ms` };
-    return { color: '#ff6600', text: `${latency}ms` };
-  };
-  
-  const connectionQuality = getConnectionQuality();
 
   return (
     <div className="playing-screen">
-      {/* Indicador de conexión */}
-      <div className="connection-indicator" style={{ color: connectionQuality.color }}>
-        <span className="connection-dot" style={{ backgroundColor: connectionQuality.color }} />
-        {connectionQuality.text}
-      </div>
-      
-      {/* Animación de GOL */}
-      {goalAnimation && (
-        <div className={`goal-overlay ${goalAnimation === "you" ? "my-goal" : "rival-goal"}`}>
-          <div className="goal-text">
-            {goalAnimation === "you" ? "¡GOOOL!" : "GOL RIVAL"}
-          </div>
-        </div>
-      )}
-      
       {/* Header con scores estilo BotMatch */}
       <div className="game-header">
         <button className="exit-btn" onClick={handleExit}>✕</button>
@@ -498,14 +438,6 @@ export function PlayingScreen() {
             <span className="score-value">{rivalScore}</span>
           </div>
         </div>
-        
-        <button 
-          className="mute-btn" 
-          onClick={() => setIsMuted(!isMuted)}
-          title={isMuted ? "Activar sonido" : "Silenciar"}
-        >
-          {isMuted ? "🔇" : "🔊"}
-        </button>
       </div>
 
       {/* Momentum bar */}
@@ -552,7 +484,6 @@ export function PlayingScreen() {
         activePlayer={activePlayer}
         isPlayerTurn={isMyTurn}
         aimLine={aim}
-        shotPower={shotPower}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -562,6 +493,22 @@ export function PlayingScreen() {
       <div className="commentary">
         {!connected ? "🔄 Conectando al servidor..." : commentary}
       </div>
+
+      {/* Animación de GOL */}
+      {goalAnimation && (
+        <div className={`goal-overlay ${goalAnimation === "you" ? "goal-you" : "goal-rival"}`}>
+          <div className="goal-text">
+            {goalAnimation === "you" ? "⚽ ¡GOOOL!" : "😔 Gol rival"}
+          </div>
+        </div>
+      )}
+
+      {/* Animación de turno perdido */}
+      {turnLostAnimation && (
+        <div className="turn-lost-overlay">
+          <div className="turn-lost-text">⏱️ Turno perdido</div>
+        </div>
+      )}
 
       {/* Player info */}
       <div className="player-info">
@@ -615,75 +562,6 @@ export function PlayingScreen() {
           flex-direction: column;
           align-items: center;
           padding: 10px;
-          position: relative;
-        }
-        
-        .connection-indicator {
-          position: absolute;
-          top: 8px;
-          right: 12px;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 11px;
-          font-weight: 500;
-          padding: 4px 10px;
-          background: rgba(0,0,0,0.6);
-          border-radius: 12px;
-          z-index: 10;
-        }
-        .connection-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          animation: pulse-dot 2s ease-in-out infinite;
-        }
-        @keyframes pulse-dot {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-        
-        .goal-overlay {
-          position: fixed;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 100;
-          animation: goal-flash 2s ease-out forwards;
-          pointer-events: none;
-        }
-        .goal-overlay.my-goal {
-          background: radial-gradient(circle, rgba(0,255,106,0.3) 0%, transparent 70%);
-        }
-        .goal-overlay.rival-goal {
-          background: radial-gradient(circle, rgba(255,77,90,0.3) 0%, transparent 70%);
-        }
-        .goal-text {
-          font-size: 64px;
-          font-weight: 900;
-          text-transform: uppercase;
-          animation: goal-text-anim 2s ease-out forwards;
-          text-shadow: 0 0 40px currentColor, 0 0 80px currentColor;
-        }
-        .my-goal .goal-text {
-          color: #00ff6a;
-        }
-        .rival-goal .goal-text {
-          color: #ff4d5a;
-        }
-        @keyframes goal-flash {
-          0% { opacity: 0; }
-          10% { opacity: 1; }
-          80% { opacity: 1; }
-          100% { opacity: 0; }
-        }
-        @keyframes goal-text-anim {
-          0% { transform: scale(0.5); opacity: 0; }
-          20% { transform: scale(1.2); opacity: 1; }
-          40% { transform: scale(1); }
-          80% { transform: scale(1); opacity: 1; }
-          100% { transform: scale(1.5); opacity: 0; }
         }
 
         .game-header {
@@ -709,22 +587,6 @@ export function PlayingScreen() {
         .exit-btn:hover {
           background: #ff4d5a;
           color: #000;
-        }
-
-        .mute-btn {
-          background: rgba(255,255,255,0.1);
-          border: 1px solid rgba(255,255,255,0.3);
-          color: #fff;
-          font-size: 18px;
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        .mute-btn:hover {
-          background: rgba(255,255,255,0.2);
-          border-color: rgba(255,255,255,0.5);
         }
 
         .score-section {
