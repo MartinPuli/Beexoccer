@@ -753,11 +753,27 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 8px;
   height: 100%;
   max-height: 100vh;
   max-height: 100dvh; /* Dynamic viewport height for mobile */
   overflow: hidden;
+  padding: 12px;
+  /* Prevent zoom on touch drag */
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Desktop layout for playing screen */
+@media (min-width: 600px) {
+  .playing-screen {
+    padding: 20px;
+    justify-content: center;
+    gap: 12px;
+  }
 }
 
 .playing-hud {
@@ -765,9 +781,11 @@ body {
   border: none;
   border-left: 3px solid var(--border-green);
   border-right: 3px solid var(--border-green);
-  border-radius: 0;
-  padding: 18px 24px;
+  border-radius: 12px;
+  padding: 12px 18px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 600px;
 }
 
 .hud-scores {
@@ -848,16 +866,29 @@ body {
 .playing-pitch {
   flex: 1;
   background: linear-gradient(180deg, var(--dark-panel) 0%, #030505 100%);
-  border: none;
-  border-left: 3px solid var(--border-green);
-  border-right: 3px solid var(--border-green);
-  border-radius: 0;
+  border: 3px solid var(--border-green);
+  border-radius: 12px;
   overflow: hidden;
   position: relative;
   min-height: 0; /* Allow flex to shrink */
+  width: 100%;
+  max-width: 600px;
+  /* Aspect ratio to match field 600x900 */
+  aspect-ratio: 600 / 900;
   box-shadow: 
     0 20px 60px rgba(0, 0, 0, 0.5),
     inset 0 0 80px rgba(0, 0, 0, 0.3);
+  /* Prevent zoom on touch */
+  touch-action: none;
+}
+
+/* Make pitch bigger on mobile */
+@media (max-width: 600px) {
+  .playing-pitch {
+    max-width: 100%;
+    border-radius: 8px;
+    border-width: 2px;
+  }
 }
 
 .pitch-svg {

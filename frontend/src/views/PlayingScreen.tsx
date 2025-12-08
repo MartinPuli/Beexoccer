@@ -307,7 +307,8 @@ export function PlayingScreen() {
     const hit = myChips.find((c) => Math.hypot(c.x - x, c.y - y) < c.radius + 10);
     
     if (hit) {
-      dragRef.current = { chipId: hit.id, start: { x, y } };
+      // Guardamos la posición del chip, no del toque
+      dragRef.current = { chipId: hit.id, start: { x: hit.x, y: hit.y } };
       setSelectedChipId(hit.id);
       (e.target as Element).setPointerCapture(e.pointerId);
     }
@@ -320,25 +321,30 @@ export function PlayingScreen() {
     const chip = chips.find((c) => c.id === dragRef.current?.chipId);
     if (!chip) return;
 
-    const dx = dragRef.current.start.x - x;
-    const dy = dragRef.current.start.y - y;
-    const dist = Math.min(Math.hypot(dx, dy), MAX_DRAG_DISTANCE);
-    const angle = Math.atan2(dy, dx);
+    // Calcular vector de arrastre (desde ficha hacia posición actual del dedo)
+    const dragDx = x - chip.x;
+    const dragDy = y - chip.y;
+    const dist = Math.min(Math.hypot(dragDx, dragDy), MAX_DRAG_DISTANCE);
     
     // Calcular potencia normalizada para feedback visual
     const normalizedPower = dist / MAX_DRAG_DISTANCE;
     setShotPower(normalizedPower);
     (globalThis as Record<string, unknown>).shotPower = normalizedPower;
 
-    // La línea de apuntado muestra hacia dónde IRÁ la ficha
-    // El angle ya apunta en la dirección correcta (opuesto al arrastre)
-    // No invertir para nadie - la línea siempre muestra la dirección local
+    // Limitar la posición del aim a la distancia máxima
+    let aimX = x;
+    let aimY = y;
+    if (dist >= MAX_DRAG_DISTANCE) {
+      const angle = Math.atan2(dragDy, dragDx);
+      aimX = chip.x + Math.cos(angle) * MAX_DRAG_DISTANCE;
+      aimY = chip.y + Math.sin(angle) * MAX_DRAG_DISTANCE;
+    }
+    
+    // Pasamos to como la posición del arrastre
+    // PitchCanvas invertirá la dirección para mostrar hacia dónde irá el tiro
     setAim({
       from: { x: chip.x, y: chip.y },
-      to: {
-        x: chip.x + Math.cos(angle) * dist * 1.5,
-        y: chip.y + Math.sin(angle) * dist * 1.5
-      }
+      to: { x: aimX, y: aimY }
     });
   }, [chips, getSvgPoint]);
 
@@ -350,24 +356,37 @@ export function PlayingScreen() {
       return;
     }
 
+    const chip = chips.find((c) => c.id === dragRef.current?.chipId);
+    if (!chip) {
+      setAim(undefined);
+      setShotPower(0);
+      dragRef.current = null;
+      return;
+    }
+
     const { x, y } = getSvgPoint(e);
-    const dx = dragRef.current.start.x - x;
-    const dy = dragRef.current.start.y - y;
-    const dist = Math.min(Math.hypot(dx, dy), MAX_DRAG_DISTANCE);
+    // Vector de arrastre (desde ficha hacia donde soltó)
+    const dragDx = x - chip.x;
+    const dragDy = y - chip.y;
+    const dist = Math.min(Math.hypot(dragDx, dragDy), MAX_DRAG_DISTANCE);
     
     if (dist > 20) {
       // === SISTEMA DE POTENCIA LINEAL ===
       // La potencia es directamente proporcional a la longitud del arrastre
-      // 0% arrastre = 0 velocidad, 100% arrastre = MAX_SPEED (36)
       const normalizedDist = Math.min(1, dist / MAX_DRAG_DISTANCE);
       const targetSpeed = normalizedDist * MAX_SPEED;
       
-      // Calcular dirección normalizada
-      const angle = Math.atan2(dy, dx);
-      let impulseX = Math.cos(angle) * targetSpeed;
-      let impulseY = Math.sin(angle) * targetSpeed;
+      // Dirección del tiro = opuesto al arrastre (arrastra abajo = tira arriba)
+      const shotDx = -dragDx;
+      const shotDy = -dragDy;
+      const shotMag = Math.hypot(shotDx, shotDy) || 1;
+      
+      // Impulso en coordenadas locales del jugador
+      let impulseX = (shotDx / shotMag) * targetSpeed;
+      let impulseY = (shotDy / shotMag) * targetSpeed;
 
-      // Si es challenger, invertir porque la cancha está rotada para él
+      // Para el challenger, la vista está rotada 180°, así que el servidor
+      // espera coordenadas del mundo real. Invertimos el impulso.
       if (isChallenger) {
         impulseX = -impulseX;
         impulseY = -impulseY;
@@ -386,7 +405,7 @@ export function PlayingScreen() {
     setShotPower(0);
     setSelectedChipId(null);
     dragRef.current = null;
-  }, [currentMatchId, isChallenger, getSvgPoint]);
+  }, [currentMatchId, isChallenger, getSvgPoint, chips]);
 
   const handleExit = () => setShowExitConfirm(true);
   const confirmExit = () => {
@@ -403,11 +422,6 @@ export function PlayingScreen() {
     setView("home");
   };
   const cancelExit = () => setShowExitConfirm(false);
-
-  const handleRematch = () => {
-    socketService.requestRematch();
-    setCommentary("Esperando respuesta del rival...");
-  };
 
   const handleGoHome = () => {
     socketService.disconnect();
@@ -548,11 +562,8 @@ export function PlayingScreen() {
             </h2>
             <p className="final-score">{myScore} - {rivalScore}</p>
             <div className="modal-buttons">
-              <button className="modal-btn primary" onClick={handleRematch}>
-                🔄 Revancha
-              </button>
-              <button className="modal-btn secondary" onClick={handleGoHome}>
-                🏠 Inicio
+              <button className="modal-btn primary" onClick={handleGoHome}>
+                🏠 Volver al inicio
               </button>
             </div>
           </div>
