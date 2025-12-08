@@ -1,28 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 120" role="img" aria-label="Beexoccer logo">
-  <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#0f7f24"/>
-      <stop offset="50%" stop-color="#11b13a"/>
-      <stop offset="100%" stop-color="#0c6b1f"/>
-    </linearGradient>
-    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
-      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.35"/>
-    </filter>
-  </defs>
-  <rect width="520" height="120" fill="transparent"/>
-  <g filter="url(#shadow)" fill="url(#g)" stroke="#0a3613" stroke-width="4" stroke-linejoin="round">
-    <path d="M25 90 V30 h70 q25 0 25 28 q0 13 -6 20 q-6 7 -19 12 l23 0 v20 h-93 z M95 70 q9 -4 9 -12 q0 -16 -14 -16 h-27 v32 h32z"/>
-    <path d="M138 90 V30 h82 v18 h-58 v8 h50 v16 h-50 v8 h60 v18 h-84 z"/>
-    <path d="M238 90 V30 h82 v18 h-58 v8 h50 v16 h-50 v8 h60 v18 h-84 z"/>
-    <path d="M338 90 V30 h32 l18 22 l18 -22 h32 V90 h-24 V57 l-24 26 l-24 -26 V90 h-24 z"/>
-    <path d="M430 90 q-18 0 -28 -10 t-10 -26 q0 -16 10 -26 t28 -10 q18 0 28 10 t10 26 q0 16 -10 26 t-28 10 z m0 -18 q18 0 18 -18 q0 -18 -18 -18 q-18 0 -18 18 q0 18 18 18 z"/>
-  </g>
-  <g transform="translate(250 14)">
-    <circle cx="0" cy="46" r="30" fill="#0a3613" stroke="#11b13a" stroke-width="4"/>
-    <path d="M0 18 l10 16 l-10 8 l-10 -8 z" fill="#e6f9e6"/>
-    <path d="M0 74 l10 -16 l-10 -8 l-10 8 z" fill="#e6f9e6"/>
-    <path d="M-18 46 l16 -10 l8 10 l-8 10 z" fill="#e6f9e6"/>
-    <path d="M18 46 l-16 -10 l-8 10 l8 10 z" fill="#e6f9e6"/>
-    <circle cx="0" cy="46" r="6" fill="#0a3613"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="500" height="100" viewBox="0 0 500 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="500" height="100" fill="#0A1A10"/>
+  
+  <!-- Full BEEXSOCCER text with integrated soccer ball -->
+  <g fill="#11B13A" font-family="Arial, sans-serif" font-weight="bold" font-size="50">
+    <!-- BEEX -->
+    <text x="20" y="65">BEEX</text>
+    
+    <!-- Soccer ball replacing the 'O' -->
+    <g transform="translate(180, 15)">
+      <circle cx="20" cy="35" r="20" fill="white" stroke="#11B13A" stroke-width="2"/>
+      <path d="M20 15L10 35L20 55L30 35L20 15Z" fill="#11B13A"/>
+      <circle cx="20" cy="35" r="5" fill="#0A1A10"/>
+    </g>
+    
+    <!-- CCER -->
+    <text x="230" y="65">CCER</text>
   </g>
 </svg>
