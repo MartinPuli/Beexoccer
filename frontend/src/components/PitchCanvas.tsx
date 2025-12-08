@@ -300,12 +300,32 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
   // Usar el prop de shotPower directamente
   const shotPower = shotPowerProp;
   
-  // Sistema de colores mejorado según potencia
+  // Función para interpolar entre dos colores RGB
+  const lerpColor = (color1: [number, number, number], color2: [number, number, number], t: number): string => {
+    const r = Math.round(color1[0] + (color2[0] - color1[0]) * t);
+    const g = Math.round(color1[1] + (color2[1] - color1[1]) * t);
+    const b = Math.round(color1[2] + (color2[2] - color1[2]) * t);
+    return `rgb(${r}, ${g}, ${b})`;
+  };
+  
+  // Sistema de colores con gradiente continuo según potencia
   const getAimLineColor = (power: number) => {
-    if (power < 0.25) return '#22c55e'; // Verde brillante - tiro suave
-    if (power < 0.5) return '#eab308';  // Amarillo - tiro medio
-    if (power < 0.75) return '#f97316'; // Naranja - tiro fuerte
-    return '#ef4444'; // Rojo - tiro máximo
+    // Colores: verde -> amarillo -> naranja -> rojo
+    const green: [number, number, number] = [34, 197, 94];    // #22c55e
+    const yellow: [number, number, number] = [234, 179, 8];   // #eab308
+    const orange: [number, number, number] = [249, 115, 22];  // #f97316
+    const red: [number, number, number] = [239, 68, 68];      // #ef4444
+    
+    if (power < 0.33) {
+      // Verde a Amarillo
+      return lerpColor(green, yellow, power / 0.33);
+    } else if (power < 0.66) {
+      // Amarillo a Naranja
+      return lerpColor(yellow, orange, (power - 0.33) / 0.33);
+    } else {
+      // Naranja a Rojo
+      return lerpColor(orange, red, (power - 0.66) / 0.34);
+    }
   };
   
   // Ancho progresivo de la línea
@@ -318,12 +338,9 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
     return 0.7 + (power * 0.3); // Opacidad entre 0.7 y 1
   };
   
-  // Obtener texto de potencia
+  // Obtener texto de potencia - ahora muestra el porcentaje exacto
   const getPowerLabel = (power: number) => {
-    if (power < 0.25) return 'SUAVE';
-    if (power < 0.5) return 'MEDIO';
-    if (power < 0.75) return 'FUERTE';
-    return 'MÁXIMO';
+    return `${Math.round(power * 100)}%`;
   };
   
   return (

@@ -472,15 +472,35 @@ export function PlayingScreen() {
       </div>
 
       {/* Power meter cuando arrastra */}
-      {shotPower > 0 && (
-        <div className="power-meter">
-          <div className="power-fill" style={{ 
-            width: `${shotPower * 100}%`,
-            backgroundColor: shotPower > 0.7 ? '#ff4444' : shotPower > 0.4 ? '#ffaa00' : '#00ff6a'
-          }} />
-          <span className="power-label">{Math.round(shotPower * 100)}%</span>
-        </div>
-      )}
+      {shotPower > 0 && (() => {
+        // Interpolación de color continua: verde -> amarillo -> naranja -> rojo
+        const lerpColor = (c1: [number, number, number], c2: [number, number, number], t: number) => {
+          const r = Math.round(c1[0] + (c2[0] - c1[0]) * t);
+          const g = Math.round(c1[1] + (c2[1] - c1[1]) * t);
+          const b = Math.round(c1[2] + (c2[2] - c1[2]) * t);
+          return `rgb(${r}, ${g}, ${b})`;
+        };
+        const green: [number, number, number] = [0, 255, 106];
+        const yellow: [number, number, number] = [255, 170, 0];
+        const red: [number, number, number] = [255, 68, 68];
+        
+        let bgColor: string;
+        if (shotPower < 0.5) {
+          bgColor = lerpColor(green, yellow, shotPower / 0.5);
+        } else {
+          bgColor = lerpColor(yellow, red, (shotPower - 0.5) / 0.5);
+        }
+        
+        return (
+          <div className="power-meter">
+            <div className="power-fill" style={{ 
+              width: `${shotPower * 100}%`,
+              backgroundColor: bgColor
+            }} />
+            <span className="power-label">{Math.round(shotPower * 100)}%</span>
+          </div>
+        );
+      })()}
 
       {/* Pitch */}
       <PitchCanvas
