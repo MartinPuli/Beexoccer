@@ -52,6 +52,18 @@ const ERC20_ABI = [
 const POLYGON_AMOY_CHAIN_ID = 80002;
 const POLYGON_AMOY_RPC = "https://polygon-amoy.drpc.org";
 
+// XOConnectProvider requiere rpcs en v2.1.3
+const XO_CONNECT_CONFIG = {
+  rpcs: {
+    // Polygon Amoy Testnet
+    80002: POLYGON_AMOY_RPC,
+    // Polygon Mainnet
+    137: "https://polygon.drpc.org",
+    // Ethereum Mainnet
+    1: "https://eth.drpc.org"
+  }
+};
+
 class XoConnectService {
   private xoProvider?: typeof XOConnectProvider;
   private ethersProvider?: BrowserProvider;
@@ -130,10 +142,9 @@ class XoConnectService {
     console.log("🔌 Iniciando conexión con XO Connect...");
     
     try {
-      // Siguiendo el ejemplo EXACTO de la documentación:
-      // const provider = new ethers.providers.Web3Provider(new XOConnectProvider(), "any");
-      console.log("📡 Creando XOConnectProvider (sin config, como dice la doc)...");
-      this.xoProvider = new XOConnectProvider();
+      // XOConnectProvider v2.1.3 requiere rpcs config
+      console.log("📡 Creando XOConnectProvider con rpcs config...");
+      this.xoProvider = new XOConnectProvider(XO_CONNECT_CONFIG);
       
       // Wrap in ethers BrowserProvider (ethers v6 version of Web3Provider)
       // Usamos "any" como network como dice la documentación
