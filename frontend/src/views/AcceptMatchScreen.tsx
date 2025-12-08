@@ -3,7 +3,7 @@ import { fetchOpenMatches, acceptMatch } from "../services/matchService";
 import { socketService } from "../services/socketService";
 import { useGameStore } from "../hooks/useGameStore";
 import { MatchLobby } from "../types/game";
-import { xoConnectService } from "../services/xoConnectService";
+import { walletService } from "../services/walletService";
 import { toast } from "../components/Toast";
 
 export function AcceptMatchScreen() {
@@ -17,7 +17,7 @@ export function AcceptMatchScreen() {
   const setWaitingMatch = useGameStore((state) => state.setWaitingMatch);
 
   // Obtener dirección del usuario actual
-  const userAddress = xoConnectService.getAddress()?.toLowerCase() ?? "";
+  const userAddress = walletService.getAddress()?.toLowerCase() ?? "";
 
   useEffect(() => {
     // Carga inicial
@@ -29,8 +29,7 @@ export function AcceptMatchScreen() {
         if (initial.length > 0) {
           toast.info("Lobby actualizado", `${initial.length} partida(s) disponible(s)`);
         }
-      } catch (error) {
-        console.error(error);
+      } catch {
         toast.error("Error cargando partidas", "No se pudo conectar al contrato");
       }
       setLoading(false);
@@ -76,7 +75,6 @@ export function AcceptMatchScreen() {
       setMatchStatus("playing");
       setView("playing");
     } catch (error) {
-      console.error(error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       
       if (errorMessage.includes("insufficient funds") || errorMessage.includes("Internal JSON-RPC")) {
@@ -104,7 +102,7 @@ export function AcceptMatchScreen() {
       const refreshed = await fetchOpenMatches();
       setMatches(refreshed);
       toast.success("Actualizado", `${refreshed.length} partida(s) encontrada(s)`);
-    } catch (error) {
+    } catch {
       toast.error("Error", "No se pudo actualizar el lobby");
     }
     setLoading(false);

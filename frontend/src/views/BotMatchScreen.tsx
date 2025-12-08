@@ -351,15 +351,12 @@ export function BotMatchScreen() {
 
   // Función para el disparo del bot con IA mejorada
   const botShoot = useCallback(() => {
-    console.log("Ejecutando botShoot con IA...");
-    
     // Obtener fichas del bot, jugador y la pelota
     const botChips = chipsRef.current.filter(c => c.owner === "challenger");
     const playerChips = chipsRef.current.filter(c => c.owner === "creator");
     const ballPos = { ...ballRef.current };
     
     if (botChips.length === 0) {
-      console.log("No hay fichas del bot disponibles");
       return;
     }
 
@@ -504,8 +501,6 @@ export function BotMatchScreen() {
         bestTarget = bestLocalTarget;
         bestPassTargetX = bestLocalPassTarget ? bestLocalPassTarget.x : null;
         bestPassTargetY = bestLocalPassTarget ? bestLocalPassTarget.y : null;
-        // Log razonamiento solo de la ficha elegida
-        console.log(`Bot reasoning for ${chip.id}:\n` + reasoningLog.join('\n'));
       }
     });
     const ballIsNearOurGoal = ballPos.y < BOUNDARY_TOP + 140;
@@ -589,14 +584,10 @@ export function BotMatchScreen() {
     } else if (bestAction === 'pass') {
       stats.passes += 1;
     }
-    const tipoAccion = bestAction === 'shoot' ? 'tiro' : bestAction === 'pass' ? 'pase' : 'despeje';
-    console.log(`Bot ha realizado un ${tipoAccion} con potencia ${power.toFixed(1)}`);
   }, [analyzeDefense, myScore, botScore]);
 
   // RESET campo (compatible)
   const resetField = useCallback((scorer: "you" | "bot") => {
-    console.log(`Reseteando campo. Último gol: ${scorer}`);
-    
     // 1. Resetear fichas y pelota
     chipsRef.current = [...initPlayerChips(), ...initBotChips()];
     ballRef.current = initBall();
@@ -615,17 +606,14 @@ export function BotMatchScreen() {
     
     // 4. Establecer el jugador activo
     if (scorer === "you") {
-      console.log("Configurando turno del bot...");
       // No establecer el turno aquí, lo haremos después en showGoalAnim
     } else {
-      console.log("Configurando turno del jugador...");
       setActive("creator");
       setSelectedChipId("you-1");
     }
   }, []);
 
   const showGoalAnim = useCallback((scorer: "you" | "bot") => {
-    console.log(`Gol de: ${scorer}`);
     setGoalAnimation(scorer);
     
     setTimeout(() => {
@@ -643,11 +631,8 @@ export function BotMatchScreen() {
       
       // 2. Si el jugador anotó, el bot debe tirar
       if (scorer === "you") {
-        console.log("Preparando turno del bot...");
-        
         // Pequeño retraso para asegurar que el estado se actualice
         setTimeout(() => {
-          console.log("Es el turno del bot, disparando...");
           // Asegurarse de que el turno esté configurado para el bot
           setActive("challenger");
           setSelectedChipId("bot-1");

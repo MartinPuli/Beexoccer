@@ -2,7 +2,7 @@ import { ChangeEvent, FormEvent, useState, useEffect } from "react";
 import { createMatch } from "../services/matchService";
 import { useGameStore } from "../hooks/useGameStore";
 import { GoalTarget } from "../types/game";
-import { xoConnectService, TokenInfo } from "../services/xoConnectService";
+import { walletService, TokenInfo } from "../services/walletService";
 import { toast } from "../components/Toast";
 
 export function CreateMatchScreen() {
@@ -21,21 +21,20 @@ export function CreateMatchScreen() {
     const loadTokens = async () => {
       try {
         // Primero inicializar el servicio
-        await xoConnectService.init();
+        await walletService.init();
         // Luego obtener tokens
-        const tokenList = xoConnectService.getTokens();
+        const tokenList = walletService.getTokens();
         if (tokenList.length === 0) {
           // Si no hay tokens, hacer fetch
-          await xoConnectService.fetchTokenBalances();
-          setTokens(xoConnectService.getTokens());
+          await walletService.fetchTokenBalances();
+          setTokens(walletService.getTokens());
         } else {
           setTokens(tokenList);
         }
-      } catch (error) {
-        console.warn("Error loading tokens:", error);
+      } catch {
         // Usar tokens mock en caso de error
         setTokens([
-          { symbol: "POL", name: "Polygon", address: "native", decimals: 18, type: "native", balance: "0", icon: "🟣" }
+          { symbol: "POL", name: "Polygon", address: "native", decimals: 18, type: "native", balance: "0" }
         ]);
       }
     };
@@ -64,8 +63,6 @@ export function CreateMatchScreen() {
         amount = stakeAmount;
       }
       
-      console.log("📤 Creando partida:", { goals, isFree: !isBet, stakeAmount: amount, stakeToken: tokenAddress });
-      
       const result = await createMatch({
         goals,
         isFree: !isBet,
@@ -85,7 +82,6 @@ export function CreateMatchScreen() {
       });
       setView("waiting");
     } catch (error) {
-      console.error(error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       
       // Analizar el tipo de error

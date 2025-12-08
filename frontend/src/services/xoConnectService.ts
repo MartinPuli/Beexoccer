@@ -106,11 +106,10 @@ class XoConnectService {
     try {
       const client = await XOConnect.getClient();
       if (client?.alias) {
-        console.log("🐝 Sesión existente de Beexo:", client.alias);
         return client.alias;
       }
     } catch {
-      console.log("No hay sesión XO Connect existente");
+      // Sin sesión existente
     }
     return null;
   }
@@ -135,18 +134,14 @@ class XoConnectService {
    */
   async connect(): Promise<boolean> {
     if (this._isConnecting) {
-      console.log("⏳ Ya hay una conexión en progreso...");
       return false;
     }
 
     this._isConnecting = true;
     this._connectionError = null;
     
-    console.log("🔌 Iniciando conexión con XO Connect...");
-    
     try {
       // XOConnectProvider v2.1.3 requiere rpcs config
-      console.log("📡 Creando XOConnectProvider con rpcs config...");
       this.xoProvider = new XOConnectProvider(XO_CONNECT_CONFIG);
       
       // Wrap in ethers BrowserProvider (ethers v6 version of Web3Provider)
@@ -154,9 +149,7 @@ class XoConnectService {
       this.ethersProvider = new BrowserProvider(this.xoProvider, "any");
       
       // Request accounts - await provider.send("eth_requestAccounts", []);
-      console.log("🔑 Solicitando eth_requestAccounts...");
       const accounts = await this.ethersProvider.send("eth_requestAccounts", []) as string[];
-      console.log("✅ Cuentas conectadas:", accounts);
       
       if (!accounts || accounts.length === 0) {
         throw new Error("No se recibieron cuentas de Beexo Wallet");
@@ -165,7 +158,6 @@ class XoConnectService {
       // Get signer
       this.signer = await this.ethersProvider.getSigner();
       this.userAddress = await this.signer.getAddress();
-      console.log("📍 Dirección:", this.userAddress);
       
       // Get client info from XO Connect
       await this.fetchClientInfo();
@@ -176,16 +168,9 @@ class XoConnectService {
       this.initialized = true;
       this._isConnecting = false;
       
-      console.log("✅ XO Connect Service conectado:", {
-        alias: this.alias,
-        address: this.userAddress,
-        tokens: this.tokenBalances.length
-      });
-      
       return true;
       
     } catch (error) {
-      console.error("❌ Error conectando con XO Connect:", error);
       this._connectionError = error instanceof Error ? error.message : "Error de conexión";
       this._isConnecting = false;
       this.initialized = false;
@@ -199,7 +184,6 @@ class XoConnectService {
   private async fetchClientInfo() {
     try {
       const client: XOClient = await XOConnect.getClient();
-      console.log("🐝 Cliente Beexo:", client);
       
       this.alias = client.alias || this.formatAddress(this.userAddress);
       
@@ -218,8 +202,7 @@ class XoConnectService {
       } else {
         this.setDefaultTokens();
       }
-    } catch (clientError) {
-      console.warn("No se pudo obtener info del cliente XO:", clientError);
+    } catch {
       this.alias = this.formatAddress(this.userAddress);
       this.setDefaultTokens();
     }
@@ -276,8 +259,7 @@ class XoConnectService {
           ...token,
           balance: Number.parseFloat(balance).toFixed(token.decimals > 2 ? 4 : 2)
         });
-      } catch (error) {
-        console.warn(`Error fetching balance for ${token.symbol}:`, error);
+      } catch {
         updatedBalances.push({ ...token, balance: "0" });
       }
     }

@@ -70,8 +70,8 @@ export function WaitingScreen() {
           setWaitingMatch(undefined);
           setView("playing");
         }
-      } catch (error) {
-        console.warn("Error checking match status:", error);
+      } catch {
+        // Error silenciado en producción
       }
     };
 
@@ -101,8 +101,6 @@ export function WaitingScreen() {
       return;
     }
     
-    console.log("🚫 Intentando cancelar partida #", waitingMatch.matchId);
-    
     setCancelling(true);
     try {
       await cancelMatch(waitingMatch.matchId);
@@ -110,7 +108,6 @@ export function WaitingScreen() {
       setWaitingMatch(undefined);
       setView("accept");
     } catch (error) {
-      console.error("Error cancelling match:", error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       
       // Mensajes específicos según el error

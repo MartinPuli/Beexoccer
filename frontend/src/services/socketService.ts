@@ -1,6 +1,9 @@
 import { io, Socket } from "socket.io-client";
-import { env } from "../config/env";
 import { PlayingSnapshot, MatchEvent, MatchLobby } from "../types/game";
+import { env } from "../config/env";
+
+// URL del servidor de tiempo real
+const REALTIME_URL = env.realtimeUrl;
 
 type ServerToClientEvents = {
   snapshot: (payload: PlayingSnapshot) => void;
@@ -8,6 +11,7 @@ type ServerToClientEvents = {
   lobbiesUpdate: (lobbies: MatchLobby[]) => void;
   lobbyCreated: (lobby: MatchLobby) => void;
   lobbyJoined: (data: { matchId: number; challenger: string }) => void;
+  matchReady: (data: { matchId: string }) => void;
 };
 
 type ClientToServerEvents = {
@@ -23,49 +27,64 @@ class SocketService {
   private socket?: Socket<ServerToClientEvents, ClientToServerEvents>;
   private lobbiesCallbacks: ((lobbies: MatchLobby[]) => void)[] = [];
   private lobbyCreatedCallbacks: ((lobby: MatchLobby) => void)[] = [];
-  private connectionFailed = false;
-  private disabled = !env.enableRealtime; // Deshabilitar si VITE_ENABLE_REALTIME != "true"
+  private matchReadyCallbacks: ((matchId: string) => void)[] = [];
+  private retryCount = 0;
+  private maxRetries = 5;
+  private currentMatchId?: string;
+  private currentSide?: "creator" | "challenger";
 
   connect(matchId: string, side: "creator" | "challenger") {
-    if (this.disabled || this.connectionFailed) return; // Skip if disabled or server unavailable
     if (this.socket) {
       this.socket.disconnect();
     }
+    
+    this.currentMatchId = matchId;
+    this.currentSide = side;
+    
     try {
-      this.socket = io(env.realtimeUrl, { 
-        transports: ["websocket"], 
+      this.socket = io(REALTIME_URL, { 
+        transports: ["websocket", "polling"], 
         query: { matchId, side },
-        timeout: 5000,
-        reconnectionAttempts: 2
+        timeout: 10000,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
       });
+      
       this.socket.on("connect_error", () => {
-        console.warn("Realtime server unavailable - running in offline mode");
-        this.connectionFailed = true;
-        this.socket?.disconnect();
+        this.retryCount++;
+        if (this.retryCount >= this.maxRetries) {
+          this.socket?.disconnect();
+        }
+      });
+      
+      this.socket.on("connect", () => {
+        this.retryCount = 0;
       });
     } catch {
-      console.warn("Socket connection failed");
-      this.connectionFailed = true;
+      // Silently fail
     }
   }
 
   connectLobbies() {
-    if (this.disabled || this.connectionFailed) return; // Skip if disabled or server unavailable
-    if (this.socket) return;
+    if (this.socket?.connected) {
+      this.socket.emit("subscribeLobbies");
+      return;
+    }
+    
     try {
-      this.socket = io(env.realtimeUrl, { 
-        transports: ["websocket"],
-        timeout: 5000,
-        reconnectionAttempts: 2
+      this.socket = io(REALTIME_URL, { 
+        transports: ["websocket", "polling"],
+        timeout: 10000,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
       });
       
       this.socket.on("connect_error", () => {
-        console.warn("Realtime server unavailable - lobbies will use blockchain only");
-        this.connectionFailed = true;
-        this.socket?.disconnect();
+        this.retryCount++;
       });
       
       this.socket.on("connect", () => {
+        this.retryCount = 0;
         this.socket?.emit("subscribeLobbies");
       });
     
@@ -76,10 +95,17 @@ class SocketService {
       this.socket.on("lobbyCreated", (lobby) => {
         for (const cb of this.lobbyCreatedCallbacks) cb(lobby);
       });
-    } catch (error) {
-      console.warn("Socket lobbies connection failed", error);
-      this.connectionFailed = true;
+    } catch {
+      // Silently fail
     }
+  }
+
+  getCurrentSide(): "creator" | "challenger" | undefined {
+    return this.currentSide;
+  }
+
+  getCurrentMatchId(): string | undefined {
+    return this.currentMatchId;
   }
 
   onLobbiesUpdate(cb: (lobbies: MatchLobby[]) => void) {
@@ -88,6 +114,11 @@ class SocketService {
 
   onLobbyCreated(cb: (lobby: MatchLobby) => void) {
     this.lobbyCreatedCallbacks.push(cb);
+  }
+
+  onMatchReady(cb: (matchId: string) => void) {
+    this.matchReadyCallbacks.push(cb);
+    this.socket?.on("matchReady", (data) => cb(data.matchId));
   }
 
   offLobbies() {
@@ -100,6 +131,8 @@ class SocketService {
   disconnect() {
     this.socket?.disconnect();
     this.socket = undefined;
+    this.currentMatchId = undefined;
+    this.currentSide = undefined;
   }
 
   onSnapshot(cb: (payload: PlayingSnapshot) => void) {
@@ -113,15 +146,25 @@ class SocketService {
   offAll() {
     this.socket?.off("snapshot");
     this.socket?.off("event");
+    this.socket?.off("matchReady");
     this.offLobbies();
+    this.matchReadyCallbacks = [];
   }
 
   sendInput(matchId: string, chipId: string, impulse: { dx: number; dy: number }) {
     this.socket?.emit("input", { matchId, chipId, impulse });
   }
 
+  requestSync() {
+    this.socket?.emit("sync");
+  }
+
   requestRematch() {
     this.socket?.emit("requestRematch");
+  }
+
+  isConnected(): boolean {
+    return this.socket?.connected ?? false;
   }
 }
 
