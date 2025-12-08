@@ -6,7 +6,7 @@ import { env } from "../config/env";
 
 // El archivo JSON de Hardhat tiene formato { abi: [...], ... }
 const matchAbi = abiJson.abi as InterfaceAbi;
-const POLYGON_AMOY_CHAIN_ID = 80002n;
+const POLYGON_CHAIN_ID = 137n;
 
 // Dirección del contrato desde configuración
 const MATCH_MANAGER_ADDRESS = env.matchManagerAddress;
@@ -18,8 +18,8 @@ async function getContract() {
   const signer = await walletService.getSigner();
   
   const network = await signer.provider?.getNetwork();
-  if (network && network.chainId !== POLYGON_AMOY_CHAIN_ID) {
-    throw new Error(`Red incorrecta. Cambia a Polygon Amoy (${POLYGON_AMOY_CHAIN_ID}).`);
+  if (network && network.chainId !== POLYGON_CHAIN_ID) {
+    throw new Error(`Red incorrecta. Cambia a Polygon Mainnet (chainId: ${POLYGON_CHAIN_ID}).`);
   }
   
   return new Contract(MATCH_MANAGER_ADDRESS, matchAbi, signer);

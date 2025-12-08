@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const { POLYGON_AMOY_RPC, PRIVATE_KEY } = process.env;
+const { POLYGON_RPC, POLYGON_AMOY_RPC, PRIVATE_KEY } = process.env;
 
 const sharedAccounts = PRIVATE_KEY ? [PRIVATE_KEY] : [];
 
@@ -23,15 +23,21 @@ const config: HardhatUserConfig = {
     hardhat: {
       chainId: 31337
     },
+    polygon: {
+      url: POLYGON_RPC || "https://polygon-mainnet.g.alchemy.com/v2/demo",
+      accounts: sharedAccounts,
+      chainId: 137
+    },
     polygonAmoy: {
-      url: POLYGON_AMOY_RPC || "https://polygon-amoy.g.alchemy.com/v2/demo",
+      url: POLYGON_AMOY_RPC || "https://polygon-amoy.drpc.org",
       accounts: sharedAccounts,
       chainId: 80002
     }
   },
   etherscan: {
     apiKey: {
-      polygonAmoy: "" // TODO: add PolygonScan API key when verification is required.
+      polygon: process.env.POLYGONSCAN_API_KEY || "",
+      polygonAmoy: ""
     }
   },
   typechain: {

@@ -22,15 +22,15 @@ export interface TokenInfo {
   icon?: string;
 }
 
-const POLYGON_AMOY_CHAIN_ID = 80002;
-const POLYGON_AMOY_CHAIN_ID_HEX = "0x13882";
-const POLYGON_AMOY_RPC = "https://polygon-amoy.drpc.org";
+// Polygon Mainnet
+const POLYGON_CHAIN_ID = 137;
+const POLYGON_CHAIN_ID_HEX = "0x89";
+const POLYGON_RPC = "https://polygon.drpc.org";
 
 const XO_CONNECT_CONFIG = {
-  defaultChainId: POLYGON_AMOY_CHAIN_ID_HEX,
+  defaultChainId: POLYGON_CHAIN_ID_HEX,
   rpcs: {
-    "0x13882": POLYGON_AMOY_RPC,
-    "0x89": "https://polygon.drpc.org",
+    "0x89": POLYGON_RPC,
     "0x1": "https://eth.drpc.org"
   }
 };
@@ -120,11 +120,11 @@ class WalletService {
       // Request accounts
       await ethereum.request({ method: "eth_requestAccounts" });
       
-      // Switch to Polygon Amoy
+      // Switch to Polygon Mainnet
       try {
         await ethereum.request({
           method: "wallet_switchEthereumChain",
-          params: [{ chainId: POLYGON_AMOY_CHAIN_ID_HEX }]
+          params: [{ chainId: POLYGON_CHAIN_ID_HEX }]
         });
       } catch (switchError: unknown) {
         const err = switchError as { code?: number };
@@ -132,17 +132,17 @@ class WalletService {
           await ethereum.request({
             method: "wallet_addEthereumChain",
             params: [{
-              chainId: POLYGON_AMOY_CHAIN_ID_HEX,
-              chainName: "Polygon Amoy Testnet",
+              chainId: POLYGON_CHAIN_ID_HEX,
+              chainName: "Polygon Mainnet",
               nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
-              rpcUrls: [POLYGON_AMOY_RPC],
-              blockExplorerUrls: ["https://amoy.polygonscan.com/"]
+              rpcUrls: [POLYGON_RPC],
+              blockExplorerUrls: ["https://polygonscan.com/"]
             }]
           });
         }
       }
 
-      this.provider = new BrowserProvider(ethereum, POLYGON_AMOY_CHAIN_ID);
+      this.provider = new BrowserProvider(ethereum, POLYGON_CHAIN_ID);
       this.signer = await this.provider.getSigner();
       this.userAddress = await this.signer.getAddress();
       
@@ -235,7 +235,7 @@ class WalletService {
   }
 
   getReadProvider(): JsonRpcProvider {
-    return new JsonRpcProvider(POLYGON_AMOY_RPC);
+    return new JsonRpcProvider(POLYGON_RPC);
   }
 
   async getSigner(): Promise<Signer> {

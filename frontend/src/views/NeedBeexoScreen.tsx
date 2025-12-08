@@ -7,10 +7,17 @@
 import React, { useState } from "react";
 import { walletService } from "../services/walletService";
 import { useGameStore } from "../hooks/useGameStore";
+import beexoLogo from "../assets/beexo.png";
 
 const BEEXO_DOWNLOAD_URL = "https://share.beexo.com/?type=download";
-const BEEXO_LOGO_URL = "https://beexo.com/logo-beexo.svg";
 const METAMASK_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg";
+const METAMASK_DEEP_LINK = "https://metamask.app.link/dapp/";
+
+// Detectar si estamos en móvil
+const isMobile = (): boolean => {
+  if (typeof navigator === "undefined") return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+};
 
 interface ConnectWalletScreenProps {
   onConnected?: () => void;
@@ -64,6 +71,13 @@ export const NeedBeexoScreen: React.FC<ConnectWalletScreenProps> = ({ onConnecte
   };
 
   const handleConnectMetaMask = async () => {
+    // En móvil sin MetaMask inyectado, redirigir a la app de MetaMask
+    if (!walletService.isMetaMaskAvailable() && isMobile()) {
+      const currentUrl = globalThis.location.href.replace(/^https?:\/\//, '');
+      globalThis.location.href = METAMASK_DEEP_LINK + currentUrl;
+      return;
+    }
+    
     if (!walletService.isMetaMaskAvailable()) {
       setError("MetaMask no está instalado. Descárgalo desde metamask.io");
       return;
@@ -104,7 +118,7 @@ export const NeedBeexoScreen: React.FC<ConnectWalletScreenProps> = ({ onConnecte
 
         <div className="beexo-logo">
           <img 
-            src={BEEXO_LOGO_URL}
+            src={beexoLogo}
             alt="Beexo Wallet" 
             className="beexo-logo-img"
           />
