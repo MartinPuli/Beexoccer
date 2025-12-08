@@ -10,8 +10,9 @@ type ServerToClientEvents = {
   event: (payload: MatchEvent) => void;
   lobbiesUpdate: (lobbies: MatchLobby[]) => void;
   lobbyCreated: (lobby: MatchLobby) => void;
-  lobbyJoined: (data: { matchId: number; challenger: string }) => void;
+  lobbyJoined: (data: { matchId: string; challenger: string; challengerAlias: string }) => void;
   matchReady: (data: { matchId: string }) => void;
+  lobbyCancelled: (data: { matchId: string }) => void;
 };
 
 type ClientToServerEvents = {
@@ -21,6 +22,9 @@ type ClientToServerEvents = {
   requestRematch: () => void;
   subscribeLobbies: () => void;
   unsubscribeLobbies: () => void;
+  createLobby: (payload: { matchId: string; creator: string; creatorAlias: string; stake: string }) => void;
+  joinLobby: (payload: { matchId: string; challenger: string; challengerAlias: string }) => void;
+  cancelLobby: (payload: { matchId: string }) => void;
 };
 
 class SocketService {
@@ -29,7 +33,7 @@ class SocketService {
   private lobbyCreatedCallbacks: ((lobby: MatchLobby) => void)[] = [];
   private matchReadyCallbacks: ((matchId: string) => void)[] = [];
   private retryCount = 0;
-  private maxRetries = 5;
+  private readonly maxRetries = 5;
   private currentMatchId?: string;
   private currentSide?: "creator" | "challenger";
 
@@ -161,6 +165,27 @@ class SocketService {
 
   requestRematch() {
     this.socket?.emit("requestRematch");
+  }
+
+  // Lobby management methods
+  createLobby(matchId: string, creator: string, creatorAlias: string, stake: string) {
+    this.socket?.emit("createLobby", { matchId, creator, creatorAlias, stake });
+  }
+
+  joinLobby(matchId: string, challenger: string, challengerAlias: string) {
+    this.socket?.emit("joinLobby", { matchId, challenger, challengerAlias });
+  }
+
+  cancelLobby(matchId: string) {
+    this.socket?.emit("cancelLobby", { matchId });
+  }
+
+  onLobbyCancelled(cb: (matchId: string) => void) {
+    this.socket?.on("lobbyCancelled", (data) => cb(data.matchId));
+  }
+
+  onLobbyJoined(cb: (data: { matchId: string; challenger: string; challengerAlias: string }) => void) {
+    this.socket?.on("lobbyJoined", cb);
   }
 
   isConnected(): boolean {

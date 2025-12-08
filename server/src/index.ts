@@ -18,6 +18,19 @@ type PlayerSide = "creator" | "challenger";
 
 type MatchEventType = "goal-self" | "goal-rival" | "timeout" | "rematch-requested" | "rematch-confirmed";
 
+// Lobby system
+interface Lobby {
+  matchId: string;
+  creator: string;
+  creatorAlias: string;
+  stake: string;
+  createdAt: number;
+  status: "waiting" | "ready" | "playing";
+}
+
+const lobbies = new Map<string, Lobby>();
+const lobbySubscribers = new Set<string>(); // socket ids subscribed to lobby updates
+
 interface SnapshotPayload {
   activePlayer: PlayerSide;
   turnEndsAt: number;
@@ -48,11 +61,21 @@ interface ClientToServerEvents {
   input: (payload: { matchId?: string; chipId: string; impulse: { dx: number; dy: number } }) => void;
   sync: () => void;
   requestRematch: () => void;
+  subscribeLobbies: () => void;
+  unsubscribeLobbies: () => void;
+  createLobby: (payload: { matchId: string; creator: string; creatorAlias: string; stake: string }) => void;
+  joinLobby: (payload: { matchId: string; challenger: string; challengerAlias: string }) => void;
+  cancelLobby: (payload: { matchId: string }) => void;
 }
 
 interface ServerToClientEvents {
   snapshot: (payload: SnapshotPayload) => void;
   event: (payload: MatchEventPayload) => void;
+  lobbiesUpdate: (lobbies: Lobby[]) => void;
+  lobbyCreated: (lobby: Lobby) => void;
+  lobbyJoined: (data: { matchId: string; challenger: string; challengerAlias: string }) => void;
+  matchReady: (data: { matchId: string }) => void;
+  lobbyCancelled: (data: { matchId: string }) => void;
 }
 
 interface InterServerEvents {}
@@ -377,6 +400,75 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
         timestamp: Date.now()
       });
     }
+  });
+
+  // Lobby system handlers
+  socket.on("subscribeLobbies", () => {
+    lobbySubscribers.add(socket.id);
+    // Send current lobbies list
+    const waitingLobbies = Array.from(lobbies.values()).filter(l => l.status === "waiting");
+    socket.emit("lobbiesUpdate", waitingLobbies);
+  });
+
+  socket.on("unsubscribeLobbies", () => {
+    lobbySubscribers.delete(socket.id);
+  });
+
+  socket.on("createLobby", ({ matchId: lobbyMatchId, creator, creatorAlias, stake }) => {
+    const lobby: Lobby = {
+      matchId: lobbyMatchId,
+      creator,
+      creatorAlias,
+      stake,
+      createdAt: Date.now(),
+      status: "waiting"
+    };
+    lobbies.set(lobbyMatchId, lobby);
+    
+    // Notify all subscribers
+    const waitingLobbies = Array.from(lobbies.values()).filter(l => l.status === "waiting");
+    for (const subId of lobbySubscribers) {
+      io.to(subId).emit("lobbiesUpdate", waitingLobbies);
+    }
+    socket.emit("lobbyCreated", lobby);
+  });
+
+  socket.on("joinLobby", ({ matchId: lobbyMatchId, challenger, challengerAlias }) => {
+    const lobby = lobbies.get(lobbyMatchId);
+    if (lobby?.status !== "waiting") return;
+    
+    lobby.status = "ready";
+    
+    // Notify creator that someone joined
+    io.to(lobbyMatchId).emit("lobbyJoined", { matchId: lobbyMatchId, challenger, challengerAlias });
+    
+    // Notify both players match is ready
+    io.to(lobbyMatchId).emit("matchReady", { matchId: lobbyMatchId });
+    
+    // Update lobbies list for all subscribers
+    const waitingLobbies = Array.from(lobbies.values()).filter(l => l.status === "waiting");
+    for (const subId of lobbySubscribers) {
+      io.to(subId).emit("lobbiesUpdate", waitingLobbies);
+    }
+  });
+
+  socket.on("cancelLobby", ({ matchId: lobbyMatchId }) => {
+    const lobby = lobbies.get(lobbyMatchId);
+    if (!lobby) return;
+    
+    lobbies.delete(lobbyMatchId);
+    
+    // Notify subscribers
+    const waitingLobbies = Array.from(lobbies.values()).filter(l => l.status === "waiting");
+    for (const subId of lobbySubscribers) {
+      io.to(subId).emit("lobbiesUpdate", waitingLobbies);
+    }
+    io.to(lobbyMatchId).emit("lobbyCancelled", { matchId: lobbyMatchId });
+  });
+
+  // Handle disconnect - clean up lobby subscriptions
+  (socket as unknown as { on: (event: string, cb: () => void) => void }).on("disconnect", () => {
+    lobbySubscribers.delete(socket.id);
   });
 });
 

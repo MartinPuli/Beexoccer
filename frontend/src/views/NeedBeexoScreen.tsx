@@ -223,7 +223,7 @@ export const NeedBeexoScreen: React.FC<ConnectWalletScreenProps> = ({ onConnecte
         </button>
 
         <div className="beexo-footer">
-          <span>Red: Polygon Amoy Testnet</span>
+          <span>Red: Polygon Mainnet</span>
         </div>
       </div>
       
@@ -263,7 +263,8 @@ export const NeedBeexoScreen: React.FC<ConnectWalletScreenProps> = ({ onConnecte
         }
 
         .beexo-logo-img {
-          width: 120px;
+          width: 220px;
+          max-width: 80%;
           filter: drop-shadow(0 0 25px rgba(0, 255, 120, 0.4));
           margin-bottom: 20px;
         }

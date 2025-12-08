@@ -2,6 +2,7 @@ import { Contract, InterfaceAbi, formatEther, parseEther } from "ethers";
 import abiJson from "../abi/MatchManager.json";
 import { MatchConfig, MatchLobby } from "../types/game";
 import { walletService } from "./walletService";
+import { socketService } from "./socketService";
 import { env } from "../config/env";
 
 // El archivo JSON de Hardhat tiene formato { abi: [...], ... }
@@ -161,6 +162,12 @@ export async function createMatch(config: MatchConfig): Promise<{ matchId: numbe
       throw new Error("No se pudo obtener el ID de la partida creada.");
     }
     
+    // Notify via socket so other clients see the new lobby
+    const userAddress = walletService.getUserAddress() || "";
+    const userAlias = walletService.getAlias();
+    const stakeDisplay = config.isFree ? "GRATIS" : `${config.stakeAmount} POL`;
+    socketService.createLobby(String(matchId), userAddress, userAlias, stakeDisplay);
+    
     return { matchId };
   } catch (error: unknown) {
     const err = error as { reason?: string; data?: { message?: string }; message?: string; code?: string | number };
@@ -243,6 +250,9 @@ export async function cancelMatch(matchId: number): Promise<void> {
     
     const tx = await contract.cancelMatch(matchId);
     await tx.wait();
+    
+    // Notify via socket that we cancelled this lobby
+    socketService.cancelLobby(String(matchId));
   } catch (error) {
     if (error instanceof Error && 
         (error.message.includes("creador") || 
@@ -268,7 +278,14 @@ export async function acceptMatch(matchId: number, match: MatchLobby) {
     const tx = await contract.joinMatch(matchId, {
       value: match.stakeToken === "0x0000000000000000000000000000000000000000" ? stakeWei : 0n
     });
-    return tx.wait();
+    const result = await tx.wait();
+    
+    // Notify via socket that we joined this lobby
+    const userAddress = walletService.getUserAddress() || "";
+    const userAlias = walletService.getAlias();
+    socketService.joinLobby(String(matchId), userAddress, userAlias);
+    
+    return result;
   } catch (error) {
     handleRpcError(error);
   }
