@@ -1288,8 +1288,8 @@ export function BotMatchScreen() {
       clearInterval(turnTimerRef.current);
     }
 
-    // Solo iniciar el temporizador si es el turno del jugador y no hay animaciones
-    if (active === "creator" && !goalAnimation && !showEnd && !turnLostAnimation) {
+    // Solo iniciar el temporizador si es el turno del jugador y no hay animaciones y no se ha tomado el turno
+    if (active === "creator" && !goalAnimation && !showEnd && !turnLostAnimation && !turnTakenRef.current) {
       const startTime = Date.now();
       setTurnTimeLeft(TURN_TIME);
       
@@ -1297,6 +1297,12 @@ export function BotMatchScreen() {
         const elapsed = Date.now() - startTime;
         const remaining = Math.max(0, TURN_TIME - elapsed);
         setTurnTimeLeft(remaining);
+        
+        // Detener el temporizador si el jugador ya pateó
+        if (turnTakenRef.current) {
+          clearInterval(turnTimerRef.current!);
+          return;
+        }
         
         if (remaining <= 0) {
           clearInterval(turnTimerRef.current!);
@@ -1311,7 +1317,7 @@ export function BotMatchScreen() {
         clearInterval(turnTimerRef.current);
       }
     };
-  }, [active, goalAnimation, showEnd, turnLostAnimation, showTurnLost]);
+  }, [active, goalAnimation, showEnd, turnLostAnimation, showTurnLost, turnTakenRef.current]);
 
   // Efecto para manejar el turno del bot
   useEffect(() => {
@@ -1452,6 +1458,8 @@ export function BotMatchScreen() {
       // Actualizar solo la ficha objetivo de forma inmutable
       chipsRef.current = chipsRef.current.map((c) => c.id === chipId ? { ...c, vx: dx, vy: dy } : c);
       turnTakenRef.current = true;
+      // Detener el tiempo inmediatamente cuando el jugador patea
+      setTurnTimeLeft(prev => prev);
     }
 
     // limpiar estados
