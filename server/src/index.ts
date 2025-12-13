@@ -65,6 +65,7 @@ const freeLobbySubscribers = new Set<string>();
 interface SnapshotPayload {
   activePlayer: PlayerSide;
   turnEndsAt: number;
+  awaitingInput: boolean;
   creatorScore: number;
   challengerScore: number;
   commentary: string;
@@ -363,6 +364,7 @@ function toSnapshot(state: MatchState): SnapshotPayload {
   return {
     activePlayer: state.activePlayer,
     turnEndsAt: state.turnEndsAt,
+    awaitingInput: state.awaitingInput,
     creatorScore: state.creatorScore,
     challengerScore: state.challengerScore,
     commentary: state.awaitingInput ? "Apunta y dispara" : "Resolviendo jugada",

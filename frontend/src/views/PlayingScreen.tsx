@@ -99,6 +99,8 @@ export function PlayingScreen() {
   const [consecutiveTimeouts, setConsecutiveTimeouts] = useState(0);
   const [rematchRequested, setRematchRequested] = useState(false);
   const [waitingRematchResponse, setWaitingRematchResponse] = useState(false);
+  const [rivalRequestedRematch, setRivalRequestedRematch] = useState(false);
+  const [rivalRematchAlias, setRivalRematchAlias] = useState("");
 
   const dragRef = useRef<{ chipId: string; start: { x: number; y: number } } | null>(null);
   const turnEndRef = useRef<number>(Date.now() + TURN_TIME);
@@ -114,9 +116,11 @@ export function PlayingScreen() {
     creatorScore: number;
     commentary: string;
     turnEndsAt: number;
+    awaitingInput: boolean;
   } | null>(null);
   const isMobileRef = useRef(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [awaitingInput, setAwaitingInput] = useState(true);
 
   const isMyTurn = (isChallenger && activePlayer === "challenger") || (!isChallenger && activePlayer === "creator");
 
@@ -176,6 +180,7 @@ export function PlayingScreen() {
         creatorScore: snapshot.creatorScore,
         commentary: snapshot.commentary,
         turnEndsAt: snapshot.turnEndsAt,
+        awaitingInput: snapshot.awaitingInput ?? true,
       };
 
       // If not throttling (desktop), apply immediately
@@ -183,6 +188,7 @@ export function PlayingScreen() {
         setChips(transformedChips);
         setBall(transformedBall);
         setActivePlayer(snapshot.activePlayer);
+        setAwaitingInput(snapshot.awaitingInput ?? true);
         if (isChallenger) {
           setMyScore(snapshot.challengerScore);
           setRivalScore(snapshot.creatorScore);
@@ -281,6 +287,7 @@ export function PlayingScreen() {
       setWinner(null);
       setRematchRequested(false);
       setWaitingRematchResponse(false);
+      setRivalRequestedRematch(false);
       setMatchStatus("playing");
       setCommentary("¡Revancha! Comienza el partido");
     });
@@ -288,7 +295,14 @@ export function PlayingScreen() {
     socketService.onRematchDeclined(() => {
       setWaitingRematchResponse(false);
       setRematchRequested(false);
+      setRivalRequestedRematch(false);
       setCommentary("El rival rechazó la revancha");
+    });
+
+    // Listen for rival rematch request
+    socketService.onRematchRequested((data) => {
+      setRivalRequestedRematch(true);
+      setRivalRematchAlias(data.fromAlias);
     });
 
     // Request sync after listeners are registered to ensure we get the current state
@@ -322,6 +336,7 @@ export function PlayingScreen() {
         setChips(snap.chips);
         setBall(snap.ball);
         setActivePlayer(snap.activePlayer);
+        setAwaitingInput(snap.awaitingInput);
         if (isChallenger) {
           setMyScore(snap.challengerScore);
           setRivalScore(snap.creatorScore);
@@ -344,21 +359,29 @@ export function PlayingScreen() {
   
   useEffect(() => {
     const interval = setInterval(() => {
-      const remaining = Math.max(0, turnEndRef.current - Date.now());
-      setTimerPercent((remaining / TURN_TIME) * 100);
-      
-      // Si es mi turno y el tiempo llegó a 0, enviar timeout al servidor
-      // El servidor manejará el conteo y emitirá el evento de vuelta
-      if (remaining === 0 && isMyTurn && !timeoutSentRef.current && currentMatchId) {
-        console.log("[PlayingScreen] Sending timeout to server for match:", currentMatchId);
-        timeoutSentRef.current = true;
-        setAim(undefined); // Limpiar flecha de apuntado
-        setSelectedChipId(null); // Deseleccionar ficha
-        socketService.sendTimeout(currentMatchId);
+      // Solo mostrar timer decreciente si estamos esperando input
+      if (awaitingInput) {
+        const remaining = Math.max(0, turnEndRef.current - Date.now());
+        setTimerPercent((remaining / TURN_TIME) * 100);
+        
+        // Si es mi turno y el tiempo llegó a 0, enviar timeout al servidor
+        // El servidor manejará el conteo y emitirá el evento de vuelta
+        if (remaining <= 0 && isMyTurn && !timeoutSentRef.current && currentMatchId) {
+          console.log("[PlayingScreen] Sending timeout to server for match:", currentMatchId);
+          timeoutSentRef.current = true;
+          setAim(undefined); // Limpiar flecha de apuntado
+          setSelectedChipId(null); // Deseleccionar ficha
+          // Localmente marcar que no estamos esperando input para evitar enviar duplicados
+          setAwaitingInput(false);
+          socketService.sendTimeout(currentMatchId);
+        }
+      } else {
+        // Mientras la pelota se mueve, mostrar barra llena
+        setTimerPercent(100);
       }
     }, 100);
     return () => clearInterval(interval);
-  }, [isMyTurn, currentMatchId]);
+  }, [isMyTurn, currentMatchId, awaitingInput]);
 
   // Reset timeout flag cuando cambia de turno
   useEffect(() => {
@@ -542,6 +565,19 @@ export function PlayingScreen() {
     setWaitingRematchResponse(true);
   };
 
+  const handleAcceptRematch = () => {
+    if (!currentMatchId) return;
+    socketService.acceptRematch(currentMatchId);
+    setRivalRequestedRematch(false);
+    setWaitingRematchResponse(true);
+  };
+
+  const handleDeclineRematch = () => {
+    if (!currentMatchId) return;
+    socketService.declineRematch(currentMatchId);
+    setRivalRequestedRematch(false);
+  };
+
   // Momentum bar como en BotMatchScreen
   const momentum = myScore - rivalScore;
   const momentumPercent = 50 + (momentum / Math.max(1, goalTarget)) * 50;
@@ -695,12 +731,39 @@ export function PlayingScreen() {
               <button 
                 className="modal-btn secondary" 
                 onClick={handleRequestRematch}
-                disabled={waitingRematchResponse}
+                disabled={waitingRematchResponse || rivalRequestedRematch}
               >
                 {waitingRematchResponse ? "⏳ Esperando..." : "🔄 Revancha"}
               </button>
               <button className="modal-btn primary" onClick={handleGoHome}>
                 🏠 Inicio
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rival rematch request popup */}
+      {rivalRequestedRematch && (
+        <div className="modal-overlay">
+          <div className="modal-box rematch-modal">
+            <div className="rematch-icon">🔄</div>
+            <h2 className="rematch-title">¡Revancha!</h2>
+            <p className="rematch-message">
+              {rivalRematchAlias || "Tu rival"} quiere la revancha
+            </p>
+            <div className="modal-buttons">
+              <button 
+                className="modal-btn primary" 
+                onClick={handleAcceptRematch}
+              >
+                ✓ Aceptar
+              </button>
+              <button 
+                className="modal-btn secondary" 
+                onClick={handleDeclineRematch}
+              >
+                ✕ Rechazar
               </button>
             </div>
           </div>
@@ -996,6 +1059,27 @@ export function PlayingScreen() {
           color: #fff;
           font-weight: bold;
           margin-bottom: 8px;
+        }
+
+        /* Rematch popup styles */
+        .rematch-modal .rematch-icon {
+          font-size: 48px;
+          margin-bottom: 12px;
+          animation: spin 1s ease-in-out;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        .rematch-title {
+          font-size: 24px;
+          color: #00ff6a;
+          margin-bottom: 8px;
+        }
+        .rematch-message {
+          font-size: 16px;
+          color: #ccc;
+          margin-bottom: 16px;
         }
       `}</style>
     </div>
