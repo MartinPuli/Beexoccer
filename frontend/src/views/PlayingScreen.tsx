@@ -194,14 +194,10 @@ export function PlayingScreen() {
         setCommentary(snapshot.commentary);
       }
       
-      // Verificar si cambió de turno para tracking de timeouts
+      // Verificar si cambió de turno para tracking
       if (lastTurnPlayerRef.current !== null && lastTurnPlayerRef.current !== snapshot.activePlayer) {
-        // Cambió el turno
-        const myServerSide = isChallenger ? "challenger" : "creator";
-        if (snapshot.activePlayer === myServerSide) {
-          // Ahora es mi turno - resetear contador si hice algo
-          setConsecutiveTimeouts(0);
-        }
+        // Cambió el turno - resetear flag de timeout enviado
+        // El reset del contador se hace cuando el jugador hace una jugada, no aquí
       }
       lastTurnPlayerRef.current = snapshot.activePlayer;
       
@@ -240,18 +236,15 @@ export function PlayingScreen() {
       } else if (event.type === "timeout") {
         // Mostrar animación de turno perdido
         setTurnLostAnimation(true);
+        setAim(undefined); // Limpiar aim cuando hay timeout
+        setSelectedChipId(null);
         setTimeout(() => setTurnLostAnimation(false), 1500);
+        // Incrementar contador local solo para mostrar (el servidor maneja la lógica de derrota)
         if (event.from === myServerSide) {
-          setConsecutiveTimeouts(prev => {
-            const newCount = prev + 1;
-            if (newCount >= MAX_TIMEOUTS_TO_LOSE) {
-              setWinner("rival");
-              setShowEnd(true);
-              setMatchStatus("ended");
-              setCommentary("Perdiste por inactividad");
-            }
-            return newCount;
-          });
+          setConsecutiveTimeouts(prev => prev + 1);
+        } else {
+          // El rival perdió un turno, reseteamos nuestro contador
+          setConsecutiveTimeouts(0);
         }
       }
     });
@@ -353,10 +346,12 @@ export function PlayingScreen() {
       const remaining = Math.max(0, turnEndRef.current - Date.now());
       setTimerPercent((remaining / TURN_TIME) * 100);
       
-      // Si es mi turno y el tiempo llegó a 0, enviar timeout
+      // Si es mi turno y el tiempo llegó a 0, enviar timeout al servidor
+      // El servidor manejará el conteo y emitirá el evento de vuelta
       if (remaining === 0 && isMyTurn && !timeoutSentRef.current && currentMatchId) {
         timeoutSentRef.current = true;
-        setConsecutiveTimeouts(prev => prev + 1);
+        setAim(undefined); // Limpiar flecha de apuntado
+        setSelectedChipId(null); // Deseleccionar ficha
         socketService.sendTimeout(currentMatchId);
       }
     }, 100);
@@ -593,9 +588,6 @@ export function PlayingScreen() {
       {/* Turn indicator */}
       <div className={`turn-indicator ${isMyTurn ? 'my-turn' : 'rival-turn'}`}>
         {isMyTurn ? "🎯 TU TURNO" : "⏳ TURNO RIVAL"}
-        {consecutiveTimeouts > 0 && isMyTurn && (
-          <span className="timeout-warning"> ⚠️ {MAX_TIMEOUTS_TO_LOSE - consecutiveTimeouts} turnos restantes</span>
-        )}
       </div>
 
       {/* Power meter cuando arrastra */}

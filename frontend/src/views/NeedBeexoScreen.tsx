@@ -5,6 +5,7 @@
  */
 
 import React, { useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { walletService } from "../services/walletService";
 import { useGameStore } from "../hooks/useGameStore";
 import beexoccerLogo from "../assets/BEEXOCCER.png";
@@ -13,11 +14,17 @@ import beexoLogo from "../assets/beexo.png";
 const BEEXO_DOWNLOAD_URL = "https://share.beexo.com/?type=download";
 const METAMASK_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg";
 const METAMASK_DEEP_LINK = "https://metamask.app.link/dapp/";
+const APP_URL = "beexoccer.vercel.app"; // URL de tu app web
 
 // Detectar si estamos en móvil
 const isMobile = (): boolean => {
   if (typeof navigator === "undefined") return false;
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+};
+
+// Detectar si estamos en app nativa de Capacitor
+const isNativeApp = (): boolean => {
+  return Capacitor.isNativePlatform();
 };
 
 interface ConnectWalletScreenProps {
@@ -72,7 +79,16 @@ export const NeedBeexoScreen: React.FC<ConnectWalletScreenProps> = ({ onConnecte
   };
 
   const handleConnectMetaMask = async () => {
-    // En móvil sin MetaMask inyectado, redirigir a la app de MetaMask
+    // En app nativa de Capacitor, no podemos usar deep links de MetaMask
+    // El usuario debe abrir la app desde el navegador de MetaMask
+    if (isNativeApp()) {
+      setError(
+        "Para usar MetaMask, abrí la app de MetaMask → Navegador → " + APP_URL + " o usá Beexo Wallet"
+      );
+      return;
+    }
+    
+    // En móvil web sin MetaMask inyectado, redirigir a la app de MetaMask
     if (!walletService.isMetaMaskAvailable() && isMobile()) {
       const currentUrl = globalThis.location.href.replace(/^https?:\/\//, '');
       globalThis.location.href = METAMASK_DEEP_LINK + currentUrl;

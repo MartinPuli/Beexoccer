@@ -1219,9 +1219,11 @@ export function BotMatchScreen() {
       }
 
       // Timeout - pierde turno si no movió y no hay movimiento
+      // NOTA: showTurnLost() se llama desde el efecto del temporizador para evitar doble mensaje
       if (turnTimeLeft <= 0 && !turnTakenRef.current && !isMoving() && !goalScoredRef.current) {
         if (active === "creator") {
-          showTurnLost();
+          // Limpiar aim y deseleccionar cuando termina el tiempo
+          setAim(undefined);
           // Incrementar contador de timeouts consecutivos del jugador
           setConsecutiveTimeouts(prev => {
             const newCount = prev + 1;
@@ -1293,6 +1295,7 @@ export function BotMatchScreen() {
         
         if (remaining <= 0) {
           clearInterval(turnTimerRef.current!);
+          setAim(undefined); // Limpiar flecha de apuntado
           showTurnLost();
         }
       }, 50);
@@ -1511,9 +1514,6 @@ export function BotMatchScreen() {
           </div>
           <span className="timer-label">
             {active === "creator" ? 'TU TURNO' : 'TURNO BOT'}
-            {active === "creator" && consecutiveTimeouts > 0 && (
-              <span className="timeout-warning"> ⚠️ {MAX_TIMEOUTS_TO_LOSE - consecutiveTimeouts} turnos restantes</span>
-            )}
           </span>
         </div>
       </div>
