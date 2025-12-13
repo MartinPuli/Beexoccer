@@ -105,6 +105,19 @@ export function PlayingScreen() {
   const lastTurnPlayerRef = useRef<"creator" | "challenger" | null>(null);
   const resultReportedRef = useRef(false);
 
+  // Snapshot buffering and mobile throttling
+  const latestSnapshotRef = useRef<{
+    chips: TokenChip[];
+    ball: { x: number; y: number };
+    activePlayer: "creator" | "challenger";
+    challengerScore: number;
+    creatorScore: number;
+    commentary: string;
+    turnEndsAt: number;
+  } | null>(null);
+  const isMobileRef = useRef(false);
+  const [isMobile, setIsMobile] = useState(false);
+
   const isMyTurn = (isChallenger && activePlayer === "challenger") || (!isChallenger && activePlayer === "creator");
 
   // Reportar resultado al contrato cuando la partida termina
@@ -153,11 +166,33 @@ export function PlayingScreen() {
         isChallenger
       );
 
-      setChips(transformedChips);
-      setBall(transformedBall);
-      
-      // Active player desde perspectiva local
-      setActivePlayer(snapshot.activePlayer);
+      // Throttle visual updates on mobile: write to refs every snapshot,
+      // and update React state at a capped frequency.
+      latestSnapshotRef.current = {
+        chips: transformedChips,
+        ball: transformedBall,
+        activePlayer: snapshot.activePlayer,
+        challengerScore: snapshot.challengerScore,
+        creatorScore: snapshot.creatorScore,
+        commentary: snapshot.commentary,
+        turnEndsAt: snapshot.turnEndsAt,
+      };
+
+      // If not throttling (desktop), apply immediately
+      if (!isMobileRef.current) {
+        setChips(transformedChips);
+        setBall(transformedBall);
+        setActivePlayer(snapshot.activePlayer);
+        if (isChallenger) {
+          setMyScore(snapshot.challengerScore);
+          setRivalScore(snapshot.creatorScore);
+        } else {
+          setMyScore(snapshot.creatorScore);
+          setRivalScore(snapshot.challengerScore);
+        }
+        turnEndRef.current = snapshot.turnEndsAt;
+        setCommentary(snapshot.commentary);
+      }
       
       // Verificar si cambió de turno para tracking de timeouts
       if (lastTurnPlayerRef.current !== null && lastTurnPlayerRef.current !== snapshot.activePlayer) {
@@ -170,17 +205,22 @@ export function PlayingScreen() {
       }
       lastTurnPlayerRef.current = snapshot.activePlayer;
       
-      // Scores desde perspectiva local
-      if (isChallenger) {
-        setMyScore(snapshot.challengerScore);
-        setRivalScore(snapshot.creatorScore);
-      } else {
-        setMyScore(snapshot.creatorScore);
-        setRivalScore(snapshot.challengerScore);
+      // Scores desde perspectiva local (only apply immediately on non-mobile)
+      if (!isMobileRef.current) {
+        if (isChallenger) {
+          setMyScore(snapshot.challengerScore);
+          setRivalScore(snapshot.creatorScore);
+        } else {
+          setMyScore(snapshot.creatorScore);
+          setRivalScore(snapshot.challengerScore);
+        }
       }
 
-      turnEndRef.current = snapshot.turnEndsAt;
-      setCommentary(snapshot.commentary);
+      // When throttling, commentary/turnEndsAt are updated from latestSnapshotRef
+      if (!isMobileRef.current) {
+        turnEndRef.current = snapshot.turnEndsAt;
+        setCommentary(snapshot.commentary);
+      }
     });
 
     socketService.onEvent((event) => {
@@ -269,6 +309,42 @@ export function PlayingScreen() {
     };
   }, [currentMatchId, playerSide, isChallenger, setMatchStatus]);
 
+  // Detect mobile and start throttled visual updater
+  useEffect(() => {
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const mobile = /Mobi|Android|iPhone|iPad|iPod/.test(ua) || window.innerWidth < 720;
+    isMobileRef.current = mobile;
+    setIsMobile(mobile);
+
+    // Throttle interval: target ~25-30 FPS on mobile
+    const throttleMs = mobile ? 40 : 0; // 40ms ~= 25fps
+
+    let interval: ReturnType<typeof setInterval> | undefined = undefined;
+    if (mobile) {
+      interval = setInterval(() => {
+        const snap = latestSnapshotRef.current;
+        if (!snap) return;
+
+        setChips(snap.chips);
+        setBall(snap.ball);
+        setActivePlayer(snap.activePlayer);
+        if (isChallenger) {
+          setMyScore(snap.challengerScore);
+          setRivalScore(snap.creatorScore);
+        } else {
+          setMyScore(snap.creatorScore);
+          setRivalScore(snap.challengerScore);
+        }
+        turnEndRef.current = snap.turnEndsAt;
+        setCommentary(snap.commentary);
+      }, throttleMs);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isChallenger]);
+
   // Timer visual y detección de timeout
   const timeoutSentRef = useRef(false);
   
@@ -333,8 +409,6 @@ export function PlayingScreen() {
     if (hit) {
       // Guardamos la posición del chip, no del toque
       dragRef.current = { chipId: hit.id, start: { x: hit.x, y: hit.y } };
-      // Usar la posición del chip como inicio (igual que BotMatchScreen)
-      dragRef.current = { chipId: hit.id, start: { x: hit.x, y: hit.y } };
       setSelectedChipId(hit.id);
       setAim({ from: { x: hit.x, y: hit.y }, to: { x, y } });
       setShotPower(0);
@@ -379,7 +453,7 @@ export function PlayingScreen() {
   }, [chips, getSvgPoint]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
-    if (!dragRef.current || !currentMatchId) {
+    if (!dragRef.current || !currentMatchId || !isMyTurn) {
       setAim(undefined);
       setShotPower(0);
       dragRef.current = null;
@@ -407,16 +481,18 @@ export function PlayingScreen() {
       const targetSpeed = normalizedDist * MAX_SPEED;
       
       // Dirección del tiro = opuesto al arrastre (arrastra abajo = tira arriba)
+      // Las coordenadas ya están en espacio visual del jugador
       const dirX = chip.x - x;
       const dirY = chip.y - y;
       const dirMag = Math.hypot(dirX, dirY) || 1;
       
-      // Impulso en coordenadas locales del jugador
+      // Impulso en coordenadas visuales del jugador
       let impulseX = (dirX / dirMag) * targetSpeed;
       let impulseY = (dirY / dirMag) * targetSpeed;
 
-      // Para el challenger, la vista está rotada 180°, así que el servidor
-      // espera coordenadas del mundo real. Invertimos el impulso.
+      // Para el challenger, las coordenadas están invertidas visualmente,
+      // pero el servidor espera coordenadas del mundo real.
+      // La dirección visual es correcta, pero necesitamos invertir para el servidor.
       if (isChallenger) {
         impulseX = -impulseX;
         impulseY = -impulseY;
@@ -435,7 +511,7 @@ export function PlayingScreen() {
     setShotPower(0);
     setSelectedChipId(null);
     dragRef.current = null;
-  }, [currentMatchId, isChallenger, getSvgPoint, chips]);
+  }, [currentMatchId, isChallenger, isMyTurn, getSvgPoint, chips]);
 
   const handleExit = () => setShowExitConfirm(true);
   const confirmExit = () => {
@@ -566,6 +642,7 @@ export function PlayingScreen() {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        lowPerf={isMobile}
       />
 
       {/* Commentary */}

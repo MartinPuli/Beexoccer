@@ -6,4 +6,3 @@ export { PlayingScreen } from "./PlayingScreen";
 export { BotMatchScreen } from "./BotMatchScreen";
 export { WaitingScreen } from "./WaitingScreen";
 export { ConnectWalletScreen } from "./ConnectWalletScreen";
-export { FreeOnlineScreen } from "./FreeOnlineScreen";

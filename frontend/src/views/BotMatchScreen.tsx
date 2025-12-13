@@ -95,6 +95,7 @@ function reflectInBounds(entity: { x: number; y: number; vx: number; vy: number;
   const r = entity.radius;
   const wallBounce = WALL_RESTITUTION; // Rebote vivo en paredes
   
+  // Ensure entity stays within horizontal boundaries
   if (entity.x - r < BOUNDARY_LEFT) {
     entity.x = BOUNDARY_LEFT + r;
     entity.vx = Math.abs(entity.vx) * wallBounce;
@@ -104,19 +105,47 @@ function reflectInBounds(entity: { x: number; y: number; vx: number; vy: number;
     entity.vx = -Math.abs(entity.vx) * wallBounce;
   }
   
+  // Check if entity is within goal area horizontally
   const inGoalX = entity.x > GOAL_LEFT && entity.x < GOAL_RIGHT;
   
+  // Handle top boundary
   if (entity.y - r < BOUNDARY_TOP) {
-    if (!isBall || !inGoalX) {
+    if (isBall) {
+      // If ball is in goal area, let it continue
+      if (!inGoalX) {
+        entity.y = BOUNDARY_TOP + r;
+        entity.vy = Math.abs(entity.vy) * wallBounce;
+      }
+    } else {
+      // For non-ball entities, always bounce
       entity.y = BOUNDARY_TOP + r;
       entity.vy = Math.abs(entity.vy) * wallBounce;
     }
   }
   
+  // Handle bottom boundary
   if (entity.y + r > BOUNDARY_BOTTOM) {
-    if (!isBall || !inGoalX) {
+    if (isBall) {
+      // If ball is in goal area, let it continue
+      if (!inGoalX) {
+        entity.y = BOUNDARY_BOTTOM - r;
+        entity.vy = -Math.abs(entity.vy) * wallBounce;
+      }
+    } else {
+      // For non-ball entities, always bounce
       entity.y = BOUNDARY_BOTTOM - r;
       entity.vy = -Math.abs(entity.vy) * wallBounce;
+    }
+  }
+  
+  // Additional safety check to ensure ball doesn't get stuck outside
+  if (isBall) {
+    // If ball somehow got outside the field, bring it back in
+    if (entity.y < BOUNDARY_TOP - 100 || entity.y > BOUNDARY_BOTTOM + 100) {
+      entity.x = Math.max(BOUNDARY_LEFT + r, Math.min(BOUNDARY_RIGHT - r, entity.x));
+      entity.y = Math.max(BOUNDARY_TOP + r, Math.min(BOUNDARY_BOTTOM - r, entity.y));
+      entity.vx = 0;
+      entity.vy = 0;
     }
   }
 }
@@ -688,7 +717,7 @@ export function BotMatchScreen() {
     passBias += randomVariance * 0.5;
     
     let bestDecision = {
-      action: 'shoot' as const,
+      action: 'shoot' as 'shoot' | 'pass' | 'clear' | 'intercept' | 'position',
       chip: botChips[0],
       targetX: 300,
       targetY: BOUNDARY_BOTTOM,
@@ -704,7 +733,7 @@ export function BotMatchScreen() {
       }, botChips[0]);
       
       return {
-        action: 'intercept' as const,
+        action: 'intercept' as 'shoot' | 'pass' | 'clear' | 'intercept' | 'position',
         chip: closestToBall,
         targetX: predictedBall.x,
         targetY: Math.max(BOUNDARY_TOP + 50, predictedBall.y - 30),
@@ -729,13 +758,15 @@ export function BotMatchScreen() {
         0.8, playerChips
       );
       
-      // Gran bonus si la simulación predice gol
+      // Gran bonus si la simulación predice gol (priorizar estos tiros)
       if (shotSimulation.willScore) {
-        shootScore += 150;
+        shootScore += 220;
+        // Preferir potencia alta en tiros con probabilidad de gol
+        // (se ajustará más abajo al decidir power)
       }
-      // Penalizar si será bloqueado (menos si somos arriesgados)
+      // Penalizar fuertemente si será bloqueado (solo menos si somos muy arriesgados)
       if (shotSimulation.blocked) {
-        shootScore -= 80 * (1 - riskTolerance * 0.5);
+        shootScore -= 150 * (1 - riskTolerance * 0.6);
       }
       
       // Bonus si estamos en posición ofensiva
@@ -786,10 +817,11 @@ export function BotMatchScreen() {
         const teammateGoalOpp = evaluateGoalOpportunity(teammate.x, teammate.y, playerChips);
         passScore += teammateGoalOpp.score * 0.6;
         
-        // Simular si el pase llegaría
+        // Simular si el pase llegaría (usamos la misma simulación simplificada)
         const passSimulation = simulateShot(chip.x, chip.y, teammate.x, teammate.y, 0.5, playerChips);
         if (passSimulation.blocked) {
-          passScore -= 70 * (1 - riskTolerance * 0.3);
+          // Penalizamos, pero menos si somos arriesgados
+          passScore -= 90 * (1 - riskTolerance * 0.5);
         }
         
         // Penalizar si hay defensores en el camino
@@ -820,7 +852,7 @@ export function BotMatchScreen() {
         
         if (passScore > bestDecision.confidence) {
           bestDecision = {
-            action: 'pass',
+            action: 'pass' as 'shoot' | 'pass' | 'clear' | 'intercept' | 'position',
             chip,
             targetX: teammate.x + (teammate.y > chip.y ? 0 : (Math.random() - 0.5) * 40),
             targetY: teammate.y + 20,
@@ -854,7 +886,7 @@ export function BotMatchScreen() {
           // Dirección del despeje varía según personalidad
           const clearY = personality === 'parking_bus' ? FIELD_HEIGHT * 0.5 : FIELD_HEIGHT * 0.7;
           bestDecision = {
-            action: 'clear',
+            action: 'clear' as 'shoot' | 'pass' | 'clear' | 'intercept' | 'position',
             chip,
             targetX: FIELD_WIDTH / 2 + side * 150,
             targetY: clearY,
@@ -876,7 +908,7 @@ export function BotMatchScreen() {
         
         if (interceptScore > bestDecision.confidence) {
           bestDecision = {
-            action: 'intercept',
+            action: 'intercept' as 'shoot' | 'pass' | 'clear' | 'intercept' | 'position',
             chip,
             targetX: predictedBall.x,
             targetY: predictedBall.y,
@@ -894,7 +926,7 @@ export function BotMatchScreen() {
         
         if (Math.hypot(chip.x - idealX, chip.y - idealY) > 100) {
           bestDecision = {
-            action: 'position',
+            action: 'position' as 'shoot' | 'pass' | 'clear' | 'intercept' | 'position',
             chip,
             targetX: idealX,
             targetY: idealY,
@@ -933,15 +965,28 @@ export function BotMatchScreen() {
 
   // Función para el disparo del bot con IA avanzada
   const botShoot = useCallback(() => {
-    const botChips = chipsRef.current.filter(c => c.owner === "challenger");
-    
-    if (botChips.length === 0) return;
+    try {
+      // Asegurarse de que es realmente el turno del bot
+      if (active !== "challenger" || turnTakenRef.current) {
+        return;
+      }
+      
+      const botChips = chipsRef.current.filter(c => c.owner === "challenger");
+      
+      if (botChips.length === 0) {
+        // Si por alguna razón no hay fichas del bot, forzar el cambio de turno
+        turnTakenRef.current = true;
+        return;
+      }
 
     // Usar el sistema de decisión de IA
     const decision = makeDecision();
     
     // Añadir variación humana (pequeños errores aleatorios)
-    const humanError = 0.05 + Math.random() * 0.08; // 5-13% de error
+    // Reducir error cuando la confianza de la decisión es alta
+    const confidenceFactor = Math.min(1, Math.max(0, (decision.confidence || 0) / 300));
+    const baseError = 0.05 + Math.random() * 0.06; // base 5-11%
+    const humanError = Math.max(0.02, baseError * (1 - confidenceFactor * 0.7));
     const errorAngle = (Math.random() - 0.5) * humanError * Math.PI;
     
     // Calcular dirección base
@@ -1029,7 +1074,12 @@ export function BotMatchScreen() {
     if (playHistoryRef.current.length > 20) {
       playHistoryRef.current.shift();
     }
-  }, [makeDecision]);
+    } catch (error) {
+      console.error("Error en botShoot:", error);
+      // Asegurarse de que el turno no se quede bloqueado en caso de error
+      turnTakenRef.current = true;
+    }
+  }, [makeDecision, active]);
 
   // RESET campo (compatible)
   const resetField = useCallback((scorer: "you" | "bot") => {
@@ -1058,6 +1108,17 @@ export function BotMatchScreen() {
     }
   }, []);
 
+  // Helper: ¿hay movimiento?
+  const isMoving = useCallback(() => {
+    return chipsRef.current.some((c) => mag(c.vx, c.vy) > EPSILON) ||
+           mag(ballRef.current.vx, ballRef.current.vy) > EPSILON;
+  }, []);
+
+  const showTurnLost = useCallback(() => {
+    setTurnLostAnimation(true);
+    setTimeout(() => setTurnLostAnimation(false), 1200);
+  }, []);
+
   const showGoalAnim = useCallback((scorer: "you" | "bot") => {
     setGoalAnimation(scorer);
     
@@ -1082,26 +1143,10 @@ export function BotMatchScreen() {
           setActive("challenger");
           setSelectedChipId("bot-1");
           turnTakenRef.current = false;
-          
-          // Pequeño retraso antes de disparar
-          setTimeout(() => {
-            botShoot();
-          }, 100);
         }, 300);
       }
     }, 1500);
-  }, [resetField, botShoot]);
-
-  const showTurnLost = useCallback(() => {
-    setTurnLostAnimation(true);
-    setTimeout(() => setTurnLostAnimation(false), 1200);
-  }, []);
-
-  // Helper: ¿hay movimiento?
-  const isMoving = useCallback(() => {
-    return chipsRef.current.some((c) => mag(c.vx, c.vy) > EPSILON) ||
-           mag(ballRef.current.vx, ballRef.current.vy) > EPSILON;
-  }, []);
+  }, [resetField, botShoot, isMoving]);
 
   /* =========================
      BOT AI (moved to the top to avoid reference issues)
@@ -1184,8 +1229,6 @@ export function BotMatchScreen() {
           setSelectedChipId("bot-1");
           turnTakenRef.current = false;
           turnStartTimeRef.current = Date.now();
-          // Bot dispara luego de un pequeño delay
-          setTimeout(() => { if (!goalScoredRef.current) botShoot(); }, 600);
         } else {
           setActive("creator");
           setSelectedChipId("you-1");
@@ -1218,8 +1261,8 @@ export function BotMatchScreen() {
       clearInterval(turnTimerRef.current);
     }
 
-    // Solo iniciar el temporizador si es el turno del jugador y no hay animaciones
-    if (active === "creator" && !goalAnimation && !showEnd && !turnLostAnimation) {
+    // Solo iniciar el temporizador si es el turno del jugador y no hay animaciones y no se ha tomado el turno
+    if (active === "creator" && !goalAnimation && !showEnd && !turnLostAnimation && !turnTakenRef.current) {
       const startTime = Date.now();
       setTurnTimeLeft(TURN_TIME);
       
@@ -1227,6 +1270,12 @@ export function BotMatchScreen() {
         const elapsed = Date.now() - startTime;
         const remaining = Math.max(0, TURN_TIME - elapsed);
         setTurnTimeLeft(remaining);
+        
+        // Detener el temporizador si el jugador ya pateó
+        if (turnTakenRef.current) {
+          clearInterval(turnTimerRef.current!);
+          return;
+        }
         
         if (remaining <= 0) {
           clearInterval(turnTimerRef.current!);
@@ -1241,14 +1290,50 @@ export function BotMatchScreen() {
         clearInterval(turnTimerRef.current);
       }
     };
-  }, [active, goalAnimation, showEnd, turnLostAnimation, showTurnLost]);
+  }, [active, goalAnimation, showEnd, turnLostAnimation, showTurnLost, turnTakenRef.current]);
+
+  // Efecto para manejar el turno del bot - Simplificado para evitar bugs
+  useEffect(() => {
+    // Solo ejecutar si es el turno del bot y no hay animaciones activas
+    if (active === "challenger" && !turnTakenRef.current && !goalAnimation && !showEnd && !turnLostAnimation && !isMoving()) {
+      // Pequeño retraso antes de que el bot realice su movimiento
+      const timer = setTimeout(() => {
+        // Verificar condiciones nuevamente antes de disparar
+        if (active === "challenger" && !turnTakenRef.current && !goalAnimation && !showEnd && !turnLostAnimation && !isMoving()) {
+          try {
+            botShoot();
+          } catch (error) {
+            console.error("Error en el turno del bot:", error);
+            // Forzar cambio de turno en caso de error para no bloquear el juego
+            turnTakenRef.current = true;
+          }
+        }
+      }, 800);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [active, turnTakenRef.current, goalAnimation, showEnd, turnLostAnimation, isMoving, botShoot]);
 
   /* =========================
      INPUT HANDLERS (pointer)
      - compatibles con PitchCanvas handlers previos
      ========================= */
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (active !== "creator" || turnTakenRef.current || isMoving()) return;
+    // Debug: Log current state to identify issues
+    console.log('handlePointerDown called:', {
+      active,
+      isPlayerTurn: active === "creator",
+      turnTaken: turnTakenRef.current,
+      isMoving: isMoving(),
+      goalAnimation,
+      showEnd,
+      turnLostAnimation
+    });
+
+    if (active !== "creator" || turnTakenRef.current || isMoving()) {
+      console.log('Shooting blocked - conditions not met');
+      return;
+    }
 
     // Prevenir comportamientos del navegador y capturar el pointer
     e.preventDefault();
@@ -1349,6 +1434,8 @@ export function BotMatchScreen() {
       // Actualizar solo la ficha objetivo de forma inmutable
       chipsRef.current = chipsRef.current.map((c) => c.id === chipId ? { ...c, vx: dx, vy: dy } : c);
       turnTakenRef.current = true;
+      // Detener el tiempo inmediatamente cuando el jugador patea
+      setTurnTimeLeft(prev => prev);
     }
 
     // limpiar estados
@@ -1425,6 +1512,7 @@ export function BotMatchScreen() {
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerCancel}
+          lowPerf={false}
         />
       </div>
 

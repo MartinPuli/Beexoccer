@@ -40,8 +40,7 @@ import {
   CreateMatchScreen,
   HomeScreen,
   PlayingScreen,
-  WaitingScreen,
-  FreeOnlineScreen
+  WaitingScreen
 } from "./views";
 import { NeedBeexoScreen } from "./views/NeedBeexoScreen";
 import { walletService } from "./services/walletService";
@@ -338,8 +337,6 @@ export default function App() {
         return <BotMatchScreen />;
       case "waiting":
         return <WaitingScreen />;
-      case "freeOnline":
-        return <FreeOnlineScreen />;
       default:
         return <HomeScreen />;
     }

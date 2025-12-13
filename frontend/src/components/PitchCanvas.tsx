@@ -14,10 +14,11 @@ interface PitchCanvasProps {
   onPointerMove?: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerUp?: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerCancel?: (event: React.PointerEvent<SVGSVGElement>) => void;
+  lowPerf?: boolean;
 }
 
 // Componente de esfera 3D real usando Canvas 2D con proyección 3D mejorada
-function SoccerBall3DCanvas({ rotateX, rotateY, size = 40 }: { rotateX: number; rotateY: number; size?: number }) {
+function SoccerBall3DCanvas({ rotateX, rotateY, size = 40, lowPerf = false }: { rotateX: number; rotateY: number; size?: number; lowPerf?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
   const drawBall = useCallback(() => {
@@ -27,14 +28,33 @@ function SoccerBall3DCanvas({ rotateX, rotateY, size = 40 }: { rotateX: number; 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    const w = canvas.width;
-    const h = canvas.height;
+    // respect devicePixelRatio for crisp rendering, but reduce on low perf
+    const dpr = lowPerf ? 1 : (window.devicePixelRatio || 1);
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
     const cx = w / 2;
     const cy = h / 2;
     const radius = (Math.min(w, h) / 2) - 4;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     
     // Limpiar canvas
     ctx.clearRect(0, 0, w, h);
+
+    if (lowPerf) {
+      // Simple, low-cost spherical ball for mobile/low-perf
+      const grad = ctx.createRadialGradient(cx - radius * 0.3, cy - radius * 0.3, 0, cx, cy, radius);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.6, '#e0e0e0');
+      grad.addColorStop(1, '#b0b0b0');
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+      ctx.stroke();
+      return;
+    }
     
     // Convertir ángulos a radianes
     const rx = (rotateX * Math.PI) / 180;
@@ -243,7 +263,7 @@ function SoccerBall3DCanvas({ rotateX, rotateY, size = 40 }: { rotateX: number; 
     ctx.lineWidth = 1;
     ctx.stroke();
     
-  }, [rotateX, rotateY]);
+  }, [rotateX, rotateY, lowPerf]);
   
   useEffect(() => {
     drawBall();
@@ -252,18 +272,18 @@ function SoccerBall3DCanvas({ rotateX, rotateY, size = 40 }: { rotateX: number; 
   return (
     <canvas
       ref={canvasRef}
-      width={size * 2}
-      height={size * 2}
+      width={Math.round(size * 2 * (lowPerf ? 1 : (window.devicePixelRatio || 1)))}
+      height={Math.round(size * 2 * (lowPerf ? 1 : (window.devicePixelRatio || 1)))}
       style={{
         width: `${size}px`,
         height: `${size}px`,
-        filter: 'drop-shadow(2px 3px 4px rgba(0,0,0,0.4))',
+        filter: lowPerf ? 'none' : 'drop-shadow(2px 3px 4px rgba(0,0,0,0.4))',
       }}
     />
   );
 }
 
-export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTurn, children, aimLine, shotPower: shotPowerProp = 0, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }: Readonly<PitchCanvasProps>) {
+export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTurn, children, aimLine, shotPower: shotPowerProp = 0, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, lowPerf = false }: Readonly<PitchCanvasProps>) {
   // Sistema de rotación 3D realista para la pelota
   const lastBallPosRef = useRef({ x: ball.x, y: ball.y });
   const [ballRotation, setBallRotation] = useState({ rotateX: 0, rotateY: 0 });
@@ -593,11 +613,12 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
           height="40"
           style={{ overflow: 'visible' }}
         >
-          <SoccerBall3DCanvas 
-            rotateX={ballRotation.rotateX} 
-            rotateY={ballRotation.rotateY}
-            size={40}
-          />
+            <SoccerBall3DCanvas 
+              rotateX={ballRotation.rotateX} 
+              rotateY={ballRotation.rotateY}
+              size={40}
+              lowPerf={lowPerf}
+            />
         </foreignObject>
       </svg>
       {children}
