@@ -25,6 +25,10 @@ type ServerToClientEvents = {
   matchEnded: (data: { winner: "creator" | "challenger"; reason: string }) => void;
   playerForfeited: (data: { side: "creator" | "challenger" }) => void;
   pong: () => void;
+  // Rematch events
+  rematchRequested: (data: { fromSide: "creator" | "challenger"; fromAlias: string; matchId: string }) => void;
+  rematchAccepted: (data: { matchId: string }) => void;
+  rematchDeclined: (data: { bySide: "creator" | "challenger" }) => void;
   // Free lobbies events
   freeLobbiesUpdate: (lobbies: FreeLobby[]) => void;
   freeMatchReady: (data: { matchId: string; rivalAlias: string }) => void;
@@ -35,7 +39,9 @@ type ClientToServerEvents = {
   joinMatch: (matchId: string) => void;
   input: (payload: { matchId: string; impulse: { dx: number; dy: number }; chipId: string }) => void;
   sync: () => void;
-  requestRematch: () => void;
+  requestRematch: (payload: { matchId: string; alias: string }) => void;
+  acceptRematch: (payload: { matchId: string }) => void;
+  declineRematch: (payload: { matchId: string }) => void;
   turnTimeout: (payload: { matchId: string }) => void;
   forfeit: (payload: { matchId: string }) => void;
   subscribeLobbies: () => void;
@@ -60,6 +66,10 @@ class SocketService {
   private snapshotCallbacks: ((payload: PlayingSnapshot) => void)[] = [];
   private eventCallbacks: ((payload: MatchEvent) => void)[] = [];
   private connectionCallbacks: ((connected: boolean) => void)[] = [];
+  // Rematch callbacks
+  private rematchRequestedCallbacks: ((data: { fromSide: "creator" | "challenger"; fromAlias: string; matchId: string }) => void)[] = [];
+  private rematchAcceptedCallbacks: ((data: { matchId: string }) => void)[] = [];
+  private rematchDeclinedCallbacks: ((data: { bySide: "creator" | "challenger" }) => void)[] = [];
   // Free lobbies callbacks
   private freeLobbiesCallbacks: ((lobbies: FreeLobby[]) => void)[] = [];
   private freeMatchReadyCallbacks: ((data: { matchId: string; rivalAlias: string }) => void)[] = [];
@@ -280,6 +290,7 @@ class SocketService {
     this.socket?.off("event");
     this.socket?.off("matchReady");
     this.offLobbies();
+    this.offRematch();
     this.matchReadyCallbacks = [];
   }
 
@@ -291,8 +302,40 @@ class SocketService {
     this.socket?.emit("sync");
   }
 
-  requestRematch() {
-    this.socket?.emit("requestRematch");
+  requestRematch(matchId: string, alias: string) {
+    this.socket?.emit("requestRematch", { matchId, alias });
+  }
+
+  acceptRematch(matchId: string) {
+    this.socket?.emit("acceptRematch", { matchId });
+  }
+
+  declineRematch(matchId: string) {
+    this.socket?.emit("declineRematch", { matchId });
+  }
+
+  onRematchRequested(cb: (data: { fromSide: "creator" | "challenger"; fromAlias: string; matchId: string }) => void) {
+    this.rematchRequestedCallbacks.push(cb);
+    this.socket?.on("rematchRequested", cb);
+  }
+
+  onRematchAccepted(cb: (data: { matchId: string }) => void) {
+    this.rematchAcceptedCallbacks.push(cb);
+    this.socket?.on("rematchAccepted", cb);
+  }
+
+  onRematchDeclined(cb: (data: { bySide: "creator" | "challenger" }) => void) {
+    this.rematchDeclinedCallbacks.push(cb);
+    this.socket?.on("rematchDeclined", cb);
+  }
+
+  offRematch() {
+    this.rematchRequestedCallbacks = [];
+    this.rematchAcceptedCallbacks = [];
+    this.rematchDeclinedCallbacks = [];
+    this.socket?.off("rematchRequested");
+    this.socket?.off("rematchAccepted");
+    this.socket?.off("rematchDeclined");
   }
 
   sendTimeout(matchId: string) {

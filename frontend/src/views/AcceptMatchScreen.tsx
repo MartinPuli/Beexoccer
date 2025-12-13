@@ -96,18 +96,6 @@ export function AcceptMatchScreen() {
     }
   };
 
-  const handleRefresh = async () => {
-    setLoading(true);
-    try {
-      const refreshed = await fetchOpenMatches();
-      setMatches(refreshed);
-      toast.success("Actualizado", `${refreshed.length} partida(s) encontrada(s)`);
-    } catch {
-      toast.error("Error", "No se pudo actualizar el lobby");
-    }
-    setLoading(false);
-  };
-
   const handleGoToWaiting = (match: MatchLobby) => {
     setWaitingMatch({
       matchId: match.id,
@@ -124,9 +112,6 @@ export function AcceptMatchScreen() {
       <div className="lobbies-header">
         <button className="lobbies-back" onClick={() => setView("home")}>←</button>
         <span className="lobbies-title">Lobbies</span>
-        <button className="lobbies-refresh" onClick={handleRefresh} disabled={loading}>
-          🔄
-        </button>
       </div>
 
       <div className="lobbies-list">

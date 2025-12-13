@@ -20,6 +20,14 @@ interface ActiveMatchInfo {
   userAddress: string; // Dirección del usuario para verificar propiedad
 }
 
+// Datos de solicitud de revancha pendiente
+interface PendingRematch {
+  matchId: string;
+  fromSide: "creator" | "challenger";
+  rivalAlias: string;
+  expiresAt: number;
+}
+
 interface GameStore {
   view: ViewId;
   alias: string;
@@ -34,6 +42,7 @@ interface GameStore {
   lastEvent?: MatchEvent;
   waitingMatch?: WaitingMatchInfo;
   activeMatch?: ActiveMatchInfo;
+  pendingRematch?: PendingRematch;
   consecutiveTimeouts: number; // Contador de timeouts seguidos
   setView: (view: ViewId) => void;
   setAlias: (alias: string) => void;
@@ -52,6 +61,7 @@ interface GameStore {
   clearLastEvent: () => void;
   setWaitingMatch: (info?: WaitingMatchInfo) => void;
   setActiveMatch: (info?: ActiveMatchInfo) => void;
+  setPendingRematch: (info?: PendingRematch) => void;
   resetTimeoutCounter: () => void;
   clearSession: () => void;
 }
@@ -89,6 +99,7 @@ export const useGameStore = create<GameStore>()(
       playing: defaultSnapshot(),
       waitingMatch: undefined,
       activeMatch: undefined,
+      pendingRematch: undefined,
       consecutiveTimeouts: 0,
       setView: (view) => set({ view }),
       setAlias: (alias) => set({ alias }),
@@ -104,10 +115,12 @@ export const useGameStore = create<GameStore>()(
       setLastEvent: (lastEvent) => set({ lastEvent }),
       setWaitingMatch: (waitingMatch) => set({ waitingMatch }),
       setActiveMatch: (activeMatch) => set({ activeMatch }),
+      setPendingRematch: (pendingRematch) => set({ pendingRematch }),
       resetTimeoutCounter: () => set({ consecutiveTimeouts: 0 }),
       clearSession: () => set({ 
         waitingMatch: undefined, 
         activeMatch: undefined, 
+        pendingRematch: undefined,
         matchStatus: "idle",
         currentMatchId: undefined,
         consecutiveTimeouts: 0
@@ -184,4 +197,4 @@ export const useGameStore = create<GameStore>()(
   )
 );
 
-export type { ViewId };
+export type { ViewId, PendingRematch };

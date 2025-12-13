@@ -97,6 +97,8 @@ export function PlayingScreen() {
   const [goalAnimation, setGoalAnimation] = useState<"you" | "rival" | null>(null);
   const [turnLostAnimation, setTurnLostAnimation] = useState(false);
   const [consecutiveTimeouts, setConsecutiveTimeouts] = useState(0);
+  const [rematchRequested, setRematchRequested] = useState(false);
+  const [waitingRematchResponse, setWaitingRematchResponse] = useState(false);
 
   const dragRef = useRef<{ chipId: string; start: { x: number; y: number } } | null>(null);
   const turnEndRef = useRef<number>(Date.now() + TURN_TIME);
@@ -236,6 +238,23 @@ export function PlayingScreen() {
       }
       setShowEnd(true);
       setMatchStatus("ended");
+    });
+
+    // Listen for rematch events
+    socketService.onRematchAccepted(() => {
+      // Reiniciar estado de la partida
+      setShowEnd(false);
+      setWinner(null);
+      setRematchRequested(false);
+      setWaitingRematchResponse(false);
+      setMatchStatus("playing");
+      setCommentary("¡Revancha! Comienza el partido");
+    });
+
+    socketService.onRematchDeclined(() => {
+      setWaitingRematchResponse(false);
+      setRematchRequested(false);
+      setCommentary("El rival rechazó la revancha");
     });
 
     // Request sync after listeners are registered to ensure we get the current state
@@ -443,6 +462,13 @@ export function PlayingScreen() {
     setView("home");
   };
 
+  const handleRequestRematch = () => {
+    if (!currentMatchId || waitingRematchResponse) return;
+    socketService.requestRematch(currentMatchId, alias);
+    setRematchRequested(true);
+    setWaitingRematchResponse(true);
+  };
+
   // Momentum bar como en BotMatchScreen
   const momentum = myScore - rivalScore;
   const momentumPercent = 50 + (momentum / Math.max(1, goalTarget)) * 50;
@@ -595,8 +621,15 @@ export function PlayingScreen() {
             </h2>
             <p className="final-score">{myScore} - {rivalScore}</p>
             <div className="modal-buttons">
+              <button 
+                className="modal-btn secondary" 
+                onClick={handleRequestRematch}
+                disabled={waitingRematchResponse}
+              >
+                {waitingRematchResponse ? "⏳ Esperando..." : "🔄 Revancha"}
+              </button>
               <button className="modal-btn primary" onClick={handleGoHome}>
-                🏠 Volver al inicio
+                🏠 Inicio
               </button>
             </div>
           </div>

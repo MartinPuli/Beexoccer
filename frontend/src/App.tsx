@@ -46,6 +46,7 @@ import {
 import { NeedBeexoScreen } from "./views/NeedBeexoScreen";
 import { walletService } from "./services/walletService";
 import { ToastContainer, useToast, toast } from "./components/Toast";
+import { RematchPopup } from "./components/RematchPopup";
 import { cancelMatch, checkMatchStatus } from "./services/matchService";
 
 export default function App() {
@@ -348,6 +349,7 @@ export default function App() {
     <>
       {renderView()}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      <RematchPopup />
     </>
   );
 }
