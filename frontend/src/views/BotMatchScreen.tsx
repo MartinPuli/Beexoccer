@@ -1143,18 +1143,6 @@ export function BotMatchScreen() {
           setActive("challenger");
           setSelectedChipId("bot-1");
           turnTakenRef.current = false;
-          
-          // Pequeño retraso antes de disparar
-          setTimeout(() => {
-            if (!goalScoredRef.current && !turnTakenRef.current && !isMoving()) {
-              try {
-                botShoot();
-              } catch (error) {
-                console.error("Error al ejecutar el turno del bot después de gol:", error);
-                turnTakenRef.current = true;
-              }
-            }
-          }, 100);
         }, 300);
       }
     }, 1500);
@@ -1241,21 +1229,6 @@ export function BotMatchScreen() {
           setSelectedChipId("bot-1");
           turnTakenRef.current = false;
           turnStartTimeRef.current = Date.now();
-          // Bot dispara luego de un pequeño delay
-          const botMoveTimer = setTimeout(() => {
-            if (!goalScoredRef.current && !turnTakenRef.current && !isMoving()) {
-              try {
-                botShoot();
-              } catch (error) {
-                console.error("Error al ejecutar el turno del bot:", error);
-                // Asegurarse de que el turno no se quede bloqueado
-                turnTakenRef.current = true;
-              }
-            }
-          }, 600);
-          
-          // Limpiar el temporizador si el componente se desmonta
-          return () => clearTimeout(botMoveTimer);
         } else {
           setActive("creator");
           setSelectedChipId("you-1");
@@ -1319,45 +1292,48 @@ export function BotMatchScreen() {
     };
   }, [active, goalAnimation, showEnd, turnLostAnimation, showTurnLost, turnTakenRef.current]);
 
-  // Efecto para manejar el turno del bot
+  // Efecto para manejar el turno del bot - Simplificado para evitar bugs
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    
-    if (active === "challenger" && !turnTakenRef.current && !goalAnimation && !turnLostAnimation) {
+    // Solo ejecutar si es el turno del bot y no hay animaciones activas
+    if (active === "challenger" && !turnTakenRef.current && !goalAnimation && !showEnd && !turnLostAnimation && !isMoving()) {
       // Pequeño retraso antes de que el bot realice su movimiento
-      timer = setTimeout(() => {
-        if (active === "challenger" && !turnTakenRef.current && !isMoving()) {
+      const timer = setTimeout(() => {
+        // Verificar condiciones nuevamente antes de disparar
+        if (active === "challenger" && !turnTakenRef.current && !goalAnimation && !showEnd && !turnLostAnimation && !isMoving()) {
           try {
             botShoot();
           } catch (error) {
             console.error("Error en el turno del bot:", error);
-            // Forzar cambio de turno en caso de error
+            // Forzar cambio de turno en caso de error para no bloquear el juego
             turnTakenRef.current = true;
-            
-            // Asegurarse de que el juego no se quede bloqueado
-            setTimeout(() => {
-              if (!isMoving() && !goalScoredRef.current) {
-                turnTakenRef.current = true;
-              }
-            }, 100);
           }
         }
       }, 800);
+      
+      return () => clearTimeout(timer);
     }
-    
-    return () => {
-      if (timer) {
-        clearTimeout(timer);
-      }
-    };
-  }, [active, goalAnimation, turnLostAnimation, botShoot, isMoving]);
+  }, [active, turnTakenRef.current, goalAnimation, showEnd, turnLostAnimation, isMoving, botShoot]);
 
   /* =========================
      INPUT HANDLERS (pointer)
      - compatibles con PitchCanvas handlers previos
      ========================= */
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (active !== "creator" || turnTakenRef.current || isMoving()) return;
+    // Debug: Log current state to identify issues
+    console.log('handlePointerDown called:', {
+      active,
+      isPlayerTurn: active === "creator",
+      turnTaken: turnTakenRef.current,
+      isMoving: isMoving(),
+      goalAnimation,
+      showEnd,
+      turnLostAnimation
+    });
+
+    if (active !== "creator" || turnTakenRef.current || isMoving()) {
+      console.log('Shooting blocked - conditions not met');
+      return;
+    }
 
     // Prevenir comportamientos del navegador y capturar el pointer
     e.preventDefault();
