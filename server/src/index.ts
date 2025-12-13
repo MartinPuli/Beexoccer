@@ -91,7 +91,9 @@ type MatchEventPayload = {
 interface ClientToServerEvents {
   input: (payload: { matchId?: string; chipId: string; impulse: { dx: number; dy: number } }) => void;
   sync: () => void;
-  requestRematch: () => void;
+  requestRematch: (payload: { matchId: string; alias: string }) => void;
+  acceptRematch: (payload: { matchId: string }) => void;
+  declineRematch: (payload: { matchId: string }) => void;
   turnTimeout: (payload: { matchId?: string }) => void;
   forfeit: (payload: { matchId?: string }) => void;
   subscribeLobbies: () => void;
@@ -119,6 +121,10 @@ interface ServerToClientEvents {
   lobbyCancelled: (data: { matchId: string }) => void;
   matchEnded: (data: { winner: PlayerSide; reason: string }) => void;
   playerForfeited: (data: { side: PlayerSide }) => void;
+  // Rematch events
+  rematchRequested: (data: { fromSide: PlayerSide; fromAlias: string; matchId: string }) => void;
+  rematchAccepted: (data: { matchId: string }) => void;
+  rematchDeclined: (data: { bySide: PlayerSide }) => void;
   // Free lobbies events
   freeLobbiesUpdate: (lobbies: FreeLobby[]) => void;
   freeMatchReady: (data: { matchId: string; rivalAlias: string }) => void;
@@ -580,25 +586,38 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
     socket.emit("snapshot", toSnapshot(state));
   });
 
-  socket.on("requestRematch", () => {
-    const state = ensureMatch(matchId);
+  // Nuevo sistema de revancha con popup
+  socket.on("requestRematch", ({ matchId: reqMatchId, alias }) => {
+    const targetMatchId = reqMatchId || matchId;
+    const state = matches.get(targetMatchId);
+    if (!state) return;
+    
     state.rematch[side] = true;
-    io.to(state.id).emit("event", {
-      type: "rematch-requested",
-      message: side === "creator" ? "Creador pide revancha" : "Retador pide revancha",
-      accent: "#7cc0ff",
-      timestamp: Date.now(),
-      from: side
+    
+    // Notificar al otro jugador con evento específico de rematch
+    io.to(state.id).emit("rematchRequested", {
+      fromSide: side,
+      fromAlias: alias,
+      matchId: state.id
     });
-
-    const expiry = Date.now() + 10_000;
+    
+    // Expirar la solicitud después de 30 segundos
     setTimeout(() => {
-      const pending = !(state.rematch.creator && state.rematch.challenger);
-      if (pending && state.rematch[side] && Date.now() >= expiry) {
+      if (state.rematch[side] && !state.rematch[side === "creator" ? "challenger" : "creator"]) {
         state.rematch[side] = false;
       }
-    }, 10_000);
+    }, 30_000);
+  });
 
+  socket.on("acceptRematch", ({ matchId: reqMatchId }) => {
+    const targetMatchId = reqMatchId || matchId;
+    const state = matches.get(targetMatchId);
+    if (!state) return;
+    
+    // Marcar que este lado acepta
+    state.rematch[side] = true;
+    
+    // Si ambos aceptaron, reiniciar el match
     if (state.rematch.creator && state.rematch.challenger) {
       state.creatorScore = 0;
       state.challengerScore = 0;
@@ -609,14 +628,26 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
       state.awaitingInput = true;
       state.simRunning = false;
       state.rematch = { creator: false, challenger: false };
+      state.consecutiveTimeouts = { creator: 0, challenger: 0 };
+      
+      // Notificar a ambos que la revancha fue aceptada
+      io.to(state.id).emit("rematchAccepted", { matchId: state.id });
+      
+      // Enviar snapshot inicial
       io.to(state.id).emit("snapshot", toSnapshot(state));
-      io.to(state.id).emit("event", {
-        type: "rematch-confirmed",
-        message: "Revancha aceptada",
-        accent: "#00ff9d",
-        timestamp: Date.now()
-      });
     }
+  });
+
+  socket.on("declineRematch", ({ matchId: reqMatchId }) => {
+    const targetMatchId = reqMatchId || matchId;
+    const state = matches.get(targetMatchId);
+    if (!state) return;
+    
+    // Limpiar estado de rematch
+    state.rematch = { creator: false, challenger: false };
+    
+    // Notificar que la revancha fue rechazada
+    io.to(state.id).emit("rematchDeclined", { bySide: side });
   });
 
   // Lobby system handlers
