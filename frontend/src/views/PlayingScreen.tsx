@@ -263,6 +263,7 @@ export function PlayingScreen() {
 
     // Listen for match ended
     socketService.onMatchEnded((data) => {
+      console.log("[PlayingScreen] matchEnded received:", data);
       const myServerSide = isChallenger ? "challenger" : "creator";
       if (data.winner === myServerSide) {
         setWinner("you");
@@ -349,6 +350,7 @@ export function PlayingScreen() {
       // Si es mi turno y el tiempo llegó a 0, enviar timeout al servidor
       // El servidor manejará el conteo y emitirá el evento de vuelta
       if (remaining === 0 && isMyTurn && !timeoutSentRef.current && currentMatchId) {
+        console.log("[PlayingScreen] Sending timeout to server for match:", currentMatchId);
         timeoutSentRef.current = true;
         setAim(undefined); // Limpiar flecha de apuntado
         setSelectedChipId(null); // Deseleccionar ficha

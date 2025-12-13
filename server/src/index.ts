@@ -526,15 +526,26 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
   // Handle turn timeout - called by client when time runs out
   socket.on("turnTimeout", ({ matchId: incomingId }) => {
     const state = ensureMatch(incomingId || matchId);
-    if (state.simRunning || !state.awaitingInput) return;
-    if (state.activePlayer !== side) return; // Only the active player can timeout
+    console.log(`[Timeout] Received from ${side}, activePlayer: ${state.activePlayer}, simRunning: ${state.simRunning}, awaitingInput: ${state.awaitingInput}`);
+    
+    if (state.simRunning || !state.awaitingInput) {
+      console.log(`[Timeout] Ignored - simRunning or not awaiting input`);
+      return;
+    }
+    if (state.activePlayer !== side) {
+      console.log(`[Timeout] Ignored - not active player`);
+      return; // Only the active player can timeout
+    }
     
     // Increment consecutive timeouts
     state.consecutiveTimeouts[side]++;
+    console.log(`[Timeout] ${side} consecutive timeouts: ${state.consecutiveTimeouts[side]}/${MAX_CONSECUTIVE_TIMEOUTS}`);
     
     // Check for auto-lose (3 consecutive timeouts)
     if (state.consecutiveTimeouts[side] >= MAX_CONSECUTIVE_TIMEOUTS) {
       const winner = side === "creator" ? "challenger" : "creator";
+      console.log(`[Timeout] ${side} loses by inactivity! Winner: ${winner}`);
+      
       io.to(state.id).emit("event", {
         type: "timeout",
         message: `${side === "creator" ? "Creador" : "Retador"} pierde por inactividad`,
@@ -551,6 +562,7 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
         state.challengerScore = 5;
         state.creatorScore = 0;
       }
+      console.log(`[Timeout] Emitting matchEnded to room ${state.id} with winner: ${winner}`);
       io.to(state.id).emit("matchEnded", { winner, reason: "timeout" });
       io.to(state.id).emit("snapshot", toSnapshot(state));
       return;

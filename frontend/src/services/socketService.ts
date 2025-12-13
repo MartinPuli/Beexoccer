@@ -289,6 +289,8 @@ class SocketService {
     this.socket?.off("snapshot");
     this.socket?.off("event");
     this.socket?.off("matchReady");
+    this.socket?.off("matchEnded");
+    this.socket?.off("playerForfeited");
     this.offLobbies();
     this.offRematch();
     this.matchReadyCallbacks = [];
