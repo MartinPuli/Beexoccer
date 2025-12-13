@@ -27,7 +27,7 @@ export function RematchPopup() {
       if (data.fromSide !== playerSide) {
         setRequest({
           ...data,
-          expiresAt: Date.now() + 30000 // 30 segundos para responder
+          expiresAt: Date.now() + 20000 // 20 segundos para responder
         });
         
         // También guardar en el store para persistencia
@@ -35,7 +35,7 @@ export function RematchPopup() {
           matchId: data.matchId,
           fromSide: data.fromSide,
           rivalAlias: data.fromAlias,
-          expiresAt: Date.now() + 30000
+          expiresAt: Date.now() + 20000
         });
       }
     };

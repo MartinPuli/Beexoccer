@@ -601,12 +601,14 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
       matchId: state.id
     });
     
-    // Expirar la solicitud después de 30 segundos
+    // Expirar la solicitud después de 20 segundos
     setTimeout(() => {
       if (state.rematch[side] && !state.rematch[side === "creator" ? "challenger" : "creator"]) {
         state.rematch[side] = false;
+        // Notificar que la revancha expiró
+        io.to(state.id).emit("rematchDeclined", { bySide: side === "creator" ? "challenger" : "creator" });
       }
-    }, 30_000);
+    }, 20_000);
   });
 
   socket.on("acceptRematch", ({ matchId: reqMatchId }) => {

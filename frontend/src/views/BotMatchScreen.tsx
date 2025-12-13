@@ -34,6 +34,7 @@ const MAX_SPEED = 28;         // Velocidad máxima controlada
 const MIN_SPEED = 3;          // Velocidad mínima para tiros suaves
 const MAX_DRAG_DISTANCE = 200; // Distancia máxima de arrastre
 const TURN_TIME = 12000;      // 12 segundos por turno
+const MAX_TIMEOUTS_TO_LOSE = 3; // 3 timeouts consecutivos = derrota
 const RESTITUTION = 0.85;     // Rebote en colisiones (reducido)
 const WALL_RESTITUTION = 0.80; // Rebote en paredes (reducido)
 const CHIP_MASS = 5;          // Masa de las fichas (pesadas)
@@ -301,6 +302,7 @@ export function BotMatchScreen() {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [shotPower, setShotPower] = useState<number>(0);
   const [showPowerMeter, setShowPowerMeter] = useState<{ x: number; y: number } | null>(null);
+  const [consecutiveTimeouts, setConsecutiveTimeouts] = useState(0);
 
   const dragRef = useRef<{ chipId: string; start: { x: number; y: number } } | null>(null);
   const simRef = useRef<number | null>(null);
@@ -1218,7 +1220,19 @@ export function BotMatchScreen() {
 
       // Timeout - pierde turno si no movió y no hay movimiento
       if (turnTimeLeft <= 0 && !turnTakenRef.current && !isMoving() && !goalScoredRef.current) {
-        if (active === "creator") showTurnLost();
+        if (active === "creator") {
+          showTurnLost();
+          // Incrementar contador de timeouts consecutivos del jugador
+          setConsecutiveTimeouts(prev => {
+            const newCount = prev + 1;
+            if (newCount >= MAX_TIMEOUTS_TO_LOSE) {
+              // 3 timeouts consecutivos = derrota automática
+              setWinner("bot");
+              setShowEnd(true);
+            }
+            return newCount;
+          });
+        }
         turnTakenRef.current = true;
       }
 
@@ -1434,6 +1448,8 @@ export function BotMatchScreen() {
       // Actualizar solo la ficha objetivo de forma inmutable
       chipsRef.current = chipsRef.current.map((c) => c.id === chipId ? { ...c, vx: dx, vy: dy } : c);
       turnTakenRef.current = true;
+      // Resetear contador de timeouts consecutivos cuando el jugador juega
+      setConsecutiveTimeouts(0);
       // Detener el tiempo inmediatamente cuando el jugador patea
       setTurnTimeLeft(prev => prev);
     }
@@ -1495,6 +1511,9 @@ export function BotMatchScreen() {
           </div>
           <span className="timer-label">
             {active === "creator" ? 'TU TURNO' : 'TURNO BOT'}
+            {active === "creator" && consecutiveTimeouts > 0 && (
+              <span className="timeout-warning"> ⚠️ {MAX_TIMEOUTS_TO_LOSE - consecutiveTimeouts} turnos restantes</span>
+            )}
           </span>
         </div>
       </div>
