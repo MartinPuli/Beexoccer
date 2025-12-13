@@ -120,7 +120,8 @@ export function PlayingScreen() {
   } | null>(null);
   const isMobileRef = useRef(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [awaitingInput, setAwaitingInput] = useState(true);
+  // Inicializar como false para que cuando llegue el primer snapshot con true, se resetee el timeout flag
+  const [awaitingInput, setAwaitingInput] = useState(false);
 
   const isMyTurn = (isChallenger && activePlayer === "challenger") || (!isChallenger && activePlayer === "creator");
 
@@ -383,10 +384,15 @@ export function PlayingScreen() {
     return () => clearInterval(interval);
   }, [isMyTurn, currentMatchId, awaitingInput]);
 
-  // Reset timeout flag cuando cambia de turno
+  // Reset timeout flag cuando cambia de turno O cuando awaitingInput vuelve a true
+  const prevAwaitingInputRef = useRef(true);
   useEffect(() => {
-    timeoutSentRef.current = false;
-  }, [activePlayer]);
+    // Reset cuando cambia activePlayer o cuando awaitingInput pasa de false a true
+    if (!prevAwaitingInputRef.current && awaitingInput) {
+      timeoutSentRef.current = false;
+    }
+    prevAwaitingInputRef.current = awaitingInput;
+  }, [activePlayer, awaitingInput]);
 
   // Verificar victoria por goles
   useEffect(() => {
