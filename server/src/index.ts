@@ -706,6 +706,9 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
   });
 
   socket.on("createLobby", ({ matchId: lobbyMatchId, creator, creatorAlias, goals, isFree, stakeAmount }) => {
+    // Ensure this socket is in the lobby room so it can receive matchReady/lobbyJoined.
+    socket.join(lobbyMatchId);
+
     const lobby: Lobby = {
       id: Number(lobbyMatchId),
       creator,
@@ -729,6 +732,9 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
   });
 
   socket.on("joinLobby", ({ matchId: lobbyMatchId, challenger, challengerAlias }) => {
+    // Ensure this socket is in the lobby room so it can receive matchReady.
+    socket.join(lobbyMatchId);
+
     const lobby = lobbies.get(lobbyMatchId);
     if (lobby?.status !== "waiting") return;
     

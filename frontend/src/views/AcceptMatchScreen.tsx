@@ -38,7 +38,15 @@ export function AcceptMatchScreen() {
     // Suscribirse a actualizaciones en tiempo real
     socketService.connectLobbies();
     socketService.onLobbiesUpdate((lobbies) => {
-      setMatches(lobbies);
+      // El server de lobbies puede reiniciarse y devolver lista vacía.
+      // No pisar el listado on-chain en ese caso; solo mergear.
+      if (!Array.isArray(lobbies) || lobbies.length === 0) return;
+      setMatches((prev) => {
+        const byId = new Map<number, MatchLobby>();
+        for (const m of prev) byId.set(m.id, m);
+        for (const m of lobbies) byId.set(m.id, m);
+        return Array.from(byId.values());
+      });
     });
     socketService.onLobbyCreated((lobby) => {
       setMatches((prev) => {
@@ -65,7 +73,11 @@ export function AcceptMatchScreen() {
   const handleAccept = async (matchId: number) => {
     setLoading(true);
     const chosen = matches.find((item) => item.id === matchId);
-    if (!chosen) return;
+    if (!chosen) {
+      setLoading(false);
+      toast.error("Error", "No se encontró la partida seleccionada");
+      return;
+    }
     try {
       await acceptMatch(matchId, chosen);
       toast.success("¡Unido a la partida!", "Preparando el campo...");
