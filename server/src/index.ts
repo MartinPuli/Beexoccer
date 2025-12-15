@@ -408,6 +408,62 @@ function finishTurn(state: MatchState) {
   state.turnEndsAt = Date.now() + TURN_MS;
 }
 
+function applyTurnTimeout(io: RealtimeServer, state: MatchState, timedOutSide: PlayerSide) {
+  if (state.simRunning || !state.awaitingInput) {
+    return;
+  }
+  if (state.activePlayer !== timedOutSide) {
+    return;
+  }
+
+  state.consecutiveTimeouts[timedOutSide] += 1;
+  console.log(`[Timeout] ${timedOutSide} consecutive timeouts: ${state.consecutiveTimeouts[timedOutSide]}/${MAX_CONSECUTIVE_TIMEOUTS}`);
+
+  if (state.consecutiveTimeouts[timedOutSide] >= MAX_CONSECUTIVE_TIMEOUTS) {
+    const winner = timedOutSide === "creator" ? "challenger" : "creator";
+    console.log(`[Timeout] ${timedOutSide} loses by inactivity! Winner: ${winner}`);
+
+    io.to(state.id).emit("event", {
+      type: "timeout",
+      message: `${timedOutSide === "creator" ? "Creador" : "Retador"} pierde por inactividad`,
+      accent: "#ff4f64",
+      timestamp: Date.now(),
+      from: timedOutSide
+    });
+
+    // End match - winner gets max score
+    if (winner === "creator") {
+      state.creatorScore = 5;
+      state.challengerScore = 0;
+    } else {
+      state.challengerScore = 5;
+      state.creatorScore = 0;
+    }
+
+    // Mark match as ended to avoid repeated watchdog timeouts.
+    state.simRunning = false;
+    state.awaitingInput = false;
+    state.turnEndsAt = Number.MAX_SAFE_INTEGER;
+
+    console.log(`[Timeout] Emitting matchEnded to room ${state.id} with winner: ${winner}`);
+    io.to(state.id).emit("matchEnded", { winner, reason: "timeout" });
+    io.to(state.id).emit("snapshot", toSnapshot(state));
+    return;
+  }
+
+  // Just skip turn
+  io.to(state.id).emit("event", {
+    type: "timeout",
+    message: "Tiempo agotado",
+    accent: "#ffa500",
+    timestamp: Date.now(),
+    from: timedOutSide
+  });
+
+  finishTurn(state);
+  io.to(state.id).emit("snapshot", toSnapshot(state));
+}
+
 function simulateStep(io: RealtimeServer, state: MatchState, startedAt: number): boolean {
   for (const chip of state.chips) {
     applyStep(chip, false);
@@ -474,6 +530,17 @@ const io: RealtimeServer = new Server(httpServer, {
   cors: { origin: "*" }
 });
 
+// Server-side watchdog to enforce turn timeouts even if clients don't send turnTimeout.
+// This prevents desync issues and ensures the "3 consecutive timeouts per player" rule.
+setInterval(() => {
+  const now = Date.now();
+  for (const state of matches.values()) {
+    if (state.awaitingInput && !state.simRunning && now >= state.turnEndsAt) {
+      applyTurnTimeout(io, state, state.activePlayer);
+    }
+  }
+}, 250);
+
 io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>) => {
   const rawMatchId = socket.handshake.query.matchId;
   const rawSide = socket.handshake.query.side;
@@ -529,7 +596,7 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
   socket.on("turnTimeout", ({ matchId: incomingId }) => {
     const state = ensureMatch(incomingId || matchId);
     console.log(`[Timeout] Received from ${side}, activePlayer: ${state.activePlayer}, simRunning: ${state.simRunning}, awaitingInput: ${state.awaitingInput}`);
-    
+
     if (state.simRunning || !state.awaitingInput) {
       console.log(`[Timeout] Ignored - simRunning or not awaiting input`);
       return;
@@ -538,48 +605,8 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
       console.log(`[Timeout] Ignored - not active player`);
       return; // Only the active player can timeout
     }
-    
-    // Increment consecutive timeouts
-    state.consecutiveTimeouts[side]++;
-    console.log(`[Timeout] ${side} consecutive timeouts: ${state.consecutiveTimeouts[side]}/${MAX_CONSECUTIVE_TIMEOUTS}`);
-    
-    // Check for auto-lose (3 consecutive timeouts)
-    if (state.consecutiveTimeouts[side] >= MAX_CONSECUTIVE_TIMEOUTS) {
-      const winner = side === "creator" ? "challenger" : "creator";
-      console.log(`[Timeout] ${side} loses by inactivity! Winner: ${winner}`);
-      
-      io.to(state.id).emit("event", {
-        type: "timeout",
-        message: `${side === "creator" ? "Creador" : "Retador"} pierde por inactividad`,
-        accent: "#ff4f64",
-        timestamp: Date.now(),
-        from: side
-      });
-      
-      // End match - winner gets max score
-      if (winner === "creator") {
-        state.creatorScore = 5;
-        state.challengerScore = 0;
-      } else {
-        state.challengerScore = 5;
-        state.creatorScore = 0;
-      }
-      console.log(`[Timeout] Emitting matchEnded to room ${state.id} with winner: ${winner}`);
-      io.to(state.id).emit("matchEnded", { winner, reason: "timeout" });
-      io.to(state.id).emit("snapshot", toSnapshot(state));
-      return;
-    }
-    
-    // Just skip turn
-    io.to(state.id).emit("event", {
-      type: "timeout",
-      message: "Tiempo agotado",
-      accent: "#ffa500",
-      timestamp: Date.now(),
-      from: side
-    });
-    finishTurn(state);
-    io.to(state.id).emit("snapshot", toSnapshot(state));
+
+    applyTurnTimeout(io, state, side);
   });
 
   // Handle player forfeit (abandonment)
@@ -608,7 +635,7 @@ io.on("connection", (socket: Socket<ClientToServerEvents, ServerToClientEvents, 
     
     state.rematch[side] = true;
     
-    // Notificar al otro jugador con evento específico de rematch
+    // Notificar a la sala del match. El cliente ignora la solicitud si viene de su mismo lado.
     io.to(state.id).emit("rematchRequested", {
       fromSide: side,
       fromAlias: alias,

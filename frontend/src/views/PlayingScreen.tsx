@@ -302,6 +302,8 @@ export function PlayingScreen() {
 
     // Listen for rival rematch request
     socketService.onRematchRequested((data) => {
+      const myServerSide = isChallenger ? "challenger" : "creator";
+      if (data.fromSide === myServerSide) return;
       setRivalRequestedRematch(true);
       setRivalRematchAlias(data.fromAlias);
     });
