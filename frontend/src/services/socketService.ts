@@ -275,6 +275,16 @@ class SocketService {
     return this.reconnecting;
   }
 
+  /**
+   * Join a match room (used for rematch flow)
+   */
+  joinMatch(matchId: string) {
+    if (this.socket?.connected) {
+      this.currentMatchId = matchId;
+      this.socket.emit("joinMatch", matchId);
+    }
+  }
+
   connectLobbies() {
     if (this.socket?.connected) {
       this.socket.emit("subscribeLobbies");

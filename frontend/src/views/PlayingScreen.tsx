@@ -263,7 +263,14 @@ export function PlayingScreen() {
     });
 
     // Listen for rematch events
-    socketService.onRematchAccepted(() => {
+    socketService.onRematchAccepted((data) => {
+      // Si hay un nuevo matchId (revancha con blockchain), actualizar
+      if (data.matchId && data.matchId !== currentMatchId) {
+        setCurrentMatchId(data.matchId);
+        // Reconectar al nuevo match
+        socketService.joinMatch(data.matchId);
+      }
+      
       // Reiniciar estado de la partida
       setShowEnd(false);
       setWinner(null);
@@ -272,6 +279,11 @@ export function PlayingScreen() {
       setRivalRequestedRematch(false);
       setMatchStatus("playing");
       setCommentary("¡Revancha! Comienza el partido");
+      
+      // Pedir sync para obtener el estado inicial
+      setTimeout(() => {
+        socketService.requestSync();
+      }, 200);
     });
 
     socketService.onRematchDeclined(() => {
