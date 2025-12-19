@@ -962,6 +962,7 @@ export function PlayingScreen() {
             </h2>
             <p className="final-score">{myScore} - {rivalScore}</p>
             <div className="modal-buttons">
+              {/* Rematch button disabled temporarily
               <button 
                 className="modal-btn secondary" 
                 onClick={handleRequestRematch}
@@ -969,6 +970,7 @@ export function PlayingScreen() {
               >
                 {settling ? "💳 Cobrando..." : waitingRematchResponse ? "⏳ Esperando..." : "🔄 Revancha"}
               </button>
+              */}
               <button className="modal-btn primary" onClick={handleGoHome} disabled={settling}>
                 {settling ? "💳 Cobrando..." : "🏠 Inicio"}
               </button>

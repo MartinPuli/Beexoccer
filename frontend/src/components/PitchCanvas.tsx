@@ -287,6 +287,11 @@ function SoccerBall3DCanvas({ rotateX, rotateY, size = 40, lowPerf = false }: { 
   );
 }
 
+// Detect iOS Safari where foreignObject with Canvas has rendering bugs
+const isIOS = typeof navigator !== 'undefined' && 
+  /iPad|iPhone|iPod/.test(navigator.userAgent) && 
+  !(window as unknown as { MSStream?: unknown }).MSStream;
+
 export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTurn, children, aimLine, shotPower: shotPowerProp = 0, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onTouchStart, onTouchMove, onTouchEnd, lowPerf = false }: Readonly<PitchCanvasProps>) {
   // Sistema de rotación 3D realista para la pelota
   const lastBallPosRef = useRef({ x: ball.x, y: ball.y });
@@ -627,22 +632,48 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
           );
         })}
 
-        {/* Pelota 3D real usando Canvas con proyección 3D */}
+        {/* Pelota - SVG nativo para iOS, Canvas 3D para otros navegadores */}
         <g clipPath="url(#fieldClip)">
-          <foreignObject
-            x={clampedBall.x - 20}
-            y={clampedBall.y - 20}
-            width="40"
-            height="40"
-            style={{ overflow: 'visible' }}
-          >
+          {isIOS ? (
+            /* Pelota SVG nativa para iOS Safari - foreignObject tiene bugs */
+            <g transform={`translate(${clampedBall.x}, ${clampedBall.y})`}>
+              {/* Sombra */}
+              <ellipse cx="2" cy="22" rx="14" ry="4" fill="rgba(0,0,0,0.3)" />
+              {/* Pelota base con gradiente esférico */}
+              <defs>
+                <radialGradient id="ballGradient" cx="35%" cy="35%" r="60%">
+                  <stop offset="0%" stopColor="#ffffff" />
+                  <stop offset="50%" stopColor="#e8e8e8" />
+                  <stop offset="100%" stopColor="#a0a0a0" />
+                </radialGradient>
+              </defs>
+              <circle cx="0" cy="0" r="18" fill="url(#ballGradient)" stroke="rgba(0,0,0,0.15)" strokeWidth="1" />
+              {/* Patrón de pentágonos simplificado */}
+              <circle cx="0" cy="0" r="6" fill="#2a2a2a" />
+              <circle cx="-10" cy="-8" r="4" fill="#2a2a2a" opacity="0.8" />
+              <circle cx="10" cy="-8" r="4" fill="#2a2a2a" opacity="0.8" />
+              <circle cx="-10" cy="8" r="4" fill="#2a2a2a" opacity="0.7" />
+              <circle cx="10" cy="8" r="4" fill="#2a2a2a" opacity="0.7" />
+              {/* Brillo */}
+              <ellipse cx="-5" cy="-6" rx="4" ry="2" fill="rgba(255,255,255,0.7)" />
+            </g>
+          ) : (
+            /* Canvas 3D para navegadores que soportan foreignObject */
+            <foreignObject
+              x={clampedBall.x - 20}
+              y={clampedBall.y - 20}
+              width="40"
+              height="40"
+              style={{ overflow: 'visible' }}
+            >
               <SoccerBall3DCanvas 
                 rotateX={ballRotation.rotateX} 
                 rotateY={ballRotation.rotateY}
                 size={40}
                 lowPerf={lowPerf}
               />
-          </foreignObject>
+            </foreignObject>
+          )}
         </g>
       </svg>
       {children}

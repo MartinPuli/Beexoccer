@@ -331,7 +331,8 @@ export async function joinMatch(matchId: number): Promise<void> {
 export async function reportResult(matchId: number, winner: string) {
   try {
     const contract = await getContract();
-    const tx = await contract.reportResult(matchId, winner);
+    // Pass empty signature - trustedSigner is address(0) so signature check is skipped
+    const tx = await contract.reportResult(matchId, winner, "0x");
     return tx.wait();
   } catch (error) {
     handleRpcError(error);

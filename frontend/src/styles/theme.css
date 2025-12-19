@@ -31,6 +31,10 @@ html, body {
   overflow: hidden;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
+  /* Prevent pull-to-refresh and elastic scrolling on iOS */
+  position: fixed;
+  width: 100%;
+  touch-action: pan-x pan-y;
 }
 
 body {
@@ -52,6 +56,10 @@ body {
   width: 100%;
   top: 0;
   left: 0;
+  /* Prevent text selection on iOS */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 #root {
@@ -805,12 +813,17 @@ body {
   padding-bottom: max(4px, env(safe-area-inset-bottom));
   padding-left: max(4px, env(safe-area-inset-left));
   padding-right: max(4px, env(safe-area-inset-right));
-  /* Prevent zoom on touch drag */
-  touch-action: manipulation;
+  /* CRITICAL: Prevent ALL touch gestures - no zoom, no scroll */
+  touch-action: none;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
   box-sizing: border-box;
+  /* Prevent elastic scrolling on iOS */
+  overscroll-behavior: none;
+  position: fixed;
+  inset: 0;
+  width: 100%;
 }
 
 /* Desktop layout for playing screen */
@@ -922,7 +935,7 @@ body {
   background: linear-gradient(180deg, var(--dark-panel) 0%, #030505 100%);
   border: 3px solid var(--border-green);
   border-radius: 12px;
-  overflow: visible; /* Allow ball to be visible at edges */
+  overflow: hidden; /* Clip content to prevent overflow */
   position: relative;
   min-height: 0; /* Allow flex to shrink */
   width: 100%;
@@ -932,10 +945,15 @@ body {
   box-shadow: 
     0 20px 60px rgba(0, 0, 0, 0.5),
     inset 0 0 80px rgba(0, 0, 0, 0.3);
-  /* Prevent zoom on touch */
+  /* CRITICAL: Prevent ALL browser touch gestures */
   touch-action: none;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
+  user-select: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+  /* Prevent shrinking on drag */
+  flex-shrink: 0;
 }
 
 /* Make pitch bigger on mobile */
@@ -946,15 +964,29 @@ body {
     border-width: 1px;
     flex: 1;
     min-height: 0;
+    /* Fixed height based on viewport to prevent resizing */
+    height: calc(100vh - 140px);
+    height: calc(100dvh - 140px);
+    max-height: none;
+    flex-shrink: 0;
+    /* Prevent any browser interaction during gameplay */
+    touch-action: none;
+    overscroll-behavior: none;
   }
 }
 
 /* iOS specific fixes */
 @supports (-webkit-touch-callout: none) {
   .playing-pitch {
-    /* iOS needs explicit height calculation - reduced offset for bigger pitch */
-    max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 120px);
-    max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 120px);
+    /* iOS needs explicit height calculation - use fixed height */
+    height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 100px);
+    height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 100px);
+    max-height: none;
+    flex-shrink: 0;
+    /* iOS specific touch fixes */
+    touch-action: none;
+    -webkit-touch-callout: none;
+    overscroll-behavior: none;
   }
 }
 
@@ -966,6 +998,8 @@ body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  /* Prevent text selection and callouts on touch */
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* ===== ANIMACIONES ===== */
