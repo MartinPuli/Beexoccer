@@ -15,3 +15,4 @@ export const env = {
   // URL del servidor de tiempo real (usar localhost para desarrollo, producción para deploy)
   realtimeUrl: "https://beexoccer-production.up.railway.app",
 };
+ 
