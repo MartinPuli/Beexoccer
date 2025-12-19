@@ -17,13 +17,29 @@ async function main() {
   }
 
   console.log(`Deploying with ${deployer.address}`);
+  
+  // Check balance
+  const balance = await deployer.provider.getBalance(deployer.address);
+  console.log(`Balance: ${ethers.formatEther(balance)} POL`);
+  
+  if (balance < ethers.parseEther("0.01")) {
+    throw new Error("Insufficient balance. Need at least 0.01 POL for deployment.");
+  }
 
   console.log("Getting MatchManager factory...");
   const factory = await ethers.getContractFactory("MatchManager");
+  
   console.log("Factory obtained. Deploying contract (this may take a while)...");
-  const contract = await factory.deploy();
-  console.log("Deployment transaction sent. Waiting for deployment to be mined...");
-  // waitForDeployment will wait until the contract is mined and available
+  
+  // Deploy with explicit gas settings
+  const contract = await factory.deploy({
+    gasLimit: 3000000, // 3M gas limit
+  });
+  
+  console.log("Deployment transaction sent:", contract.deploymentTransaction()?.hash);
+  console.log("Waiting for 2 confirmations...");
+  
+  // Wait for deployment with timeout handling
   await contract.waitForDeployment();
   console.log("Contract deployment mined.");
 

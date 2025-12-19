@@ -24,11 +24,14 @@ const config: HardhatUserConfig = {
       chainId: 31337,
     },
     polygon: {
-      // Prefer env var, but default to a public RPC to avoid Alchemy blocks/timeouts.
-      url: POLYGON_RPC || "https://polygon-rpc.com",
+      // Use Ankr public RPC (more reliable than polygon-rpc.com)
+      url: POLYGON_RPC || "https://rpc.ankr.com/polygon",
       accounts: sharedAccounts,
       chainId: 137,
-      timeout: 60_000,
+      timeout: 120_000, // 2 minutes timeout
+      gas: "auto",
+      gasPrice: "auto",
+      gasMultiplier: 1.2, // 20% extra gas to ensure transaction goes through
     },
     polygonAmoy: {
       url: POLYGON_AMOY_RPC || "https://polygon-amoy.drpc.org",
