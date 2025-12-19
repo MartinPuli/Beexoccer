@@ -280,6 +280,20 @@ export async function cancelMatch(matchId: number): Promise<void> {
 export async function acceptMatch(matchId: number, match: MatchLobby) {
   try {
     const contract = await getContract();
+    
+    // Verificar estado actual del match en el blockchain antes de intentar unirse
+    const matchData = await contract.matches(matchId);
+    
+    // Verificar que la partida aún esté abierta
+    if (!matchData.isOpen) {
+      throw new Error("La partida ya fue tomada o cancelada");
+    }
+    
+    // Verificar que no tenga challenger
+    if (matchData.challenger !== "0x0000000000000000000000000000000000000000") {
+      throw new Error("La partida ya tiene un rival");
+    }
+    
     const stakeWei = match.isFree ? 0n : parseEther(match.stakeAmount || "0");
     const tx = await contract.joinMatch(matchId, {
       value: match.stakeToken === "0x0000000000000000000000000000000000000000" ? stakeWei : 0n
