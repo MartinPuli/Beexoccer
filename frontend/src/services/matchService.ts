@@ -313,9 +313,22 @@ export async function acceptMatch(matchId: number, match: MatchLobby) {
     
     console.log(`[acceptMatch] Match ${matchId} validaciones OK, enviando transacción...`);
     
-    const stakeWei = match.isFree ? 0n : parseEther(match.stakeAmount || "0");
+    // Usar los datos del blockchain en lugar del lobby del socket (más confiable)
+    const isFree = matchData.isFree;
+    const stakeAmount = matchData.stakeAmount;
+    const stakeToken = matchData.stakeToken;
+    const isNativeToken = stakeToken === "0x0000000000000000000000000000000000000000";
+    
+    console.log(`[acceptMatch] Match ${matchId} stake info:`, {
+      isFree,
+      stakeAmount: stakeAmount.toString(),
+      stakeToken,
+      isNativeToken,
+      valueToSend: (!isFree && isNativeToken) ? stakeAmount.toString() : "0"
+    });
+    
     const tx = await contract.joinMatch(matchId, {
-      value: match.stakeToken === "0x0000000000000000000000000000000000000000" ? stakeWei : 0n
+      value: (!isFree && isNativeToken) ? stakeAmount : 0n
     });
     
     console.log(`[acceptMatch] Match ${matchId} transacción enviada, esperando confirmación...`);
