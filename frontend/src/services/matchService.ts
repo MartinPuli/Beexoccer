@@ -284,14 +284,19 @@ export async function acceptMatch(matchId: number, match: MatchLobby) {
     // Verificar estado actual del match en el blockchain antes de intentar unirse
     const matchData = await contract.matches(matchId);
     
-    // Verificar que la partida aún esté abierta
-    if (!matchData.isOpen) {
-      throw new Error("La partida ya fue tomada o cancelada");
+    // Verificar que no esté completada
+    if (matchData.isCompleted) {
+      throw new Error("La partida ya fue completada o cancelada");
     }
     
     // Verificar que no tenga challenger
     if (matchData.challenger !== "0x0000000000000000000000000000000000000000") {
       throw new Error("La partida ya tiene un rival");
+    }
+    
+    // Verificar que la partida aún esté abierta
+    if (!matchData.isOpen) {
+      throw new Error("La partida ya no está disponible");
     }
     
     const stakeWei = match.isFree ? 0n : parseEther(match.stakeAmount || "0");
@@ -307,6 +312,11 @@ export async function acceptMatch(matchId: number, match: MatchLobby) {
     
     return result;
   } catch (error) {
+    const errorStr = String(error);
+    if (errorStr.includes("MatchClosed")) throw new Error("La partida ya no está abierta.");
+    if (errorStr.includes("ChallengerAlreadySet")) throw new Error("Ya hay un rival en esta partida.");
+    if (errorStr.includes("SelfJoinNotAllowed")) throw new Error("No puedes unirte a tu propia partida.");
+    if (errorStr.includes("MatchAlreadyCompleted")) throw new Error("La partida ya fue completada.");
     handleRpcError(error);
   }
 }

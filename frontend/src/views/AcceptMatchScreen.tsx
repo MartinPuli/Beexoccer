@@ -38,15 +38,12 @@ export function AcceptMatchScreen() {
     // Suscribirse a actualizaciones en tiempo real
     socketService.connectLobbies();
     socketService.onLobbiesUpdate((lobbies) => {
-      // El server de lobbies puede reiniciarse y devolver lista vacía.
-      // No pisar el listado on-chain en ese caso; solo mergear.
-      if (!Array.isArray(lobbies) || lobbies.length === 0) return;
-      setMatches((prev) => {
-        const byId = new Map<number, MatchLobby>();
-        for (const m of prev) byId.set(m.id, m);
-        for (const m of lobbies) byId.set(m.id, m);
-        return Array.from(byId.values());
-      });
+      // Actualizar con la lista del servidor
+      // El servidor envía solo lobbies con status "waiting"
+      // Por lo tanto, reemplazamos completamente la lista local
+      if (!Array.isArray(lobbies)) return;
+      
+      setMatches(lobbies);
     });
     socketService.onLobbyCreated((lobby) => {
       setMatches((prev) => {
@@ -54,6 +51,10 @@ export function AcceptMatchScreen() {
         return [...prev, lobby];
       });
       toast.info("Nueva partida", `Match #${lobby.id} disponible`);
+    });
+    // Escuchar cuando alguien se une a una partida para quitarla de la lista
+    socketService.onLobbyJoined((data) => {
+      setMatches((prev) => prev.filter((m) => m.id !== Number(data.matchId)));
     });
 
     return () => {
