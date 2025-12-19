@@ -62,6 +62,12 @@ export function AcceptMatchScreen() {
       console.log(`[AcceptMatchScreen] lobbyJoined recibido:`, data);
       setMatches((prev) => prev.filter((m) => m.id !== Number(data.matchId)));
     });
+    
+    // Escuchar cuando alguien cancela una partida para quitarla de la lista
+    socketService.onLobbyCancelled((matchId) => {
+      console.log(`[AcceptMatchScreen] lobbyCancelled recibido: matchId=${matchId}`);
+      setMatches((prev) => prev.filter((m) => m.id !== Number(matchId)));
+    });
 
     return () => {
       socketService.offLobbies();
@@ -95,6 +101,7 @@ export function AcceptMatchScreen() {
       setView("playing");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`[AcceptMatchScreen] Error al unirse a match ${matchId}:`, errorMessage);
       
       if (errorMessage.includes("insufficient funds") || errorMessage.includes("Internal JSON-RPC")) {
         toast.error(
@@ -105,10 +112,19 @@ export function AcceptMatchScreen() {
             onClick: () => window.open("https://faucet.polygon.technology/", "_blank")
           }
         );
-      } else if (errorMessage.includes("user rejected")) {
+      } else if (errorMessage.includes("user rejected") || errorMessage.includes("cancelada por el usuario")) {
         toast.warning("Cancelado", "Rechazaste la transacción");
       } else {
-        toast.error("No pudimos unirnos", "La partida ya fue tomada o cancelada");
+        // Mostrar el mensaje de error real en lugar de un mensaje genérico
+        toast.error("No pudimos unirnos", errorMessage);
+      }
+      
+      // Recargar la lista desde blockchain para asegurar datos frescos
+      try {
+        const fresh = await fetchOpenMatches();
+        setMatches(fresh);
+      } catch {
+        // Ignorar error de recarga
       }
     } finally {
       setLoading(false);
