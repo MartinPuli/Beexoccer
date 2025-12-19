@@ -20,11 +20,12 @@ export function AcceptMatchScreen() {
   const userAddress = walletService.getAddress()?.toLowerCase() ?? "";
 
   useEffect(() => {
-    // Carga inicial
+    // Carga inicial desde blockchain (fuente de verdad)
     void (async () => {
       setLoading(true);
       try {
         const initial = await fetchOpenMatches();
+        console.log(`[AcceptMatchScreen] Carga inicial blockchain: ${initial.length} matches`, initial);
         setMatches(initial);
         if (initial.length > 0) {
           toast.info("Lobby actualizado", `${initial.length} partida(s) disponible(s)`);
@@ -35,25 +36,30 @@ export function AcceptMatchScreen() {
       setLoading(false);
     })();
 
-    // Suscribirse a actualizaciones en tiempo real
+    // Suscribirse a actualizaciones en tiempo real del servidor de sockets
+    // NOTA: El socket solo sirve para notificaciones en tiempo real, 
+    // pero el blockchain es la fuente de verdad
     socketService.connectLobbies();
+    
+    // Ignoramos lobbiesUpdate del servidor - puede tener datos desactualizados
+    // Solo usamos el socket para notificaciones de nuevos lobbies
     socketService.onLobbiesUpdate((lobbies) => {
-      // Actualizar con la lista del servidor
-      // El servidor envía solo lobbies con status "waiting"
-      // Por lo tanto, reemplazamos completamente la lista local
-      if (!Array.isArray(lobbies)) return;
-      
-      setMatches(lobbies);
+      console.log(`[AcceptMatchScreen] lobbiesUpdate recibido (ignorado): ${lobbies.length} lobbies`);
+      // NO actualizamos el estado con esto - podría tener datos viejos
     });
+    
     socketService.onLobbyCreated((lobby) => {
+      console.log(`[AcceptMatchScreen] lobbyCreated recibido:`, lobby);
       setMatches((prev) => {
         if (prev.some((m) => m.id === lobby.id)) return prev;
         return [...prev, lobby];
       });
       toast.info("Nueva partida", `Match #${lobby.id} disponible`);
     });
+    
     // Escuchar cuando alguien se une a una partida para quitarla de la lista
     socketService.onLobbyJoined((data) => {
+      console.log(`[AcceptMatchScreen] lobbyJoined recibido:`, data);
       setMatches((prev) => prev.filter((m) => m.id !== Number(data.matchId)));
     });
 

@@ -284,26 +284,43 @@ export async function acceptMatch(matchId: number, match: MatchLobby) {
     // Verificar estado actual del match en el blockchain antes de intentar unirse
     const matchData = await contract.matches(matchId);
     
+    console.log(`[acceptMatch] Match ${matchId} estado:`, {
+      creator: matchData.creator,
+      challenger: matchData.challenger,
+      isOpen: matchData.isOpen,
+      isCompleted: matchData.isCompleted,
+      isFree: matchData.isFree,
+      stakeAmount: matchData.stakeAmount.toString()
+    });
+    
     // Verificar que no esté completada
     if (matchData.isCompleted) {
+      console.error(`[acceptMatch] Match ${matchId} ya está completada`);
       throw new Error("La partida ya fue completada o cancelada");
     }
     
     // Verificar que no tenga challenger
     if (matchData.challenger !== "0x0000000000000000000000000000000000000000") {
+      console.error(`[acceptMatch] Match ${matchId} ya tiene challenger: ${matchData.challenger}`);
       throw new Error("La partida ya tiene un rival");
     }
     
     // Verificar que la partida aún esté abierta
     if (!matchData.isOpen) {
+      console.error(`[acceptMatch] Match ${matchId} no está abierta`);
       throw new Error("La partida ya no está disponible");
     }
+    
+    console.log(`[acceptMatch] Match ${matchId} validaciones OK, enviando transacción...`);
     
     const stakeWei = match.isFree ? 0n : parseEther(match.stakeAmount || "0");
     const tx = await contract.joinMatch(matchId, {
       value: match.stakeToken === "0x0000000000000000000000000000000000000000" ? stakeWei : 0n
     });
+    
+    console.log(`[acceptMatch] Match ${matchId} transacción enviada, esperando confirmación...`);
     const result = await tx.wait();
+    console.log(`[acceptMatch] Match ${matchId} unido exitosamente`);
     
     // Notify via socket that we joined this lobby
     const userAddress = walletService.getUserAddress() || "";
@@ -312,6 +329,7 @@ export async function acceptMatch(matchId: number, match: MatchLobby) {
     
     return result;
   } catch (error) {
+    console.error(`[acceptMatch] Error uniendo a match:`, error);
     const errorStr = String(error);
     if (errorStr.includes("MatchClosed")) throw new Error("La partida ya no está abierta.");
     if (errorStr.includes("ChallengerAlreadySet")) throw new Error("Ya hay un rival en esta partida.");
