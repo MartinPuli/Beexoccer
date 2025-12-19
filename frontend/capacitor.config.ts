@@ -13,10 +13,13 @@ const config: CapacitorConfig = {
     allowMixedContent: true // Permite HTTP y HTTPS
   },
   ios: {
-    contentInset: 'always',
+    contentInset: 'never',
     allowsLinkPreview: false,
     scrollEnabled: false,
-    limitsNavigationsToAppBoundDomains: false
+    limitsNavigationsToAppBoundDomains: false,
+    // Configuraciones adicionales para prevenir scroll/bounce en iOS
+    overrideUserAgent: undefined,
+    backgroundColor: '#0a1a10'
   },
   plugins: {
     StatusBar: {

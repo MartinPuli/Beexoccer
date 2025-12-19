@@ -18,9 +18,14 @@ async function main() {
 
   console.log(`Deploying with ${deployer.address}`);
 
+  console.log("Getting MatchManager factory...");
   const factory = await ethers.getContractFactory("MatchManager");
+  console.log("Factory obtained. Deploying contract (this may take a while)...");
   const contract = await factory.deploy();
+  console.log("Deployment transaction sent. Waiting for deployment to be mined...");
+  // waitForDeployment will wait until the contract is mined and available
   await contract.waitForDeployment();
+  console.log("Contract deployment mined.");
 
   const address = await contract.getAddress();
   console.log(`MatchManager deployed to ${address}`);

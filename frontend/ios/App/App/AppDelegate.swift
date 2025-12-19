@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import WebKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -8,7 +9,36 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
+        
+        // Disable bounce and scroll in WKWebView after a short delay to ensure webView is initialized
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.disableWebViewBounce()
+        }
+        
         return true
+    }
+    
+    func disableWebViewBounce() {
+        // Find the WKWebView in the view hierarchy and disable bounce/scroll
+        if let window = self.window,
+           let rootViewController = window.rootViewController {
+            self.findAndConfigureWebView(in: rootViewController.view)
+        }
+    }
+    
+    func findAndConfigureWebView(in view: UIView) {
+        for subview in view.subviews {
+            if let webView = subview as? WKWebView {
+                webView.scrollView.bounces = false
+                webView.scrollView.isScrollEnabled = false
+                webView.scrollView.alwaysBounceVertical = false
+                webView.scrollView.alwaysBounceHorizontal = false
+                print("✅ WebView bounce and scroll disabled")
+                return
+            }
+            // Recursively search in subviews
+            self.findAndConfigureWebView(in: subview)
+        }
     }
 
     func applicationWillResignActive(_ application: UIApplication) {

@@ -1270,6 +1270,26 @@ export function BotMatchScreen() {
   const [turnTimeLeft, setTurnTimeLeft] = useState(TURN_TIME);
   const turnTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Prevenir scroll/zoom en iOS durante el gameplay
+  useEffect(() => {
+    const preventDefault = (e: TouchEvent) => {
+      // Solo prevenir si el touch es en el área de juego
+      const target = e.target as HTMLElement;
+      if (target.closest('.playing-pitch') || target.closest('.pitch-svg')) {
+        e.preventDefault();
+      }
+    };
+
+    // Agregar listeners pasivos en falso para poder hacer preventDefault
+    document.addEventListener('touchmove', preventDefault, { passive: false });
+    document.addEventListener('touchstart', preventDefault, { passive: false });
+
+    return () => {
+      document.removeEventListener('touchmove', preventDefault);
+      document.removeEventListener('touchstart', preventDefault);
+    };
+  }, []);
+
   // Efecto para el temporizador
   useEffect(() => {
     // Limpiar temporizador anterior si existe
