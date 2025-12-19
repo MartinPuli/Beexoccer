@@ -101,6 +101,7 @@ interface ClientToServerEvents {
     impulse: { dx: number; dy: number };
   }) => void;
   sync: () => void;
+  joinMatch: (matchId: string) => void;
   requestRematch: (payload: { matchId: string; alias: string }) => void;
   acceptRematch: (payload: { matchId: string }) => void;
   declineRematch: (payload: { matchId: string }) => void;
@@ -788,7 +789,7 @@ io.on(
     const rawMatchId = socket.handshake.query.matchId;
     const rawSide = socket.handshake.query.side;
     const rawGoals = socket.handshake.query.goals;
-    const matchId =
+    let matchId =
       typeof rawMatchId === "string" && rawMatchId.length > 0
         ? rawMatchId
         : "demo-match";
@@ -925,6 +926,34 @@ io.on(
       socket.emit("snapshot", toSnapshot(state));
     });
 
+    // Handler para unirse a un match (usado en revancha)
+    socket.on("joinMatch", (newMatchId: string) => {
+      if (!newMatchId) return;
+      
+      // Unirse al nuevo room
+      socket.join(newMatchId);
+      socket.data.matchId = newMatchId;
+      
+      // Actualizar el matchId local del handler
+      matchId = newMatchId;
+      
+      const state = matches.get(newMatchId);
+      if (state) {
+        // Marcar como conectado según el lado
+        if (side === "creator") {
+          state.connected.creator = true;
+        } else {
+          state.connected.challenger = true;
+        }
+        
+        // Si ambos están conectados, enviar snapshot
+        if (bothPlayersConnected(state)) {
+          resumeTurnIfReady(state);
+          socket.emit("snapshot", toSnapshot(state));
+        }
+      }
+    });
+
     // Nuevo sistema de revancha con popup
     socket.on("requestRematch", ({ matchId: reqMatchId, alias }) => {
       const targetMatchId = reqMatchId || matchId;
@@ -1019,12 +1048,6 @@ io.on(
       const oldState = matches.get(oldMatchId);
       if (!oldState) return;
 
-      // Notificar al rival que debe unirse al nuevo match
-      io.to(oldMatchId).emit("rematchBlockchainReady", { 
-        newMatchId, 
-        oldMatchId 
-      });
-
       // Crear nuevo estado del match con la configuración del anterior
       const newState = ensureMatch(newMatchId);
       newState.goalTarget = oldState.goalTarget;
@@ -1032,18 +1055,49 @@ io.on(
         ...oldState.matchConfig!,
         creatorAddress,
       };
+
+      // El creator se une al nuevo room
+      socket.join(newMatchId);
+      socket.data.matchId = newMatchId;
+      socket.data.side = "creator";
+      newState.connected.creator = true;
+
+      // Notificar al rival que debe unirse al nuevo match
+      io.to(oldMatchId).emit("rematchBlockchainReady", { 
+        newMatchId, 
+        oldMatchId 
+      });
     });
 
     // Handler: Challenger se unió al nuevo match en blockchain
     socket.on("rematchBlockchainJoined", ({ oldMatchId, newMatchId }) => {
       const oldState = matches.get(oldMatchId);
-      if (!oldState) return;
+      const newState = matches.get(newMatchId);
+      if (!oldState || !newState) return;
+
+      // El challenger se une al nuevo room
+      socket.join(newMatchId);
+      socket.data.matchId = newMatchId;
+      socket.data.side = "challenger";
+      newState.connected.challenger = true;
 
       // Limpiar el match anterior
       matches.delete(oldMatchId);
 
-      // Notificar a ambos que el nuevo match está listo
+      // Notificar a ambos que el nuevo match está listo (en AMBOS rooms para asegurar)
       io.to(oldMatchId).emit("rematchAccepted", { matchId: newMatchId });
+      io.to(newMatchId).emit("rematchAccepted", { matchId: newMatchId });
+
+      // Iniciar la partida
+      newState.activePlayer = "creator";
+      newState.ended = false;
+      pauseTurn(newState);
+      resumeTurnIfReady(newState);
+
+      // Enviar snapshot inicial al nuevo room
+      setTimeout(() => {
+        io.to(newMatchId).emit("snapshot", toSnapshot(newState));
+      }, 100);
     });
 
     // Lobby system handlers

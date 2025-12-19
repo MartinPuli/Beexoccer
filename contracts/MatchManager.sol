@@ -159,6 +159,7 @@ contract MatchManager is ReentrancyGuard {
      * @notice Records the result and releases escrow. Only the winner can call this method.
      * @param matchId Lobby to settle.
      * @param winner Address of the winning wallet (must be creator or challenger).
+     * @param signature ECDSA signature from trustedSigner (optional if trustedSigner is address(0))
      */
     function reportResult(
         uint256 matchId,
@@ -171,11 +172,14 @@ contract MatchManager is ReentrancyGuard {
         if (winner != matchInfo.creator && winner != matchInfo.challenger) revert NotParticipant();
         if (msg.sender != winner) revert NotWinner();
 
-        // Validate signature (off-chain server signs matchId, winner)
-        bytes32 messageHash = keccak256(abi.encodePacked(matchId, winner));
-        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
-        address recovered = ECDSA.recover(ethSignedMessageHash, signature);
-        if (recovered != trustedSigner) revert InvalidSignature();
+        // Validate signature only if trustedSigner is set
+        // If trustedSigner is address(0), signature verification is skipped (trust the winner)
+        if (trustedSigner != address(0)) {
+            bytes32 messageHash = keccak256(abi.encodePacked(matchId, winner));
+            bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
+            address recovered = ECDSA.recover(ethSignedMessageHash, signature);
+            if (recovered != trustedSigner) revert InvalidSignature();
+        }
 
         matchInfo.winner = winner;
         matchInfo.isCompleted = true;
