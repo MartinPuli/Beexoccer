@@ -101,6 +101,7 @@ export function PlayingScreen() {
   const [waitingRematchResponse, setWaitingRematchResponse] = useState(false);
   const [rivalRequestedRematch, setRivalRequestedRematch] = useState(false);
   const [rivalRematchAlias, setRivalRematchAlias] = useState("");
+  const [settling, setSettling] = useState(false);
 
   const dragRef = useRef<{ chipId: string; start: { x: number; y: number } } | null>(null);
   const turnEndRef = useRef<number>(Date.now() + TURN_TIME);
@@ -125,32 +126,12 @@ export function PlayingScreen() {
 
   const isMyTurn = (isChallenger && activePlayer === "challenger") || (!isChallenger && activePlayer === "creator");
 
-  // Reportar resultado al contrato cuando la partida termina
-  useEffect(() => {
-    if (!showEnd || !winner || !currentMatchId || resultReportedRef.current) return;
-    
-    // Solo el ganador reporta el resultado para evitar doble llamada
-    if (winner === "you") {
-      resultReportedRef.current = true;
-      const matchIdNum = Number.parseInt(currentMatchId, 10);
-      const userAddress = useGameStore.getState().userAddress;
-      
-      if (matchIdNum && userAddress) {
-        console.log("[PlayingScreen] Reporting result to contract:", { matchId: matchIdNum, winner: userAddress });
-        reportResult(matchIdNum, userAddress).catch((err) => {
-          console.error("[PlayingScreen] Error reporting result:", err);
-          // El error puede ser porque la partida es gratis o ya se reportó
-        });
-      }
-    }
-  }, [showEnd, winner, currentMatchId]);
-
   // Conectar al servidor de tiempo real
   useEffect(() => {
     if (!currentMatchId) return;
 
     // Primero registrar los listeners, luego conectar
-    socketService.connect(currentMatchId, playerSide);
+    socketService.connect(currentMatchId, playerSide, goalTarget);
 
     socketService.onSnapshot((snapshot: PlayingSnapshot) => {
       setConnected(true);
@@ -306,6 +287,64 @@ export function PlayingScreen() {
       if (data.fromSide === myServerSide) return;
       setRivalRequestedRematch(true);
       setRivalRematchAlias(data.fromAlias);
+    });
+
+    // Listen for blockchain rematch flow
+    socketService.onRematchBlockchainRequired(async (data) => {
+      const myServerSide = isChallenger ? "challenger" : "creator";
+      
+      // Solo el lado indicado como initiator crea el match
+      if (data.initiatorSide === myServerSide) {
+        try {
+          setCommentary("Creando nueva partida en blockchain...");
+          // Import dinámico para evitar dependencia circular
+          const { createMatch } = await import("../services/matchService");
+          const { walletService } = await import("../services/walletService");
+          
+          const result = await createMatch({
+            goals: data.matchConfig.goals as 2 | 3 | 5,
+            isFree: data.matchConfig.isFree,
+            stakeAmount: data.matchConfig.stakeAmount,
+            stakeToken: data.matchConfig.stakeToken,
+          });
+          
+          const address = await walletService.getAddress();
+          socketService.notifyRematchBlockchainCreated(
+            data.oldMatchId,
+            String(result.matchId),
+            address || ""
+          );
+        } catch (error) {
+          console.error("Error creating rematch on blockchain:", error);
+          setCommentary("Error al crear la revancha");
+        }
+      }
+    });
+
+    // Listen for blockchain rematch ready (challenger needs to join)
+    socketService.onRematchBlockchainReady(async (data) => {
+      const myServerSide = isChallenger ? "challenger" : "creator";
+      
+      // El challenger se une al nuevo match
+      if (myServerSide === "challenger") {
+        try {
+          setCommentary("Uniéndose a la nueva partida...");
+          const { joinMatch } = await import("../services/matchService");
+          
+          await joinMatch(Number(data.newMatchId));
+          
+          socketService.notifyRematchBlockchainJoined(data.oldMatchId, data.newMatchId);
+          
+          // Actualizar matchId en el store
+          setCurrentMatchId(data.newMatchId);
+        } catch (error) {
+          console.error("Error joining rematch on blockchain:", error);
+          setCommentary("Error al unirse a la revancha");
+        }
+      } else {
+        // El creator también actualiza su matchId
+        setCurrentMatchId(data.newMatchId);
+      }
     });
 
     // Request sync after listeners are registered to ensure we get the current state
@@ -541,6 +580,139 @@ export function PlayingScreen() {
     dragRef.current = null;
   }, [currentMatchId, isChallenger, isMyTurn, getSvgPoint, chips]);
 
+  const handlePointerCancel = useCallback(() => {
+    setAim(undefined);
+    setShotPower(0);
+    setSelectedChipId(null);
+    dragRef.current = null;
+  }, []);
+
+  // ===== iOS TOUCH EVENT HANDLERS =====
+  // iOS Safari tiene problemas con pointer events en SVG, usamos touch events como fallback
+  const getSvgPointFromTouch = useCallback((touch: React.Touch, svg: SVGSVGElement) => {
+    const pt = svg.createSVGPoint();
+    pt.x = touch.clientX;
+    pt.y = touch.clientY;
+    const ctm = svg.getScreenCTM()?.inverse();
+    if (!ctm) return { x: 0, y: 0 };
+    const p = pt.matrixTransform(ctm);
+    return { x: p.x, y: p.y };
+  }, []);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    if (!isMyTurn || showEnd || e.touches.length !== 1) return;
+    
+    e.preventDefault();
+    const touch = e.touches[0];
+    const { x, y } = getSvgPointFromTouch(touch, e.currentTarget);
+    
+    const myChips = chips.filter((c) => c.fill === "#00a8ff");
+    const hit = myChips.find((c) => Math.hypot(c.x - x, c.y - y) < c.radius + 15);
+    
+    if (hit) {
+      dragRef.current = { chipId: hit.id, start: { x: hit.x, y: hit.y } };
+      setSelectedChipId(hit.id);
+      setAim({ from: { x: hit.x, y: hit.y }, to: { x, y } });
+      setShotPower(0);
+      (globalThis as Record<string, unknown>).shotPower = 0;
+    }
+  }, [chips, isMyTurn, showEnd, getSvgPointFromTouch]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    if (!dragRef.current || e.touches.length !== 1) return;
+    
+    e.preventDefault();
+    const touch = e.touches[0];
+    const { x, y } = getSvgPointFromTouch(touch, e.currentTarget);
+    const chip = chips.find((c) => c.id === dragRef.current?.chipId);
+    if (!chip) return;
+
+    const dragDx = x - chip.x;
+    const dragDy = y - chip.y;
+    const dist = Math.min(Math.hypot(dragDx, dragDy), MAX_DRAG_DISTANCE);
+    
+    const rawPower = dist / (MAX_DRAG_DISTANCE * POWER_CURVE_FACTOR);
+    const powerScale = Math.min(1, rawPower * rawPower);
+    setShotPower(powerScale);
+    (globalThis as Record<string, unknown>).shotPower = powerScale;
+
+    let aimX = x;
+    let aimY = y;
+    if (dist >= MAX_DRAG_DISTANCE) {
+      const angle = Math.atan2(dragDy, dragDx);
+      aimX = chip.x + Math.cos(angle) * MAX_DRAG_DISTANCE;
+      aimY = chip.y + Math.sin(angle) * MAX_DRAG_DISTANCE;
+    }
+    
+    setAim({
+      from: { x: chip.x, y: chip.y },
+      to: { x: aimX, y: aimY }
+    });
+  }, [chips, getSvgPointFromTouch]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    if (!dragRef.current || !currentMatchId || !isMyTurn) {
+      setAim(undefined);
+      setShotPower(0);
+      setSelectedChipId(null);
+      dragRef.current = null;
+      return;
+    }
+
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    if (!touch) {
+      setAim(undefined);
+      setShotPower(0);
+      setSelectedChipId(null);
+      dragRef.current = null;
+      return;
+    }
+
+    const chip = chips.find((c) => c.id === dragRef.current?.chipId);
+    if (!chip) {
+      setAim(undefined);
+      setShotPower(0);
+      setSelectedChipId(null);
+      dragRef.current = null;
+      return;
+    }
+
+    const { x, y } = getSvgPointFromTouch(touch, e.currentTarget);
+    const dragDx = x - chip.x;
+    const dragDy = y - chip.y;
+    const dist = Math.min(Math.hypot(dragDx, dragDy), MAX_DRAG_DISTANCE);
+    
+    if (dist > 20) {
+      const normalizedDist = Math.min(1, dist / MAX_DRAG_DISTANCE);
+      const targetSpeed = normalizedDist * MAX_SPEED;
+      
+      const dirX = chip.x - x;
+      const dirY = chip.y - y;
+      const dirMag = Math.hypot(dirX, dirY) || 1;
+      
+      let impulseX = (dirX / dirMag) * targetSpeed;
+      let impulseY = (dirY / dirMag) * targetSpeed;
+
+      if (isChallenger) {
+        impulseX = -impulseX;
+        impulseY = -impulseY;
+      }
+
+      setConsecutiveTimeouts(0);
+
+      socketService.sendInput(currentMatchId, dragRef.current.chipId, {
+        dx: impulseX,
+        dy: impulseY
+      });
+    }
+
+    setAim(undefined);
+    setShotPower(0);
+    setSelectedChipId(null);
+    dragRef.current = null;
+  }, [currentMatchId, isChallenger, isMyTurn, getSvgPointFromTouch, chips]);
+
   const handleExit = () => setShowExitConfirm(true);
   const confirmExit = () => {
     setShowExitConfirm(false);
@@ -557,7 +729,27 @@ export function PlayingScreen() {
   };
   const cancelExit = () => setShowExitConfirm(false);
 
-  const handleGoHome = () => {
+  const handleGoHome = async () => {
+    if (settling) return;
+
+    // Settle on-chain if we won and haven't reported yet
+    if (showEnd && winner === "you" && currentMatchId && !resultReportedRef.current) {
+      const matchIdNum = Number.parseInt(currentMatchId, 10);
+      const userAddress = useGameStore.getState().userAddress;
+      if (matchIdNum && userAddress) {
+        setSettling(true);
+        try {
+          await reportResult(matchIdNum, userAddress);
+          resultReportedRef.current = true;
+        } catch (err) {
+          console.error("[PlayingScreen] Error reporting result:", err);
+          // Continue to home even if reporting fails (might be free match)
+        } finally {
+          setSettling(false);
+        }
+      }
+    }
+
     socketService.disconnect();
     // Limpiar estado del store
     setCurrentMatchId(undefined);
@@ -566,8 +758,27 @@ export function PlayingScreen() {
     setView("home");
   };
 
-  const handleRequestRematch = () => {
-    if (!currentMatchId || waitingRematchResponse) return;
+  const handleRequestRematch = async () => {
+    if (!currentMatchId || waitingRematchResponse || settling) return;
+
+    // Settle on-chain if we won and haven't reported yet
+    if (showEnd && winner === "you" && !resultReportedRef.current) {
+      const matchIdNum = Number.parseInt(currentMatchId, 10);
+      const userAddress = useGameStore.getState().userAddress;
+      if (matchIdNum && userAddress) {
+        setSettling(true);
+        try {
+          await reportResult(matchIdNum, userAddress);
+          resultReportedRef.current = true;
+        } catch (err) {
+          console.error("[PlayingScreen] Error reporting result:", err);
+          // Continue with rematch even if reporting fails
+        } finally {
+          setSettling(false);
+        }
+      }
+    }
+
     socketService.requestRematch(currentMatchId, alias);
     setRematchRequested(true);
     setWaitingRematchResponse(true);
@@ -679,7 +890,10 @@ export function PlayingScreen() {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         lowPerf={isMobile}
       />
 
@@ -739,12 +953,12 @@ export function PlayingScreen() {
               <button 
                 className="modal-btn secondary" 
                 onClick={handleRequestRematch}
-                disabled={waitingRematchResponse || rivalRequestedRematch}
+                disabled={waitingRematchResponse || rivalRequestedRematch || settling}
               >
-                {waitingRematchResponse ? "⏳ Esperando..." : "🔄 Revancha"}
+                {settling ? "💳 Cobrando..." : waitingRematchResponse ? "⏳ Esperando..." : "🔄 Revancha"}
               </button>
-              <button className="modal-btn primary" onClick={handleGoHome}>
-                🏠 Inicio
+              <button className="modal-btn primary" onClick={handleGoHome} disabled={settling}>
+                {settling ? "💳 Cobrando..." : "🏠 Inicio"}
               </button>
             </div>
           </div>
@@ -782,11 +996,21 @@ export function PlayingScreen() {
         .playing-screen {
           min-height: 100vh;
           min-height: 100dvh;
+          min-height: -webkit-fill-available;
+          height: 100%;
           background: linear-gradient(180deg, #001a00 0%, #000 100%);
           display: flex;
           flex-direction: column;
           align-items: center;
-          padding: 10px;
+          padding: 4px;
+          padding-top: max(4px, env(safe-area-inset-top));
+          padding-bottom: max(4px, env(safe-area-inset-bottom));
+          padding-left: env(safe-area-inset-left);
+          padding-right: env(safe-area-inset-right);
+          overflow: hidden;
+          box-sizing: border-box;
+          -webkit-overflow-scrolling: touch;
+          gap: 4px;
         }
 
         .game-header {
@@ -794,17 +1018,17 @@ export function PlayingScreen() {
           max-width: 600px;
           display: flex;
           align-items: center;
-          gap: 12px;
-          padding: 8px 12px;
+          gap: 8px;
+          padding: 4px 8px;
         }
 
         .exit-btn {
           background: rgba(255,77,90,0.2);
           border: 1px solid #ff4d5a;
           color: #ff4d5a;
-          font-size: 18px;
-          width: 36px;
-          height: 36px;
+          font-size: 16px;
+          width: 32px;
+          height: 32px;
           border-radius: 50%;
           cursor: pointer;
           transition: all 0.2s;
@@ -819,16 +1043,16 @@ export function PlayingScreen() {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 16px;
+          gap: 12px;
         }
 
         .player-score-box {
           display: flex;
           flex-direction: column;
           align-items: center;
-          padding: 8px 16px;
-          border-radius: 12px;
-          min-width: 70px;
+          padding: 4px 12px;
+          border-radius: 8px;
+          min-width: 50px;
         }
         .player-score-box.me {
           background: rgba(0,168,255,0.15);
@@ -840,7 +1064,7 @@ export function PlayingScreen() {
         }
 
         .score-label {
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 600;
           opacity: 0.8;
         }
@@ -848,7 +1072,7 @@ export function PlayingScreen() {
         .player-score-box.rival .score-label { color: #ff4d5a; }
 
         .score-value {
-          font-size: 28px;
+          font-size: 22px;
           font-weight: bold;
           color: #fff;
         }
@@ -859,24 +1083,24 @@ export function PlayingScreen() {
           align-items: center;
         }
         .vs-text {
-          font-size: 16px;
+          font-size: 14px;
           font-weight: bold;
           color: #666;
         }
         .goal-target {
-          font-size: 11px;
+          font-size: 10px;
           color: #888;
         }
 
         .momentum-bar {
           width: 100%;
           max-width: 600px;
-          height: 6px;
+          height: 4px;
           background: #222;
-          border-radius: 3px;
+          border-radius: 2px;
           display: flex;
           overflow: hidden;
-          margin-bottom: 4px;
+          margin-bottom: 2px;
         }
         .momentum-fill.me {
           background: linear-gradient(90deg, #00a8ff, #00ff6a);

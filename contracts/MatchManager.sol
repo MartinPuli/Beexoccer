@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 /**
  * @title MatchManager
@@ -11,7 +16,20 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  *      declared winner once the on-chain result is reported by either participant or a
  *      future referee module (see TODO at bottom).
  */
-contract MatchManager {
+contract MatchManager is ReentrancyGuard {
+    using SafeERC20 for IERC20;
+    
+    address public owner;
+    
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        _;
+    }
+    
+    constructor() {
+        owner = msg.sender;
+    }
+    
     struct Match {
         address creator; // Player that opened the lobby.
         address challenger; // Player that joined the lobby (if any so far).
@@ -22,21 +40,32 @@ contract MatchManager {
         bool isCompleted; // Prevents double settlements.
         uint256 stakeAmount; // Amount each participant must lock.
         address stakeToken; // ERC-20 token for escrow. Address(0) means native MATIC.
+        // Timeout for abandoned matches (e.g. 24 hours)
+        uint256 createdAt;
+        bool timeoutClaimed;
     }
 
     uint256 public matchCount; // Sequential identifier for new matches.
     mapping(uint256 => Match) public matches; // Storage for all lobbies.
+    // For result signature verification
+    address public trustedSigner;
 
     event MatchCreated(uint256 indexed matchId, address indexed creator, uint8 goalsTarget, bool isFree);
     event MatchJoined(uint256 indexed matchId, address indexed challenger);
     event MatchResult(uint256 indexed matchId, address indexed winner, uint256 totalPayout);
     event MatchCancelled(uint256 indexed matchId, address indexed creator, uint256 refundAmount);
+    event MatchTimeoutClaimed(uint256 indexed matchId, address indexed claimer);
 
     error InvalidGoalTarget();
     error InvalidStakeCombo();
     error MatchClosed();
     error MatchAlreadyCompleted();
     error NotParticipant();
+    error NotWinner();
+    error InvalidSignature();
+    error TimeoutNotReached();
+    error TimeoutAlreadyClaimed();
+    error SelfJoinNotAllowed();
     error ChallengerAlreadySet();
     error NotCreator();
     error MatchNotOpen();
@@ -75,7 +104,9 @@ contract MatchManager {
             isOpen: true,
             isCompleted: false,
             stakeAmount: stakeAmount,
-            stakeToken: stakeToken
+            stakeToken: stakeToken,
+            createdAt: block.timestamp,
+            timeoutClaimed: false
         });
 
         emit MatchCreated(matchId, msg.sender, goalsTarget, isFree);
@@ -88,6 +119,7 @@ contract MatchManager {
         Match storage matchInfo = matches[matchId];
         if (!matchInfo.isOpen) revert MatchClosed();
         if (matchInfo.challenger != address(0)) revert ChallengerAlreadySet();
+        if (msg.sender == matchInfo.creator) revert SelfJoinNotAllowed();
 
         matchInfo.challenger = msg.sender;
         matchInfo.isOpen = false;
@@ -124,15 +156,26 @@ contract MatchManager {
     }
 
     /**
-     * @notice Records the result and releases escrow. Anyone who participated can call this method.
+     * @notice Records the result and releases escrow. Only the winner can call this method.
      * @param matchId Lobby to settle.
      * @param winner Address of the winning wallet (must be creator or challenger).
      */
-    function reportResult(uint256 matchId, address winner) external {
+    function reportResult(
+        uint256 matchId,
+        address winner,
+        bytes calldata signature
+    ) external nonReentrant {
         Match storage matchInfo = matches[matchId];
         if (matchInfo.isCompleted) revert MatchAlreadyCompleted();
         if (msg.sender != matchInfo.creator && msg.sender != matchInfo.challenger) revert NotParticipant();
         if (winner != matchInfo.creator && winner != matchInfo.challenger) revert NotParticipant();
+        if (msg.sender != winner) revert NotWinner();
+
+        // Validate signature (off-chain server signs matchId, winner)
+        bytes32 messageHash = keccak256(abi.encodePacked(matchId, winner));
+        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
+        address recovered = ECDSA.recover(ethSignedMessageHash, signature);
+        if (recovered != trustedSigner) revert InvalidSignature();
 
         matchInfo.winner = winner;
         matchInfo.isCompleted = true;
@@ -154,8 +197,7 @@ contract MatchManager {
             if (msg.value != amount) revert InvalidStakeCombo();
         } else {
             IERC20 token = IERC20(stakeToken);
-            bool ok = token.transferFrom(msg.sender, address(this), amount);
-            require(ok, "TRANSFER_FAILED");
+            token.safeTransferFrom(msg.sender, address(this), amount);
         }
     }
 
@@ -168,9 +210,40 @@ contract MatchManager {
             require(sent, "NATIVE_SEND_FAILED");
         } else {
             IERC20 token = IERC20(stakeToken);
-            bool ok = token.transfer(to, amount);
-            require(ok, "TRANSFER_FAILED");
+            token.safeTransfer(to, amount);
         }
+    }
+
+    // Timeout claim: if match is not completed after X seconds, allow refund
+    uint256 public constant MATCH_TIMEOUT = 1 days;
+    function claimTimeout(uint256 matchId) external nonReentrant {
+        Match storage m = matches[matchId];
+        if (m.isCompleted || m.timeoutClaimed) revert TimeoutAlreadyClaimed();
+        if (block.timestamp < m.createdAt + MATCH_TIMEOUT) revert TimeoutNotReached();
+        m.timeoutClaimed = true;
+        // Refund both players if joined, else only creator
+        if (m.challenger != address(0)) {
+            if (!m.isFree) {
+                _pushStake(m.stakeToken, m.creator, m.stakeAmount);
+                _pushStake(m.stakeToken, m.challenger, m.stakeAmount);
+            }
+        } else {
+            if (!m.isFree) {
+                _pushStake(m.stakeToken, m.creator, m.stakeAmount);
+            }
+        }
+        emit MatchTimeoutClaimed(matchId, msg.sender);
+    }
+
+    // Admin: set trusted signer (only owner)
+    function setTrustedSigner(address signer) external onlyOwner {
+        trustedSigner = signer;
+    }
+    
+    // Admin: transfer ownership
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        owner = newOwner;
     }
 
     // ---------------------------------------------------------------------

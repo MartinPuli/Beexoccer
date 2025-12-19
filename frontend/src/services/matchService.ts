@@ -297,6 +297,37 @@ export async function acceptMatch(matchId: number, match: MatchLobby) {
   }
 }
 
+/**
+ * Joins a match by ID (for rematch flow - fetches match data from contract)
+ */
+export async function joinMatch(matchId: number): Promise<void> {
+  try {
+    const contract = await getContract();
+    
+    // Fetch match data from contract
+    const matchData = await contract.matches(matchId);
+    
+    if (!matchData.isOpen) {
+      throw new Error("La partida ya no está abierta");
+    }
+    
+    const stakeWei = matchData.isFree ? 0n : matchData.stakeAmount;
+    const isNative = matchData.stakeToken === "0x0000000000000000000000000000000000000000";
+    
+    const tx = await contract.joinMatch(matchId, {
+      value: isNative ? stakeWei : 0n
+    });
+    await tx.wait();
+    
+    // Notify via socket
+    const userAddress = walletService.getUserAddress() || "";
+    const userAlias = walletService.getAlias();
+    socketService.joinLobby(String(matchId), userAddress, userAlias);
+  } catch (error) {
+    handleRpcError(error);
+  }
+}
+
 export async function reportResult(matchId: number, winner: string) {
   try {
     const contract = await getContract();

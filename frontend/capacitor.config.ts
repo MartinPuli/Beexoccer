@@ -11,6 +11,18 @@ const config: CapacitorConfig = {
   },
   android: {
     allowMixedContent: true // Permite HTTP y HTTPS
+  },
+  ios: {
+    contentInset: 'always',
+    allowsLinkPreview: false,
+    scrollEnabled: false,
+    limitsNavigationsToAppBoundDomains: false
+  },
+  plugins: {
+    StatusBar: {
+      style: 'DARK',
+      backgroundColor: '#0a1a10'
+    }
   }
 };
 

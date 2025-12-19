@@ -1473,6 +1473,125 @@ export function BotMatchScreen() {
     (globalThis as Record<string, unknown>).shotPower = 0;
   };
 
+  // ===== iOS TOUCH EVENT HANDLERS =====
+  // iOS Safari tiene problemas con pointer events en SVG, así que usamos touch events como fallback
+  const handleTouchStart = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    
+    if (active !== "creator" || turnTakenRef.current || isMoving()) {
+      return;
+    }
+
+    e.preventDefault();
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((touch.clientX - rect.left) / rect.width) * FIELD_WIDTH;
+    const y = ((touch.clientY - rect.top) / rect.height) * FIELD_HEIGHT;
+
+    const playerChips = chipsRef.current.filter((c) => c.owner === "creator");
+    const touched = playerChips.find((c) => Math.hypot(c.x - x, c.y - y) <= c.radius + 15);
+
+    if (touched) {
+      setSelectedChipId(touched.id);
+      dragRef.current = { chipId: touched.id, start: { x: touched.x, y: touched.y } };
+      setAim({ from: { x: touched.x, y: touched.y }, to: { x, y } });
+      setShowPowerMeter({ x: touched.x, y: touched.y });
+      setShotPower(0);
+      (globalThis as Record<string, unknown>).shotPower = 0;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (!dragRef.current || e.touches.length !== 1) return;
+    
+    e.preventDefault();
+    const touch = e.touches[0];
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    let x = ((touch.clientX - rect.left) / rect.width) * FIELD_WIDTH;
+    let y = ((touch.clientY - rect.top) / rect.height) * FIELD_HEIGHT;
+    const { start } = dragRef.current;
+
+    let dist = Math.hypot(x - start.x, y - start.y);
+    if (dist > MAX_DRAG_DISTANCE) {
+      const a = Math.atan2(y - start.y, x - start.x);
+      x = start.x + Math.cos(a) * MAX_DRAG_DISTANCE;
+      y = start.y + Math.sin(a) * MAX_DRAG_DISTANCE;
+      dist = MAX_DRAG_DISTANCE;
+    }
+
+    const rawPower = dist / (MAX_DRAG_DISTANCE * 0.7);
+    const powerScale = Math.min(1, rawPower * rawPower);
+    setShotPower(powerScale);
+    (globalThis as Record<string, any>).currentShotPower = powerScale;
+    (globalThis as Record<string, unknown>).shotPower = powerScale;
+    
+    setAim((prev) => (prev ? { ...prev, to: { x, y } } : undefined));
+
+    if (showPowerMeter) setShowPowerMeter({ x: start.x, y: start.y });
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (!dragRef.current || active !== "creator" || turnTakenRef.current) {
+      dragRef.current = null;
+      setAim(undefined);
+      setShowPowerMeter(null);
+      setShotPower(0);
+      (globalThis as Record<string, unknown>).shotPower = 0;
+      return;
+    }
+
+    e.preventDefault();
+
+    // Usar el último touch conocido o changedTouches
+    const touch = e.changedTouches[0];
+    if (!touch) {
+      dragRef.current = null;
+      setAim(undefined);
+      setShowPowerMeter(null);
+      setShotPower(0);
+      (globalThis as Record<string, unknown>).shotPower = 0;
+      return;
+    }
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    let x = ((touch.clientX - rect.left) / rect.width) * FIELD_WIDTH;
+    let y = ((touch.clientY - rect.top) / rect.height) * FIELD_HEIGHT;
+    const { chipId, start } = dragRef.current;
+
+    let dist = Math.hypot(x - start.x, y - start.y);
+    if (dist > MAX_DRAG_DISTANCE) {
+      const a = Math.atan2(y - start.y, x - start.x);
+      x = start.x + Math.cos(a) * MAX_DRAG_DISTANCE;
+      y = start.y + Math.sin(a) * MAX_DRAG_DISTANCE;
+      dist = MAX_DRAG_DISTANCE;
+    }
+
+    const normalizedDist = Math.min(1, dist / MAX_DRAG_DISTANCE);
+    const targetSpeed = normalizedDist * MAX_SPEED;
+    
+    const dirX = start.x - x;
+    const dirY = start.y - y;
+    const dirMag = Math.hypot(dirX, dirY) || 1;
+    
+    const dx = (dirX / dirMag) * targetSpeed;
+    const dy = (dirY / dirMag) * targetSpeed;
+
+    if (Math.hypot(dx, dy) > 0.3) {
+      chipsRef.current = chipsRef.current.map((c) => c.id === chipId ? { ...c, vx: dx, vy: dy } : c);
+      turnTakenRef.current = true;
+      setConsecutiveTimeouts(0);
+      setTurnTimeLeft(prev => prev);
+    }
+
+    dragRef.current = null;
+    setAim(undefined);
+    setShowPowerMeter(null);
+    setShotPower(0);
+    (globalThis as Record<string, unknown>).shotPower = 0;
+  };
+
   const turnLabel = active === "creator" ? "TU TURNO" : "TURNO BOT";
   const isPlayerTurn = active === "creator";
 
@@ -1531,6 +1650,9 @@ export function BotMatchScreen() {
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerCancel}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
           lowPerf={false}
         />
       </div>

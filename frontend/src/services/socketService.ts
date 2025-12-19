@@ -1,5 +1,10 @@
 import { io, Socket } from "socket.io-client";
-import { PlayingSnapshot, MatchEvent, MatchLobby, GoalTarget } from "../types/game";
+import {
+  PlayingSnapshot,
+  MatchEvent,
+  MatchLobby,
+  GoalTarget,
+} from "../types/game";
 import { env } from "../config/env";
 
 // URL del servidor de tiempo real
@@ -19,16 +24,42 @@ type ServerToClientEvents = {
   event: (payload: MatchEvent) => void;
   lobbiesUpdate: (lobbies: MatchLobby[]) => void;
   lobbyCreated: (lobby: MatchLobby) => void;
-  lobbyJoined: (data: { matchId: string; challenger: string; challengerAlias: string }) => void;
+  lobbyJoined: (data: {
+    matchId: string;
+    challenger: string;
+    challengerAlias: string;
+  }) => void;
   matchReady: (data: { matchId: string }) => void;
   lobbyCancelled: (data: { matchId: string }) => void;
-  matchEnded: (data: { winner: "creator" | "challenger"; reason: string }) => void;
+  matchEnded: (data: {
+    winner: "creator" | "challenger";
+    reason: string;
+  }) => void;
   playerForfeited: (data: { side: "creator" | "challenger" }) => void;
   pong: () => void;
   // Rematch events
-  rematchRequested: (data: { fromSide: "creator" | "challenger"; fromAlias: string; matchId: string }) => void;
+  rematchRequested: (data: {
+    fromSide: "creator" | "challenger";
+    fromAlias: string;
+    matchId: string;
+  }) => void;
   rematchAccepted: (data: { matchId: string }) => void;
   rematchDeclined: (data: { bySide: "creator" | "challenger" }) => void;
+  // Rematch with blockchain
+  rematchBlockchainRequired: (data: {
+    oldMatchId: string;
+    matchConfig: {
+      isFree: boolean;
+      stakeAmount: string;
+      stakeToken: string;
+      goals: number;
+    };
+    initiatorSide: "creator" | "challenger";
+  }) => void;
+  rematchBlockchainReady: (data: { 
+    newMatchId: string; 
+    oldMatchId: string;
+  }) => void;
   // Free lobbies events
   freeLobbiesUpdate: (lobbies: FreeLobby[]) => void;
   freeMatchReady: (data: { matchId: string; rivalAlias: string }) => void;
@@ -37,24 +68,53 @@ type ServerToClientEvents = {
 
 type ClientToServerEvents = {
   joinMatch: (matchId: string) => void;
-  input: (payload: { matchId: string; impulse: { dx: number; dy: number }; chipId: string }) => void;
+  input: (payload: {
+    matchId: string;
+    impulse: { dx: number; dy: number };
+    chipId: string;
+  }) => void;
   sync: () => void;
   requestRematch: (payload: { matchId: string; alias: string }) => void;
   acceptRematch: (payload: { matchId: string }) => void;
   declineRematch: (payload: { matchId: string }) => void;
+  // Rematch blockchain flow
+  rematchBlockchainCreated: (payload: { 
+    oldMatchId: string; 
+    newMatchId: string;
+    creatorAddress: string;
+  }) => void;
+  rematchBlockchainJoined: (payload: { 
+    oldMatchId: string; 
+    newMatchId: string;
+  }) => void;
   turnTimeout: (payload: { matchId: string }) => void;
   forfeit: (payload: { matchId: string }) => void;
   subscribeLobbies: () => void;
   unsubscribeLobbies: () => void;
-  createLobby: (payload: { matchId: string; creator: string; creatorAlias: string; goals: number; isFree: boolean; stakeAmount: string }) => void;
-  joinLobby: (payload: { matchId: string; challenger: string; challengerAlias: string }) => void;
+  createLobby: (payload: {
+    matchId: string;
+    creator: string;
+    creatorAlias: string;
+    goals: number;
+    isFree: boolean;
+    stakeAmount: string;
+  }) => void;
+  joinLobby: (payload: {
+    matchId: string;
+    challenger: string;
+    challengerAlias: string;
+  }) => void;
   cancelLobby: (payload: { matchId: string }) => void;
   ping: () => void;
   // Free lobbies events
   subscribeFreeLobbies: () => void;
   unsubscribeFreeLobbies: () => void;
   createFreeLobby: (lobby: FreeLobby) => void;
-  joinFreeLobby: (payload: { lobbyId: string; odUserId: string; alias: string }) => void;
+  joinFreeLobby: (payload: {
+    lobbyId: string;
+    odUserId: string;
+    alias: string;
+  }) => void;
   cancelFreeLobby: (lobbyId: string) => void;
 };
 
@@ -67,14 +127,24 @@ class SocketService {
   private eventCallbacks: ((payload: MatchEvent) => void)[] = [];
   private connectionCallbacks: ((connected: boolean) => void)[] = [];
   // Rematch callbacks
-  private rematchRequestedCallbacks: ((data: { fromSide: "creator" | "challenger"; fromAlias: string; matchId: string }) => void)[] = [];
-  private rematchAcceptedCallbacks: ((data: { matchId: string }) => void)[] = [];
-  private rematchDeclinedCallbacks: ((data: { bySide: "creator" | "challenger" }) => void)[] = [];
+  private rematchRequestedCallbacks: ((data: {
+    fromSide: "creator" | "challenger";
+    fromAlias: string;
+    matchId: string;
+  }) => void)[] = [];
+  private rematchAcceptedCallbacks: ((data: { matchId: string }) => void)[] =
+    [];
+  private rematchDeclinedCallbacks: ((data: {
+    bySide: "creator" | "challenger";
+  }) => void)[] = [];
   // Free lobbies callbacks
   private freeLobbiesCallbacks: ((lobbies: FreeLobby[]) => void)[] = [];
-  private freeMatchReadyCallbacks: ((data: { matchId: string; rivalAlias: string }) => void)[] = [];
+  private freeMatchReadyCallbacks: ((data: {
+    matchId: string;
+    rivalAlias: string;
+  }) => void)[] = [];
   private freeLobbyRemovedCallbacks: ((lobbyId: string) => void)[] = [];
-  
+
   private retryCount = 0;
   private readonly maxRetries = 10;
   private currentMatchId?: string;
@@ -83,30 +153,34 @@ class SocketService {
   private latency = 0;
   private pingInterval?: ReturnType<typeof setInterval>;
 
-  connect(matchId: string, side: "creator" | "challenger") {
+  connect(
+    matchId: string,
+    side: "creator" | "challenger",
+    goalTarget?: number
+  ) {
     if (this.socket?.connected && this.currentMatchId === matchId) {
       return; // Ya conectado a este match
     }
-    
+
     if (this.socket) {
       this.socket.disconnect();
     }
-    
+
     this.currentMatchId = matchId;
     this.currentSide = side;
     this.retryCount = 0;
-    
+
     try {
-      this.socket = io(REALTIME_URL, { 
-        transports: ["websocket", "polling"], 
-        query: { matchId, side },
+      this.socket = io(REALTIME_URL, {
+        transports: ["websocket", "polling"],
+        query: { matchId, side, goals: goalTarget?.toString() || "3" },
         timeout: 15000,
         reconnection: true,
         reconnectionAttempts: this.maxRetries,
         reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000
+        reconnectionDelayMax: 5000,
       });
-      
+
       this.socket.on("connect_error", (err) => {
         console.warn("[Socket] Connection error:", err.message);
         this.retryCount++;
@@ -116,7 +190,7 @@ class SocketService {
           this.socket?.disconnect();
         }
       });
-      
+
       this.socket.on("connect", () => {
         console.log("[Socket] Connected to server");
         this.retryCount = 0;
@@ -126,42 +200,45 @@ class SocketService {
         // Solicitar sync inmediatamente
         setTimeout(() => this.requestSync(), 100);
       });
-      
+
       this.socket.on("disconnect", (reason) => {
         console.warn("[Socket] Disconnected:", reason);
         this.notifyConnection(false);
         this.stopPing();
-        
+
         // Intentar reconectar automáticamente si fue desconexión inesperada
         if (reason === "io server disconnect" || reason === "transport close") {
           this.reconnecting = true;
           setTimeout(() => {
-            if (this.currentMatchId && this.currentSide && !this.socket?.connected) {
+            if (
+              this.currentMatchId &&
+              this.currentSide &&
+              !this.socket?.connected
+            ) {
               this.connect(this.currentMatchId, this.currentSide);
             }
           }, 1000);
         }
       });
-      
+
       // Re-registrar callbacks de snapshot
       this.socket.on("snapshot", (payload) => {
         for (const cb of this.snapshotCallbacks) cb(payload);
       });
-      
+
       this.socket.on("event", (payload) => {
         for (const cb of this.eventCallbacks) cb(payload);
       });
-      
+
       // Ping/pong para medir latencia
       this.socket.on("pong", () => {
         // Latencia calculada en startPing
       });
-      
     } catch (err) {
       console.error("[Socket] Failed to create socket:", err);
     }
   }
-  
+
   private startPing() {
     this.stopPing();
     this.pingInterval = setInterval(() => {
@@ -174,26 +251,26 @@ class SocketService {
       }
     }, 5000);
   }
-  
+
   private stopPing() {
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
       this.pingInterval = undefined;
     }
   }
-  
+
   private notifyConnection(connected: boolean) {
     for (const cb of this.connectionCallbacks) cb(connected);
   }
-  
+
   onConnectionChange(cb: (connected: boolean) => void) {
     this.connectionCallbacks.push(cb);
   }
-  
+
   getLatency(): number {
     return this.latency;
   }
-  
+
   isReconnecting(): boolean {
     return this.reconnecting;
   }
@@ -203,28 +280,28 @@ class SocketService {
       this.socket.emit("subscribeLobbies");
       return;
     }
-    
+
     try {
-      this.socket = io(REALTIME_URL, { 
+      this.socket = io(REALTIME_URL, {
         transports: ["websocket", "polling"],
         timeout: 10000,
         reconnectionAttempts: 5,
-        reconnectionDelay: 1000
+        reconnectionDelay: 1000,
       });
-      
+
       this.socket.on("connect_error", () => {
         this.retryCount++;
       });
-      
+
       this.socket.on("connect", () => {
         this.retryCount = 0;
         this.socket?.emit("subscribeLobbies");
       });
-    
+
       this.socket.on("lobbiesUpdate", (lobbies) => {
         for (const cb of this.lobbiesCallbacks) cb(lobbies);
       });
-      
+
       this.socket.on("lobbyCreated", (lobby) => {
         for (const cb of this.lobbyCreatedCallbacks) cb(lobby);
       });
@@ -296,7 +373,11 @@ class SocketService {
     this.matchReadyCallbacks = [];
   }
 
-  sendInput(matchId: string, chipId: string, impulse: { dx: number; dy: number }) {
+  sendInput(
+    matchId: string,
+    chipId: string,
+    impulse: { dx: number; dy: number }
+  ) {
     this.socket?.emit("input", { matchId, chipId, impulse });
   }
 
@@ -316,7 +397,13 @@ class SocketService {
     this.socket?.emit("declineRematch", { matchId });
   }
 
-  onRematchRequested(cb: (data: { fromSide: "creator" | "challenger"; fromAlias: string; matchId: string }) => void) {
+  onRematchRequested(
+    cb: (data: {
+      fromSide: "creator" | "challenger";
+      fromAlias: string;
+      matchId: string;
+    }) => void
+  ) {
     this.rematchRequestedCallbacks.push(cb);
     this.socket?.on("rematchRequested", cb);
   }
@@ -338,6 +425,38 @@ class SocketService {
     this.socket?.off("rematchRequested");
     this.socket?.off("rematchAccepted");
     this.socket?.off("rematchDeclined");
+    this.socket?.off("rematchBlockchainRequired");
+    this.socket?.off("rematchBlockchainReady");
+  }
+
+  // Rematch blockchain handlers
+  onRematchBlockchainRequired(
+    cb: (data: {
+      oldMatchId: string;
+      matchConfig: {
+        isFree: boolean;
+        stakeAmount: string;
+        stakeToken: string;
+        goals: number;
+      };
+      initiatorSide: "creator" | "challenger";
+    }) => void
+  ) {
+    this.socket?.on("rematchBlockchainRequired", cb);
+  }
+
+  onRematchBlockchainReady(
+    cb: (data: { newMatchId: string; oldMatchId: string }) => void
+  ) {
+    this.socket?.on("rematchBlockchainReady", cb);
+  }
+
+  notifyRematchBlockchainCreated(oldMatchId: string, newMatchId: string, creatorAddress: string) {
+    this.socket?.emit("rematchBlockchainCreated", { oldMatchId, newMatchId, creatorAddress });
+  }
+
+  notifyRematchBlockchainJoined(oldMatchId: string, newMatchId: string) {
+    this.socket?.emit("rematchBlockchainJoined", { oldMatchId, newMatchId });
   }
 
   sendTimeout(matchId: string) {
@@ -352,13 +471,29 @@ class SocketService {
     this.socket?.on("playerForfeited", (data) => cb(data.side));
   }
 
-  onMatchEnded(cb: (data: { winner: "creator" | "challenger"; reason: string }) => void) {
+  onMatchEnded(
+    cb: (data: { winner: "creator" | "challenger"; reason: string }) => void
+  ) {
     this.socket?.on("matchEnded", cb);
   }
 
   // Lobby management methods
-  createLobby(matchId: string, creator: string, creatorAlias: string, goals: number, isFree: boolean, stakeAmount: string) {
-    const payload = { matchId, creator, creatorAlias, goals, isFree, stakeAmount };
+  createLobby(
+    matchId: string,
+    creator: string,
+    creatorAlias: string,
+    goals: number,
+    isFree: boolean,
+    stakeAmount: string
+  ) {
+    const payload = {
+      matchId,
+      creator,
+      creatorAlias,
+      goals,
+      isFree,
+      stakeAmount,
+    };
     if (this.socket?.connected) {
       this.socket.emit("createLobby", payload);
     } else {
@@ -374,7 +509,11 @@ class SocketService {
     if (!this.socket?.connected) {
       this.connectLobbies();
       this.socket?.once("connect", () => {
-        this.socket?.emit("joinLobby", { matchId, challenger, challengerAlias });
+        this.socket?.emit("joinLobby", {
+          matchId,
+          challenger,
+          challengerAlias,
+        });
       });
     } else {
       this.socket.emit("joinLobby", { matchId, challenger, challengerAlias });
@@ -396,7 +535,13 @@ class SocketService {
     this.socket?.on("lobbyCancelled", (data) => cb(data.matchId));
   }
 
-  onLobbyJoined(cb: (data: { matchId: string; challenger: string; challengerAlias: string }) => void) {
+  onLobbyJoined(
+    cb: (data: {
+      matchId: string;
+      challenger: string;
+      challengerAlias: string;
+    }) => void
+  ) {
     this.socket?.on("lobbyJoined", cb);
   }
 
@@ -411,28 +556,28 @@ class SocketService {
       this.socket.emit("subscribeFreeLobbies");
       return;
     }
-    
+
     try {
-      this.socket = io(REALTIME_URL, { 
+      this.socket = io(REALTIME_URL, {
         transports: ["websocket", "polling"],
         timeout: 10000,
         reconnectionAttempts: 5,
-        reconnectionDelay: 1000
+        reconnectionDelay: 1000,
       });
-      
+
       this.socket.on("connect", () => {
         this.retryCount = 0;
         this.socket?.emit("subscribeFreeLobbies");
       });
-    
+
       this.socket.on("freeLobbiesUpdate", (lobbies) => {
         for (const cb of this.freeLobbiesCallbacks) cb(lobbies);
       });
-      
+
       this.socket.on("freeMatchReady", (data) => {
         for (const cb of this.freeMatchReadyCallbacks) cb(data);
       });
-      
+
       this.socket.on("freeLobbyRemoved", (lobbyId) => {
         for (const cb of this.freeLobbyRemovedCallbacks) cb(lobbyId);
       });
@@ -455,7 +600,9 @@ class SocketService {
     this.freeLobbiesCallbacks.push(cb);
   }
 
-  onFreeMatchReady(cb: (data: { matchId: string; rivalAlias: string }) => void) {
+  onFreeMatchReady(
+    cb: (data: { matchId: string; rivalAlias: string }) => void
+  ) {
     this.freeMatchReadyCallbacks.push(cb);
   }
 

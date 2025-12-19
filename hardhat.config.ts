@@ -15,35 +15,38 @@ const config: HardhatUserConfig = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200
-      }
-    }
+        runs: 200,
+      },
+    },
   },
   networks: {
     hardhat: {
-      chainId: 31337
+      chainId: 31337,
     },
     polygon: {
-      url: POLYGON_RPC || "https://polygon-mainnet.g.alchemy.com/v2/demo",
+      // Prefer env var, but default to a public RPC to avoid Alchemy blocks/timeouts.
+      url: POLYGON_RPC || "https://polygon-rpc.com",
       accounts: sharedAccounts,
-      chainId: 137
+      chainId: 137,
+      timeout: 60_000,
     },
     polygonAmoy: {
       url: POLYGON_AMOY_RPC || "https://polygon-amoy.drpc.org",
       accounts: sharedAccounts,
-      chainId: 80002
-    }
+      chainId: 80002,
+      timeout: 60_000,
+    },
   },
   etherscan: {
     apiKey: {
       polygon: process.env.POLYGONSCAN_API_KEY || "",
-      polygonAmoy: ""
-    }
+      polygonAmoy: "",
+    },
   },
   typechain: {
     outDir: "typechain-types",
-    target: "ethers-v6"
-  }
+    target: "ethers-v6",
+  },
 };
 
 export default config;

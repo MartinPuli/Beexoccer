@@ -29,6 +29,7 @@ export interface MatchLobby {
 export interface PlayingSnapshot {
   activePlayer: "creator" | "challenger";
   turnEndsAt: number; // Epoch ms for the 15 second shot clock.
+  awaitingInput?: boolean; // True when a player is expected to shoot; false while simulation runs / waiting.
   creatorScore: number;
   challengerScore: number;
   commentary: string;

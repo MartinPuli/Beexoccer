@@ -28,6 +28,9 @@
 
 html, body {
   height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 body {
@@ -35,11 +38,20 @@ body {
   background: linear-gradient(135deg, var(--dark-panel) 0%, #061008 100%);
   min-height: 100vh;
   min-height: 100dvh;
+  min-height: -webkit-fill-available;
   display: flex;
   justify-content: center;
   align-items: flex-start;
   padding: 0;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
   margin: 0;
+  position: fixed;
+  width: 100%;
+  top: 0;
+  left: 0;
 }
 
 #root {
@@ -47,9 +59,14 @@ body {
   max-width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  height: 100%;
   display: flex;
   flex-direction: column;
   padding: 0;
+  overflow: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ===== PANTALLA 1: HOME ===== */
@@ -777,17 +794,23 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   height: 100%;
   max-height: 100vh;
   max-height: 100dvh; /* Dynamic viewport height for mobile */
+  max-height: -webkit-fill-available; /* iOS Safari fix */
   overflow: hidden;
-  padding: 12px;
+  padding: 4px;
+  padding-top: max(4px, env(safe-area-inset-top));
+  padding-bottom: max(4px, env(safe-area-inset-bottom));
+  padding-left: max(4px, env(safe-area-inset-left));
+  padding-right: max(4px, env(safe-area-inset-right));
   /* Prevent zoom on touch drag */
   touch-action: manipulation;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
+  box-sizing: border-box;
 }
 
 /* Desktop layout for playing screen */
@@ -802,13 +825,21 @@ body {
 .playing-hud {
   background: linear-gradient(180deg, var(--dark-panel) 0%, #061008 100%);
   border: none;
-  border-left: 3px solid var(--border-green);
-  border-right: 3px solid var(--border-green);
-  border-radius: 12px;
-  padding: 12px 18px;
+  border-left: 2px solid var(--border-green);
+  border-right: 2px solid var(--border-green);
+  border-radius: 8px;
+  padding: 6px 12px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   width: 100%;
   max-width: 600px;
+}
+
+/* HUD más compacto en móvil */
+@media (max-width: 600px) {
+  .playing-hud {
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
 }
 
 .hud-scores {
@@ -891,7 +922,7 @@ body {
   background: linear-gradient(180deg, var(--dark-panel) 0%, #030505 100%);
   border: 3px solid var(--border-green);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible; /* Allow ball to be visible at edges */
   position: relative;
   min-height: 0; /* Allow flex to shrink */
   width: 100%;
@@ -903,14 +934,27 @@ body {
     inset 0 0 80px rgba(0, 0, 0, 0.3);
   /* Prevent zoom on touch */
   touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
 }
 
 /* Make pitch bigger on mobile */
 @media (max-width: 600px) {
   .playing-pitch {
     max-width: 100%;
-    border-radius: 8px;
-    border-width: 2px;
+    border-radius: 6px;
+    border-width: 1px;
+    flex: 1;
+    min-height: 0;
+  }
+}
+
+/* iOS specific fixes */
+@supports (-webkit-touch-callout: none) {
+  .playing-pitch {
+    /* iOS needs explicit height calculation - reduced offset for bigger pitch */
+    max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 120px);
+    max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 120px);
   }
 }
 

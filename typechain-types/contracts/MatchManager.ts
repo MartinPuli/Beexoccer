@@ -26,12 +26,18 @@ import type {
 export interface MatchManagerInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "MATCH_TIMEOUT"
       | "cancelMatch"
+      | "claimTimeout"
       | "createMatch"
       | "joinMatch"
       | "matchCount"
       | "matches"
+      | "owner"
       | "reportResult"
+      | "setTrustedSigner"
+      | "transferOwnership"
+      | "trustedSigner"
   ): FunctionFragment;
 
   getEvent(
@@ -40,10 +46,19 @@ export interface MatchManagerInterface extends Interface {
       | "MatchCreated"
       | "MatchJoined"
       | "MatchResult"
+      | "MatchTimeoutClaimed"
   ): EventFragment;
 
   encodeFunctionData(
+    functionFragment: "MATCH_TIMEOUT",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "cancelMatch",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "claimTimeout",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
@@ -62,13 +77,34 @@ export interface MatchManagerInterface extends Interface {
     functionFragment: "matches",
     values: [BigNumberish]
   ): string;
+  encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "reportResult",
-    values: [BigNumberish, AddressLike]
+    values: [BigNumberish, AddressLike, BytesLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setTrustedSigner",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "transferOwnership",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "trustedSigner",
+    values?: undefined
   ): string;
 
   decodeFunctionResult(
+    functionFragment: "MATCH_TIMEOUT",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "cancelMatch",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "claimTimeout",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -78,8 +114,21 @@ export interface MatchManagerInterface extends Interface {
   decodeFunctionResult(functionFragment: "joinMatch", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "matchCount", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "matches", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "reportResult",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setTrustedSigner",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "transferOwnership",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "trustedSigner",
     data: BytesLike
   ): Result;
 }
@@ -166,6 +215,19 @@ export namespace MatchResultEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace MatchTimeoutClaimedEvent {
+  export type InputTuple = [matchId: BigNumberish, claimer: AddressLike];
+  export type OutputTuple = [matchId: bigint, claimer: string];
+  export interface OutputObject {
+    matchId: bigint;
+    claimer: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export interface MatchManager extends BaseContract {
   connect(runner?: ContractRunner | null): MatchManager;
   waitForDeployment(): Promise<this>;
@@ -209,7 +271,15 @@ export interface MatchManager extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  MATCH_TIMEOUT: TypedContractMethod<[], [bigint], "view">;
+
   cancelMatch: TypedContractMethod<
+    [matchId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  claimTimeout: TypedContractMethod<
     [matchId: BigNumberish],
     [void],
     "nonpayable"
@@ -242,7 +312,9 @@ export interface MatchManager extends BaseContract {
         boolean,
         boolean,
         bigint,
-        string
+        string,
+        bigint,
+        boolean
       ] & {
         creator: string;
         challenger: string;
@@ -253,23 +325,47 @@ export interface MatchManager extends BaseContract {
         isCompleted: boolean;
         stakeAmount: bigint;
         stakeToken: string;
+        createdAt: bigint;
+        timeoutClaimed: boolean;
       }
     ],
     "view"
   >;
 
+  owner: TypedContractMethod<[], [string], "view">;
+
   reportResult: TypedContractMethod<
-    [matchId: BigNumberish, winner: AddressLike],
+    [matchId: BigNumberish, winner: AddressLike, signature: BytesLike],
     [void],
     "nonpayable"
   >;
+
+  setTrustedSigner: TypedContractMethod<
+    [signer: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  transferOwnership: TypedContractMethod<
+    [newOwner: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  trustedSigner: TypedContractMethod<[], [string], "view">;
 
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
 
   getFunction(
+    nameOrSignature: "MATCH_TIMEOUT"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "cancelMatch"
+  ): TypedContractMethod<[matchId: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "claimTimeout"
   ): TypedContractMethod<[matchId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "createMatch"
@@ -303,7 +399,9 @@ export interface MatchManager extends BaseContract {
         boolean,
         boolean,
         bigint,
-        string
+        string,
+        bigint,
+        boolean
       ] & {
         creator: string;
         challenger: string;
@@ -314,17 +412,31 @@ export interface MatchManager extends BaseContract {
         isCompleted: boolean;
         stakeAmount: bigint;
         stakeToken: string;
+        createdAt: bigint;
+        timeoutClaimed: boolean;
       }
     ],
     "view"
   >;
   getFunction(
+    nameOrSignature: "owner"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "reportResult"
   ): TypedContractMethod<
-    [matchId: BigNumberish, winner: AddressLike],
+    [matchId: BigNumberish, winner: AddressLike, signature: BytesLike],
     [void],
     "nonpayable"
   >;
+  getFunction(
+    nameOrSignature: "setTrustedSigner"
+  ): TypedContractMethod<[signer: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "transferOwnership"
+  ): TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "trustedSigner"
+  ): TypedContractMethod<[], [string], "view">;
 
   getEvent(
     key: "MatchCancelled"
@@ -353,6 +465,13 @@ export interface MatchManager extends BaseContract {
     MatchResultEvent.InputTuple,
     MatchResultEvent.OutputTuple,
     MatchResultEvent.OutputObject
+  >;
+  getEvent(
+    key: "MatchTimeoutClaimed"
+  ): TypedContractEvent<
+    MatchTimeoutClaimedEvent.InputTuple,
+    MatchTimeoutClaimedEvent.OutputTuple,
+    MatchTimeoutClaimedEvent.OutputObject
   >;
 
   filters: {
@@ -398,6 +517,17 @@ export interface MatchManager extends BaseContract {
       MatchResultEvent.InputTuple,
       MatchResultEvent.OutputTuple,
       MatchResultEvent.OutputObject
+    >;
+
+    "MatchTimeoutClaimed(uint256,address)": TypedContractEvent<
+      MatchTimeoutClaimedEvent.InputTuple,
+      MatchTimeoutClaimedEvent.OutputTuple,
+      MatchTimeoutClaimedEvent.OutputObject
+    >;
+    MatchTimeoutClaimed: TypedContractEvent<
+      MatchTimeoutClaimedEvent.InputTuple,
+      MatchTimeoutClaimedEvent.OutputTuple,
+      MatchTimeoutClaimedEvent.OutputObject
     >;
   };
 }

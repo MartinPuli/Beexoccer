@@ -14,6 +14,10 @@ interface PitchCanvasProps {
   onPointerMove?: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerUp?: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerCancel?: (event: React.PointerEvent<SVGSVGElement>) => void;
+  // Touch event handlers for iOS Safari compatibility
+  onTouchStart?: (event: React.TouchEvent<SVGSVGElement>) => void;
+  onTouchMove?: (event: React.TouchEvent<SVGSVGElement>) => void;
+  onTouchEnd?: (event: React.TouchEvent<SVGSVGElement>) => void;
   lowPerf?: boolean;
 }
 
@@ -283,7 +287,7 @@ function SoccerBall3DCanvas({ rotateX, rotateY, size = 40, lowPerf = false }: { 
   );
 }
 
-export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTurn, children, aimLine, shotPower: shotPowerProp = 0, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, lowPerf = false }: Readonly<PitchCanvasProps>) {
+export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTurn, children, aimLine, shotPower: shotPowerProp = 0, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onTouchStart, onTouchMove, onTouchEnd, lowPerf = false }: Readonly<PitchCanvasProps>) {
   // Sistema de rotación 3D realista para la pelota
   const lastBallPosRef = useRef({ x: ball.x, y: ball.y });
   const [ballRotation, setBallRotation] = useState({ rotateX: 0, rotateY: 0 });
@@ -363,19 +367,37 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
     return `${Math.round(power * 100)}%`;
   };
   
+  // Clamp ball position to field boundaries (visual fix for iOS)
+  const clampedBall = {
+    x: Math.max(50, Math.min(550, ball.x)),
+    y: Math.max(15, Math.min(885, ball.y)), // Allow ball in goal area (15-885)
+  };
+
   return (
     <>
       <svg
         className="pitch-svg"
         viewBox="0 0 600 900"
         preserveAspectRatio="xMidYMid meet"
-        style={{ touchAction: 'none' }}
+        style={{ 
+          touchAction: 'none',
+          WebkitTouchCallout: 'none',
+          WebkitUserSelect: 'none',
+          userSelect: 'none',
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel ?? onPointerUp}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
       >
         <defs>
+          {/* Clip path para mantener la pelota dentro del campo visual */}
+          <clipPath id="fieldClip">
+            <rect x="0" y="0" width="600" height="900" />
+          </clipPath>
           <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
             <feMerge>
@@ -606,20 +628,22 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
         })}
 
         {/* Pelota 3D real usando Canvas con proyección 3D */}
-        <foreignObject
-          x={ball.x - 20}
-          y={ball.y - 20}
-          width="40"
-          height="40"
-          style={{ overflow: 'visible' }}
-        >
-            <SoccerBall3DCanvas 
-              rotateX={ballRotation.rotateX} 
-              rotateY={ballRotation.rotateY}
-              size={40}
-              lowPerf={lowPerf}
-            />
-        </foreignObject>
+        <g clipPath="url(#fieldClip)">
+          <foreignObject
+            x={clampedBall.x - 20}
+            y={clampedBall.y - 20}
+            width="40"
+            height="40"
+            style={{ overflow: 'visible' }}
+          >
+              <SoccerBall3DCanvas 
+                rotateX={ballRotation.rotateX} 
+                rotateY={ballRotation.rotateY}
+                size={40}
+                lowPerf={lowPerf}
+              />
+          </foreignObject>
+        </g>
       </svg>
       {children}
     </>
