@@ -40,6 +40,7 @@ import {
   CreateMatchScreen,
   HomeScreen,
   PlayingScreen,
+  RankingScreen,
   WaitingScreen
 } from "./views";
 import { NeedBeexoScreen } from "./views/NeedBeexoScreen";
@@ -345,6 +346,8 @@ export default function App() {
         return <BotMatchScreen />;
       case "waiting":
         return <WaitingScreen />;
+      case "ranking":
+        return <RankingScreen />;
       default:
         return <HomeScreen />;
     }

@@ -9,7 +9,7 @@ import {
   TIMED_MATCH_DURATION_MS,
 } from "../types/game";
 
-type ViewId = "home" | "create" | "createBot" | "accept" | "playing" | "bot" | "waiting" | "connect";
+type ViewId = "home" | "create" | "createBot" | "accept" | "playing" | "bot" | "waiting" | "connect" | "ranking";
 
 interface WaitingMatchInfo {
   matchId: number;

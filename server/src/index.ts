@@ -1,4 +1,6 @@
 import { createServer } from "node:http";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { Server, Socket } from "socket.io";
 
 // Basic field configuration - SYNCED WITH FRONTEND (Table Soccer style)
@@ -261,7 +263,142 @@ interface MatchState {
     stakeToken: string;
     creatorAddress: string;
     challengerAddress: string;
+    creatorAlias?: string;
+    challengerAlias?: string;
   };
+}
+
+type WeeklyRankingPlayer = {
+  address: string;
+  alias?: string;
+  xo: number;
+  updatedAt: number;
+};
+
+type WeeklyRankingState = {
+  weekStartMs: number;
+  players: Record<string, WeeklyRankingPlayer>;
+};
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFAULT_XO = 1000;
+const RANKING_K = 32;
+const RANKING_MIN_CHANGE = 5;
+const RANKING_MAX_CHANGE = 50;
+
+const rankingFilePath = join(process.cwd(), "data", "weekly_ranking.json");
+
+function getWeekStartMs(nowMs: number) {
+  const d = new Date(nowMs);
+  const day = d.getUTCDay();
+  const deltaDays = (day + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - deltaDays);
+  d.setUTCHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function ensureCurrentWeek(state: WeeklyRankingState, nowMs: number) {
+  const desired = getWeekStartMs(nowMs);
+  if (state.weekStartMs !== desired) {
+    return { weekStartMs: desired, players: {} };
+  }
+  return state;
+}
+
+function loadWeeklyRanking(nowMs: number): WeeklyRankingState {
+  const empty: WeeklyRankingState = { weekStartMs: getWeekStartMs(nowMs), players: {} };
+  try {
+    if (!existsSync(rankingFilePath)) return empty;
+    const parsed = JSON.parse(readFileSync(rankingFilePath, "utf8")) as WeeklyRankingState;
+    if (!parsed || typeof parsed.weekStartMs !== "number" || !parsed.players) return empty;
+    const normalized = ensureCurrentWeek(parsed, nowMs);
+    return normalized;
+  } catch {
+    return empty;
+  }
+}
+
+function saveWeeklyRanking(state: WeeklyRankingState) {
+  const dir = dirname(rankingFilePath);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  writeFileSync(rankingFilePath, JSON.stringify(state), "utf8");
+}
+
+function getOrInitPlayer(state: WeeklyRankingState, address: string) {
+  const key = address.toLowerCase();
+  const existing = state.players[key];
+  if (existing) return existing;
+  const created: WeeklyRankingPlayer = {
+    address: key,
+    xo: DEFAULT_XO,
+    updatedAt: Date.now(),
+  };
+  state.players[key] = created;
+  return created;
+}
+
+function clampInt(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, Math.round(n)));
+}
+
+function expectedScore(myXo: number, otherXo: number) {
+  return 1 / (1 + Math.pow(10, (otherXo - myXo) / 400));
+}
+
+function computeWinDelta(winnerXo: number, loserXo: number) {
+  const expWin = expectedScore(winnerXo, loserXo);
+  const raw = RANKING_K * (1 - expWin);
+  return clampInt(raw, RANKING_MIN_CHANGE, RANKING_MAX_CHANGE);
+}
+
+let weeklyRanking: WeeklyRankingState = loadWeeklyRanking(Date.now());
+
+function applyWeeklyRankingMatchResult(payload: {
+  winnerAddress: string;
+  loserAddress: string;
+  winnerAlias?: string;
+  loserAlias?: string;
+}) {
+  const now = Date.now();
+  weeklyRanking = ensureCurrentWeek(weeklyRanking, now);
+
+  const winner = getOrInitPlayer(weeklyRanking, payload.winnerAddress);
+  const loser = getOrInitPlayer(weeklyRanking, payload.loserAddress);
+
+  if (payload.winnerAlias) winner.alias = payload.winnerAlias;
+  if (payload.loserAlias) loser.alias = payload.loserAlias;
+
+  const delta = computeWinDelta(winner.xo, loser.xo);
+  winner.xo += delta;
+  loser.xo = Math.max(0, loser.xo - delta);
+  winner.updatedAt = now;
+  loser.updatedAt = now;
+
+  saveWeeklyRanking(weeklyRanking);
+
+  return { delta, winnerXo: winner.xo, loserXo: loser.xo };
+}
+
+function updateRankingIfPossible(state: MatchState, winner: PlayerSide) {
+  const cfg = state.matchConfig;
+  if (!cfg) return;
+  const creator = cfg.creatorAddress;
+  const challenger = cfg.challengerAddress;
+  if (!creator || !challenger) return;
+  if (creator === "" || challenger === "") return;
+
+  const winnerAddress = winner === "creator" ? creator : challenger;
+  const loserAddress = winner === "creator" ? challenger : creator;
+  const winnerAlias = winner === "creator" ? cfg.creatorAlias : cfg.challengerAlias;
+  const loserAlias = winner === "creator" ? cfg.challengerAlias : cfg.creatorAlias;
+  applyWeeklyRankingMatchResult({
+    winnerAddress,
+    loserAddress,
+    winnerAlias,
+    loserAlias,
+  });
 }
 
 const matches = new Map<string, MatchState>();
@@ -677,6 +814,7 @@ function applyTurnTimeout(
     console.log(
       `[Timeout] Emitting matchEnded to room ${state.id} with winner: ${winner}`
     );
+    updateRankingIfPossible(state, winner);
     io.to(state.id).emit("matchEnded", { winner, reason: "timeout" });
     io.to(state.id).emit("snapshot", toSnapshot(state));
     return;
@@ -734,6 +872,7 @@ function simulateStep(
       state.ended = true;
       state.simRunning = false;
       pauseTurn(state);
+      updateRankingIfPossible(state, scorer);
       io.to(state.id).emit("matchEnded", { winner: scorer, reason: "golden-goal" });
       io.to(state.id).emit("snapshot", toSnapshot(state));
       return false;
@@ -751,6 +890,7 @@ function simulateStep(
         state.ended = true;
         state.simRunning = false;
         pauseTurn(state);
+        updateRankingIfPossible(state, winner);
         io.to(state.id).emit("matchEnded", { winner, reason: "goals" });
         io.to(state.id).emit("snapshot", toSnapshot(state));
         return false;
@@ -792,7 +932,54 @@ function startSimulation(io: RealtimeServer, state: MatchState) {
   }, TICK_MS);
 }
 
-const httpServer = createServer();
+const httpServer = createServer((req, res) => {
+  const origin = "*";
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
+
+  const url = new URL(req.url || "/", "http://localhost");
+  if (url.pathname.startsWith("/socket.io")) {
+    return;
+  }
+  if (req.method === "GET" && url.pathname === "/api/ranking/weekly") {
+    const now = Date.now();
+    weeklyRanking = ensureCurrentWeek(weeklyRanking, now);
+
+    const players = Object.values(weeklyRanking.players)
+      .sort((a, b) => b.xo - a.xo || a.address.localeCompare(b.address))
+      .slice(0, 200)
+      .map((p, idx) => ({
+        rank: idx + 1,
+        id: p.alias || p.address,
+        address: p.address,
+        alias: p.alias,
+        xo: p.xo,
+      }));
+
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json");
+    res.end(
+      JSON.stringify({
+        weekStartMs: weeklyRanking.weekStartMs,
+        weekEndMs: weeklyRanking.weekStartMs + WEEK_MS,
+        generatedAt: now,
+        players,
+      })
+    );
+    return;
+  }
+
+  res.statusCode = 404;
+  res.setHeader("Content-Type", "application/json");
+  res.end(JSON.stringify({ error: "not_found" }));
+});
 const io: RealtimeServer = new Server(httpServer, {
   cors: { origin: "*" },
 });
@@ -824,6 +1011,7 @@ setInterval(() => {
         state.ended = true;
         state.simRunning = false;
         pauseTurn(state);
+        updateRankingIfPossible(state, winner);
         io.to(state.id).emit("matchEnded", { winner, reason: "time" });
         io.to(state.id).emit("snapshot", toSnapshot(state));
       }
@@ -987,6 +1175,7 @@ io.on(
 
       // Notify both players
       io.to(state.id).emit("playerForfeited", { side });
+      updateRankingIfPossible(state, winner);
       io.to(state.id).emit("matchEnded", { winner, reason: "forfeit" });
 
       // Clean up match
@@ -1231,6 +1420,7 @@ io.on(
           stakeToken: "0x0000000000000000000000000000000000000000",
           creatorAddress: creator,
           challengerAddress: "",
+          creatorAlias,
         };
 
         // Notify all subscribers
@@ -1259,6 +1449,7 @@ io.on(
         const matchState = matches.get(lobbyMatchId);
         if (matchState?.matchConfig) {
           matchState.matchConfig.challengerAddress = challenger;
+          matchState.matchConfig.challengerAlias = challengerAlias;
         }
 
         // Notify creator that someone joined

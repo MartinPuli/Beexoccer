@@ -70,6 +70,10 @@ export function HomeScreen() {
         JUGAR CONTRA BOT
       </button>
 
+      <button className="home-btn primary" onClick={() => setView("ranking")}>
+        RANKING
+      </button>
+
       {/* Torneos como en el mock */}
       <div className="torneos-box">
         <span className="torneos-lock">🔒</span>
