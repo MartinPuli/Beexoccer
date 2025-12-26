@@ -68,6 +68,8 @@ export default function App() {
   const setCurrentMatchId = useGameStore((state) => state.setCurrentMatchId);
   const setPlayerSide = useGameStore((state) => state.setPlayerSide);
   const setMatchGoalTarget = useGameStore((state) => state.setMatchGoalTarget);
+  const setMatchMode = useGameStore((state) => state.setMatchMode);
+  const setMatchDurationMs = useGameStore((state) => state.setMatchDurationMs);
   const setMatchStatus = useGameStore((state) => state.setMatchStatus);
 
   const { toasts, dismissToast } = useToast();
@@ -159,11 +161,15 @@ export default function App() {
         setCurrentMatchId(String(storedWaitingMatch.matchId));
         setPlayerSide("creator");
         setMatchGoalTarget(storedWaitingMatch.goals);
+        if (storedWaitingMatch.mode) setMatchMode(storedWaitingMatch.mode);
+        if (storedWaitingMatch.durationMs) setMatchDurationMs(storedWaitingMatch.durationMs);
         setMatchStatus("playing");
         setActiveMatch({
           matchId: String(storedWaitingMatch.matchId),
           playerSide: "creator",
           goalTarget: storedWaitingMatch.goals,
+          mode: storedWaitingMatch.mode,
+          durationMs: storedWaitingMatch.durationMs,
           userAddress: address
         });
         setWaitingMatch(undefined);
@@ -185,6 +191,8 @@ export default function App() {
       setCurrentMatchId(storedActiveMatch.matchId);
       setPlayerSide(storedActiveMatch.playerSide);
       setMatchGoalTarget(storedActiveMatch.goalTarget);
+      if (storedActiveMatch.mode) setMatchMode(storedActiveMatch.mode);
+      if (storedActiveMatch.durationMs) setMatchDurationMs(storedActiveMatch.durationMs);
       setMatchStatus("playing");
       setActiveMatch(storedActiveMatch); // Asegurar que esté en el store
       setView("playing");

@@ -29,6 +29,8 @@ const MAX_CONSECUTIVE_TIMEOUTS = 3;
 
 type PlayerSide = "creator" | "challenger";
 
+type MatchMode = "goals" | "time";
+
 type MatchEventType =
   | "goal-self"
   | "goal-rival"
@@ -42,6 +44,8 @@ interface Lobby {
   creator: string;
   creatorAlias: string;
   goals: number;
+  mode?: MatchMode;
+  durationMs?: number;
   isFree: boolean;
   stakeAmount: string;
   stakeToken: string;
@@ -73,6 +77,10 @@ interface SnapshotPayload {
   awaitingInput: boolean;
   creatorScore: number;
   challengerScore: number;
+  matchMode?: MatchMode;
+  matchEndsAt?: number;
+  timeRemainingMs?: number;
+  goldenGoal?: boolean;
   commentary: string;
   ball: { x: number; y: number; vx: number; vy: number };
   chips: Array<{
@@ -126,6 +134,8 @@ interface ClientToServerEvents {
     goals: number;
     isFree: boolean;
     stakeAmount: string;
+    mode?: MatchMode;
+    durationMs?: number;
   }) => void;
   joinLobby: (payload: {
     matchId: string;
@@ -231,6 +241,10 @@ interface MatchState {
   goalTarget: number;
   creatorScore: number;
   challengerScore: number;
+  matchMode?: MatchMode;
+  matchDurationMs?: number;
+  matchEndsAt?: number;
+  goldenGoal?: boolean;
   chips: Vec2[];
   ball: Ball;
   simRunning: boolean;
@@ -345,6 +359,10 @@ function ensureMatch(matchId: string): MatchState {
       goalTarget: 3,
       creatorScore: 0,
       challengerScore: 0,
+      matchMode: "goals",
+      matchDurationMs: undefined,
+      matchEndsAt: undefined,
+      goldenGoal: false,
       chips: defaultChips(),
       ball: defaultBall(),
       simRunning: false,
@@ -374,6 +392,14 @@ function resumeTurnIfReady(state: MatchState) {
   if (!bothPlayersConnected(state)) {
     pauseTurn(state);
     return;
+  }
+  if (state.matchMode === "time" && !state.matchEndsAt) {
+    const duration =
+      typeof state.matchDurationMs === "number" && state.matchDurationMs > 0
+        ? state.matchDurationMs
+        : 180_000;
+    state.matchEndsAt = Date.now() + duration;
+    state.goldenGoal = false;
   }
   if (!state.awaitingInput) {
     state.awaitingInput = true;
@@ -538,19 +564,19 @@ function toSnapshot(state: MatchState): SnapshotPayload {
     awaitingInput: state.awaitingInput,
     creatorScore: state.creatorScore,
     challengerScore: state.challengerScore,
-    commentary: state.ended
-      ? "Partida finalizada"
-      : state.awaitingInput
-      ? "Apunta y dispara"
-      : bothPlayersConnected(state)
-      ? "Resolviendo jugada"
-      : "Esperando al rival",
-    ball: {
-      x: state.ball.x,
-      y: state.ball.y,
-      vx: state.ball.vx,
-      vy: state.ball.vy,
-    },
+    matchMode: state.matchMode,
+    matchEndsAt: state.matchEndsAt,
+    timeRemainingMs:
+      state.matchMode === "time" && typeof state.matchEndsAt === "number"
+        ? Math.max(0, state.matchEndsAt - Date.now())
+        : undefined,
+    goldenGoal: state.goldenGoal,
+    commentary: state.awaitingInput
+      ? state.activePlayer === "creator"
+        ? "Tu turno: arrastra una ficha para disparar"
+        : "Esperando al rival"
+      : "Pelota en movimiento...",
+    ball: state.ball,
     chips: state.chips.map((c) => ({
       id: c.id,
       x: c.x,
@@ -704,20 +730,31 @@ function simulateStep(
       from: scorer,
     });
 
-    // End match if target reached
-    const winner =
-      state.creatorScore >= state.goalTarget
-        ? "creator"
-        : state.challengerScore >= state.goalTarget
-        ? "challenger"
-        : null;
-    if (winner) {
+    if (state.matchMode === "time" && state.goldenGoal) {
       state.ended = true;
       state.simRunning = false;
       pauseTurn(state);
-      io.to(state.id).emit("matchEnded", { winner, reason: "goals" });
+      io.to(state.id).emit("matchEnded", { winner: scorer, reason: "golden-goal" });
       io.to(state.id).emit("snapshot", toSnapshot(state));
       return false;
+    }
+
+    // End match if target reached (goals mode)
+    if (state.matchMode !== "time") {
+      const winner =
+        state.creatorScore >= state.goalTarget
+          ? "creator"
+          : state.challengerScore >= state.goalTarget
+          ? "challenger"
+          : null;
+      if (winner) {
+        state.ended = true;
+        state.simRunning = false;
+        pauseTurn(state);
+        io.to(state.id).emit("matchEnded", { winner, reason: "goals" });
+        io.to(state.id).emit("snapshot", toSnapshot(state));
+        return false;
+      }
     }
 
     // Quien recibió el gol saca
@@ -770,6 +807,29 @@ setInterval(() => {
       pauseTurn(state);
       continue;
     }
+
+    if (
+      state.matchMode === "time" &&
+      typeof state.matchEndsAt === "number" &&
+      now >= state.matchEndsAt &&
+      !state.goldenGoal
+    ) {
+      if (state.creatorScore === state.challengerScore) {
+        state.goldenGoal = true;
+        // Keep playing until next goal.
+        io.to(state.id).emit("snapshot", toSnapshot(state));
+      } else {
+        const winner =
+          state.creatorScore > state.challengerScore ? "creator" : "challenger";
+        state.ended = true;
+        state.simRunning = false;
+        pauseTurn(state);
+        io.to(state.id).emit("matchEnded", { winner, reason: "time" });
+        io.to(state.id).emit("snapshot", toSnapshot(state));
+      }
+      continue;
+    }
+
     if (state.awaitingInput && !state.simRunning && now >= state.turnEndsAt) {
       applyTurnTimeout(io, state, state.activePlayer);
     }
@@ -789,6 +849,8 @@ io.on(
     const rawMatchId = socket.handshake.query.matchId;
     const rawSide = socket.handshake.query.side;
     const rawGoals = socket.handshake.query.goals;
+    const rawMode = socket.handshake.query.mode;
+    const rawDurationMs = socket.handshake.query.durationMs;
     let matchId =
       typeof rawMatchId === "string" && rawMatchId.length > 0
         ? rawMatchId
@@ -808,6 +870,16 @@ io.on(
       typeof rawGoals === "string" ? Number.parseInt(rawGoals, 10) : NaN;
     if (Number.isFinite(parsedGoals) && parsedGoals > 0 && parsedGoals <= 10) {
       match.goalTarget = parsedGoals;
+    }
+
+    // Store match mode (optional) and duration (optional)
+    if (rawMode === "time" || rawMode === "goals") {
+      match.matchMode = rawMode;
+    }
+    const parsedDurationMs =
+      typeof rawDurationMs === "string" ? Number.parseInt(rawDurationMs, 10) : NaN;
+    if (Number.isFinite(parsedDurationMs) && parsedDurationMs > 0) {
+      match.matchDurationMs = parsedDurationMs;
     }
 
     // Track connections and (re)start the timer only when both are present.
@@ -1123,6 +1195,8 @@ io.on(
         goals,
         isFree,
         stakeAmount,
+        mode,
+        durationMs,
       }) => {
         // Ensure this socket is in the lobby room so it can receive matchReady/lobbyJoined.
         socket.join(lobbyMatchId);
@@ -1132,6 +1206,8 @@ io.on(
           creator,
           creatorAlias,
           goals,
+          mode,
+          durationMs,
           isFree,
           stakeAmount,
           stakeToken: "0x0000000000000000000000000000000000000000",
@@ -1144,6 +1220,11 @@ io.on(
         // Guardar config del match para revancha con blockchain
         const matchState = ensureMatch(lobbyMatchId);
         matchState.goalTarget = goals;
+        matchState.matchMode = mode === "time" ? "time" : "goals";
+        matchState.matchDurationMs =
+          typeof durationMs === "number" && durationMs > 0 ? durationMs : undefined;
+        matchState.matchEndsAt = undefined;
+        matchState.goldenGoal = false;
         matchState.matchConfig = {
           isFree,
           stakeAmount,

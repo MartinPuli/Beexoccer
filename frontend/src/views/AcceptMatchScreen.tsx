@@ -14,6 +14,8 @@ export function AcceptMatchScreen() {
   const setMatchStatus = useGameStore((state) => state.setMatchStatus);
   const setPlayerSide = useGameStore((state) => state.setPlayerSide);
   const setMatchGoalTarget = useGameStore((state) => state.setMatchGoalTarget);
+  const setMatchMode = useGameStore((state) => state.setMatchMode);
+  const setMatchDurationMs = useGameStore((state) => state.setMatchDurationMs);
   const setWaitingMatch = useGameStore((state) => state.setWaitingMatch);
 
   // Obtener dirección del usuario actual
@@ -97,6 +99,8 @@ export function AcceptMatchScreen() {
       setCurrentMatchId(String(matchId));
       setPlayerSide("challenger");
       setMatchGoalTarget(chosen.goals);
+      if (chosen.mode) setMatchMode(chosen.mode);
+      if (chosen.durationMs) setMatchDurationMs(chosen.durationMs);
       setMatchStatus("playing");
       setView("playing");
     } catch (error) {
@@ -135,6 +139,8 @@ export function AcceptMatchScreen() {
     setWaitingMatch({
       matchId: match.id,
       goals: match.goals,
+      mode: match.mode,
+      durationMs: match.durationMs,
       isFree: match.isFree,
       stakeAmount: match.stakeAmount,
       creatorAddress: match.creator // El creador es el dueño de esta partida

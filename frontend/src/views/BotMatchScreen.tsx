@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { PitchCanvas } from "../components/PitchCanvas";
 import { useGameStore } from "../hooks/useGameStore";
-import { TokenChip } from "../types/game";
+import { TIMED_MATCH_DURATION_MS, TokenChip } from "../types/game";
 
 /**
  * BotMatchScreen (refactor compatible)
@@ -282,6 +282,8 @@ function stepEntity<T extends { x: number; y: number; vx: number; vy: number; ra
    ========================= */
 export function BotMatchScreen() {
   const goalTarget = useGameStore((s) => s.matchGoalTarget);
+  const matchMode = useGameStore((s) => s.matchMode);
+  const matchDurationMs = useGameStore((s) => s.matchDurationMs);
   const setView = useGameStore((s) => s.setView);
 
   const chipsRef = useRef<MovingChip[]>([...initPlayerChips(), ...initBotChips()]);
@@ -303,6 +305,8 @@ export function BotMatchScreen() {
   const [shotPower, setShotPower] = useState<number>(0);
   const [showPowerMeter, setShowPowerMeter] = useState<{ x: number; y: number } | null>(null);
   const [consecutiveTimeouts, setConsecutiveTimeouts] = useState(0);
+  const [matchClockMs, setMatchClockMs] = useState<number | null>(null);
+  const [goldenGoal, setGoldenGoal] = useState(false);
 
   const dragRef = useRef<{ chipId: string; start: { x: number; y: number } } | null>(null);
   const simRef = useRef<number | null>(null);
@@ -310,6 +314,11 @@ export function BotMatchScreen() {
   const turnStartTimeRef = useRef<number>(Date.now());
   const goalScoredRef = useRef(false);
   const botAggressionRef = useRef(0.5);
+  const matchEndsAtRef = useRef<number | null>(null);
+  const goldenGoalRef = useRef(false);
+  const showEndRef = useRef(false);
+  const myScoreRef = useRef(0);
+  const botScoreRef = useRef(0);
   const botStatsRef = useRef({
     shots: 0,
     passes: 0,
@@ -319,6 +328,79 @@ export function BotMatchScreen() {
     successfulPasses: 0,
     interceptions: 0,
   });
+
+  useEffect(() => {
+    showEndRef.current = showEnd;
+  }, [showEnd]);
+
+  useEffect(() => {
+    myScoreRef.current = myScore;
+  }, [myScore]);
+
+  useEffect(() => {
+    botScoreRef.current = botScore;
+  }, [botScore]);
+
+  // =========================
+  //  TIMER DE PARTIDO (vs Bot)
+  //  - Solo aplica en modo "time"
+  //  - Si termina empatado => Gol de oro
+  // =========================
+  useEffect(() => {
+    if (matchMode !== "time") {
+      matchEndsAtRef.current = null;
+      goldenGoalRef.current = false;
+      setGoldenGoal(false);
+      setMatchClockMs(null);
+      return;
+    }
+
+    const duration = typeof matchDurationMs === "number" ? matchDurationMs : TIMED_MATCH_DURATION_MS;
+    // IMPORTANT: do NOT reset the match timer when the score changes.
+    // Only initialize it if not already initialized.
+    if (typeof matchEndsAtRef.current !== "number") {
+      matchEndsAtRef.current = Date.now() + duration;
+    }
+    goldenGoalRef.current = false;
+    setGoldenGoal(false);
+    setMatchClockMs(duration);
+  }, [matchMode, matchDurationMs]);
+
+  useEffect(() => {
+    if (matchMode !== "time") return;
+
+    const interval = setInterval(() => {
+      if (showEndRef.current) return;
+
+      if (goldenGoalRef.current) {
+        setMatchClockMs(0);
+        return;
+      }
+
+      const endsAt = matchEndsAtRef.current;
+      if (typeof endsAt !== "number") return;
+
+      const remaining = endsAt - Date.now();
+      const clamped = Math.max(0, remaining);
+      setMatchClockMs(clamped);
+
+      if (remaining <= 0) {
+        // Tiempo terminado: si hay empate => gol de oro, si no => termina
+        const ms = myScoreRef.current;
+        const bs = botScoreRef.current;
+        if (ms === bs) {
+          goldenGoalRef.current = true;
+          setGoldenGoal(true);
+          setMatchClockMs(0);
+        } else {
+          setWinner(ms > bs ? "you" : "bot");
+          setShowEnd(true);
+        }
+      }
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [matchMode]);
 
   // ========== SISTEMA DE IA AVANZADA DEL BOT ==========
   
@@ -1201,20 +1283,42 @@ export function BotMatchScreen() {
           goalScoredRef.current = true;
           const newScore = myScore + 1;
           setMyScore(newScore);
-          if (newScore >= goalTarget) { 
-            setWinner("you"); 
-            setShowEnd(true);
+
+          if (matchMode === "time") {
+            if (goldenGoalRef.current) {
+              setWinner("you");
+              setShowEnd(true);
+            } else {
+              showGoalAnim("you");
+            }
+          } else {
+            if (newScore >= goalTarget) {
+              setWinner("you");
+              setShowEnd(true);
+            } else {
+              showGoalAnim("you");
+            }
           }
-          else { showGoalAnim("you"); }
         } else if (b.y > BOUNDARY_BOTTOM + 10 && b.x > GOAL_LEFT && b.x < GOAL_RIGHT) {
           goalScoredRef.current = true;
           const newScore = botScore + 1;
           setBotScore(newScore);
-          if (newScore >= goalTarget) { 
-            setWinner("bot"); 
-            setShowEnd(true);
+
+          if (matchMode === "time") {
+            if (goldenGoalRef.current) {
+              setWinner("bot");
+              setShowEnd(true);
+            } else {
+              showGoalAnim("bot");
+            }
+          } else {
+            if (newScore >= goalTarget) {
+              setWinner("bot");
+              setShowEnd(true);
+            } else {
+              showGoalAnim("bot");
+            }
           }
-          else { showGoalAnim("bot"); }
         }
       }
 
@@ -1256,13 +1360,12 @@ export function BotMatchScreen() {
       // Propagar estado a React (solo shallow copies para evitar re-renders innecesarios)
       setChips(chipsRef.current.map(c => ({ ...c })));
       setBall({ ...ballRef.current });
-
       simRef.current = requestAnimationFrame(loop);
     };
 
     simRef.current = requestAnimationFrame(loop);
     return () => { if (simRef.current) cancelAnimationFrame(simRef.current); };
-  }, [active, goalAnimation, showEnd, turnLostAnimation, myScore, botScore, goalTarget, isMoving, botShoot, showGoalAnim, showTurnLost]);
+  }, [active, goalAnimation, showEnd, turnLostAnimation, myScore, botScore, goalTarget, matchMode, isMoving, botShoot, showGoalAnim, showTurnLost]);
 
   /* =========================
      TEMPORIZADOR DE TURNO
@@ -1642,6 +1745,12 @@ export function BotMatchScreen() {
         </div>
 
         <div className="hud-timer">
+          {matchClockMs !== null && (
+            <div className="timer-label" style={{ marginBottom: 6 }}>
+              TIEMPO: {Math.ceil(matchClockMs / 1000)}
+              {goldenGoal ? "  •  GOL DE ORO" : ""}
+            </div>
+          )}
           <div className="timer-bar">
             <div 
               className="timer-fill" 

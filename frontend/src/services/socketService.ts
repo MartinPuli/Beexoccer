@@ -4,6 +4,7 @@ import {
   MatchEvent,
   MatchLobby,
   GoalTarget,
+  MatchMode,
 } from "../types/game";
 import { env } from "../config/env";
 
@@ -98,6 +99,8 @@ type ClientToServerEvents = {
     goals: number;
     isFree: boolean;
     stakeAmount: string;
+    mode?: MatchMode;
+    durationMs?: number;
   }) => void;
   joinLobby: (payload: {
     matchId: string;
@@ -156,7 +159,9 @@ class SocketService {
   connect(
     matchId: string,
     side: "creator" | "challenger",
-    goalTarget?: number
+    goalTarget?: number,
+    mode?: MatchMode,
+    durationMs?: number
   ) {
     if (this.socket?.connected && this.currentMatchId === matchId) {
       return; // Ya conectado a este match
@@ -173,7 +178,13 @@ class SocketService {
     try {
       this.socket = io(REALTIME_URL, {
         transports: ["websocket", "polling"],
-        query: { matchId, side, goals: goalTarget?.toString() || "3" },
+        query: {
+          matchId,
+          side,
+          goals: goalTarget?.toString() || "3",
+          mode: mode || "goals",
+          durationMs: durationMs?.toString() || "",
+        },
         timeout: 15000,
         reconnection: true,
         reconnectionAttempts: this.maxRetries,
@@ -494,7 +505,9 @@ class SocketService {
     creatorAlias: string,
     goals: number,
     isFree: boolean,
-    stakeAmount: string
+    stakeAmount: string,
+    mode?: MatchMode,
+    durationMs?: number
   ) {
     const payload = {
       matchId,
@@ -503,6 +516,8 @@ class SocketService {
       goals,
       isFree,
       stakeAmount,
+      mode,
+      durationMs,
     };
     if (this.socket?.connected) {
       this.socket.emit("createLobby", payload);

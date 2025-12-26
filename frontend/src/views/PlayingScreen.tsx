@@ -72,6 +72,8 @@ export function PlayingScreen() {
   const playerSide = useGameStore((s) => s.playerSide);
   const currentMatchId = useGameStore((s) => s.currentMatchId);
   const goalTarget = useGameStore((s) => s.matchGoalTarget);
+  const matchMode = useGameStore((s) => s.matchMode);
+  const matchDurationMs = useGameStore((s) => s.matchDurationMs);
   const setView = useGameStore((s) => s.setView);
   const setMatchStatus = useGameStore((s) => s.setMatchStatus);
   const setCurrentMatchId = useGameStore((s) => s.setCurrentMatchId);
@@ -102,6 +104,8 @@ export function PlayingScreen() {
   const [rivalRequestedRematch, setRivalRequestedRematch] = useState(false);
   const [rivalRematchAlias, setRivalRematchAlias] = useState("");
   const [settling, setSettling] = useState(false);
+  const [matchClockMs, setMatchClockMs] = useState<number | null>(null);
+  const [goldenGoal, setGoldenGoal] = useState(false);
 
   const dragRef = useRef<{ chipId: string; start: { x: number; y: number } } | null>(null);
   const turnEndRef = useRef<number>(Date.now() + TURN_TIME);
@@ -118,6 +122,8 @@ export function PlayingScreen() {
     commentary: string;
     turnEndsAt: number;
     awaitingInput: boolean;
+    timeRemainingMs?: number;
+    goldenGoal?: boolean;
   } | null>(null);
   const isMobileRef = useRef(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -151,7 +157,13 @@ export function PlayingScreen() {
     if (!currentMatchId) return;
 
     // Primero registrar los listeners, luego conectar
-    socketService.connect(currentMatchId, playerSide, goalTarget);
+    socketService.connect(
+      currentMatchId,
+      playerSide,
+      goalTarget,
+      matchMode,
+      matchDurationMs
+    );
 
     socketService.onSnapshot((snapshot: PlayingSnapshot) => {
       setConnected(true);
@@ -183,6 +195,8 @@ export function PlayingScreen() {
         commentary: snapshot.commentary,
         turnEndsAt: snapshot.turnEndsAt,
         awaitingInput: snapshot.awaitingInput ?? true,
+        timeRemainingMs: snapshot.timeRemainingMs,
+        goldenGoal: snapshot.goldenGoal,
       };
 
       // If not throttling (desktop), apply immediately
@@ -200,6 +214,12 @@ export function PlayingScreen() {
         }
         turnEndRef.current = snapshot.turnEndsAt;
         setCommentary(snapshot.commentary);
+        setMatchClockMs(
+          typeof snapshot.timeRemainingMs === "number"
+            ? snapshot.timeRemainingMs
+            : null
+        );
+        setGoldenGoal(!!snapshot.goldenGoal);
       }
       
       // Verificar si cambió de turno para tracking
@@ -224,6 +244,12 @@ export function PlayingScreen() {
       if (!isMobileRef.current) {
         turnEndRef.current = snapshot.turnEndsAt;
         setCommentary(snapshot.commentary);
+        setMatchClockMs(
+          typeof snapshot.timeRemainingMs === "number"
+            ? snapshot.timeRemainingMs
+            : null
+        );
+        setGoldenGoal(!!snapshot.goldenGoal);
       }
     });
 
@@ -335,6 +361,7 @@ export function PlayingScreen() {
           
           const result = await createMatch({
             goals: data.matchConfig.goals as 2 | 3 | 5,
+            mode: "goals",
             isFree: data.matchConfig.isFree,
             stakeAmount: data.matchConfig.stakeAmount,
             stakeToken: data.matchConfig.stakeToken,
@@ -389,7 +416,7 @@ export function PlayingScreen() {
       socketService.offAll();
       socketService.disconnect();
     };
-  }, [currentMatchId, playerSide, isChallenger, setMatchStatus]);
+  }, [currentMatchId, playerSide, isChallenger, setMatchStatus, goalTarget, matchMode, matchDurationMs]);
 
   // Detect mobile and start throttled visual updater
   useEffect(() => {
@@ -855,6 +882,16 @@ export function PlayingScreen() {
             <span className="score-value">{rivalScore}</span>
           </div>
         </div>
+
+        {/* Match clock (timed mode) */}
+        {matchClockMs !== null && (
+          <div className="turn-indicator" style={{ marginTop: 6 }}>
+            ⏱️ {Math.floor(matchClockMs / 60000)}:{String(
+              Math.floor((matchClockMs % 60000) / 1000)
+            ).padStart(2, "0")}
+            {goldenGoal ? "  •  GOL DE ORO" : ""}
+          </div>
+        )}
       </div>
 
       {/* Momentum bar */}

@@ -4,8 +4,14 @@
  */
 export type GoalTarget = 2 | 3 | 5;
 
+export type MatchMode = "goals" | "time";
+
+export const TIMED_MATCH_DURATION_MS = 180_000;
+
 export interface MatchConfig {
   goals: GoalTarget;
+  mode: MatchMode;
+  durationMs?: number;
   isFree: boolean;
   stakeAmount: string; // Human-readable (ether-style) number for UI binding.
   stakeToken: string; // ERC-20 address or 0x0 for native MATIC.
@@ -18,6 +24,8 @@ export interface MatchLobby {
   challenger?: string;
   challengerAlias?: string;
   goals: GoalTarget;
+  mode?: MatchMode;
+  durationMs?: number;
   isFree: boolean;
   stakeAmount: string;
   stakeToken: string;
@@ -32,6 +40,10 @@ export interface PlayingSnapshot {
   awaitingInput?: boolean; // True when a player is expected to shoot; false while simulation runs / waiting.
   creatorScore: number;
   challengerScore: number;
+  matchMode?: MatchMode;
+  matchEndsAt?: number;
+  timeRemainingMs?: number;
+  goldenGoal?: boolean;
   commentary: string;
   ball: { x: number; y: number; vx?: number; vy?: number };
   chips: TokenChip[];

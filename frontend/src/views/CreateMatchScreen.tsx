@@ -1,12 +1,13 @@
 import { ChangeEvent, FormEvent, useState, useEffect } from "react";
 import { createMatch } from "../services/matchService";
 import { useGameStore } from "../hooks/useGameStore";
-import { GoalTarget } from "../types/game";
+import { GoalTarget, MatchMode, TIMED_MATCH_DURATION_MS } from "../types/game";
 import { walletService, TokenInfo } from "../services/walletService";
 import { toast } from "../components/Toast";
 
 export function CreateMatchScreen() {
   const [goals, setGoals] = useState<GoalTarget>(3);
+  const [matchMode, setMatchMode] = useState<MatchMode>("goals");
   const [isBet, setIsBet] = useState(false);
   const [stakeAmount, setStakeAmount] = useState("10");
   const [selectedToken, setSelectedToken] = useState("POL");
@@ -65,6 +66,8 @@ export function CreateMatchScreen() {
       
       const result = await createMatch({
         goals,
+        mode: matchMode,
+        durationMs: matchMode === "time" ? TIMED_MATCH_DURATION_MS : undefined,
         isFree: !isBet,
         stakeAmount: amount,
         stakeToken: tokenAddress
@@ -76,6 +79,8 @@ export function CreateMatchScreen() {
       setWaitingMatch({
         matchId: result.matchId,
         goals,
+        mode: matchMode,
+        durationMs: matchMode === "time" ? TIMED_MATCH_DURATION_MS : undefined,
         isFree: !isBet,
         stakeAmount: isBet ? stakeAmount : "0",
         creatorAddress: userAddress
@@ -127,22 +132,45 @@ export function CreateMatchScreen() {
       </div>
 
       <form className="create-body" onSubmit={handleSubmit}>
-        {/* Meta de goles */}
+        {/* Modo de juego */}
         <div className="create-section">
-          <span className="create-label">Meta de goles</span>
+          <span className="create-label">Tipo de partido</span>
           <div className="goals-row">
-            {([2, 3, 5] as GoalTarget[]).map((n) => (
-              <button
-                key={n}
-                type="button"
-                className={`goal-btn ${goals === n ? "active" : ""}`}
-                onClick={() => setGoals(n)}
-              >
-                {n}
-              </button>
-            ))}
+            <button
+              type="button"
+              className={`goal-btn ${matchMode === "goals" ? "active" : ""}`}
+              onClick={() => setMatchMode("goals")}
+            >
+              Por goles
+            </button>
+            <button
+              type="button"
+              className={`goal-btn ${matchMode === "time" ? "active" : ""}`}
+              onClick={() => setMatchMode("time")}
+            >
+              Por tiempo (3:00)
+            </button>
           </div>
         </div>
+
+        {/* Meta de goles */}
+        {matchMode === "goals" && (
+          <div className="create-section">
+            <span className="create-label">Meta de goles</span>
+            <div className="goals-row">
+              {([2, 3, 5] as GoalTarget[]).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={`goal-btn ${goals === n ? "active" : ""}`}
+                  onClick={() => setGoals(n)}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Toggle Gratis/Apostar */}
         <div className="create-section">

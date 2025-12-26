@@ -166,12 +166,14 @@ export async function createMatch(config: MatchConfig): Promise<{ matchId: numbe
     const userAddress = walletService.getUserAddress() || "";
     const userAlias = walletService.getAlias();
     socketService.createLobby(
-      String(matchId), 
-      userAddress, 
-      userAlias, 
+      String(matchId),
+      userAddress,
+      userAlias,
       config.goals,
       config.isFree,
-      config.isFree ? "0" : config.stakeAmount
+      config.isFree ? "0" : config.stakeAmount,
+      config.mode,
+      config.durationMs
     );
     
     return { matchId };

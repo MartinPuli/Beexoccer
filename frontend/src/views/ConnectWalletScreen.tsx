@@ -47,6 +47,8 @@ export function ConnectWalletScreen() {
             matchId: String(waitingMatch.matchId),
             playerSide: "creator",
             goalTarget: waitingMatch.goals,
+            mode: waitingMatch.mode,
+            durationMs: waitingMatch.durationMs,
             userAddress: address
           });
           setWaitingMatch(undefined);

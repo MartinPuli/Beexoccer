@@ -1,12 +1,21 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { MatchLobby, GoalTarget, PlayingSnapshot, MatchEvent } from "../types/game";
+import {
+  MatchLobby,
+  GoalTarget,
+  PlayingSnapshot,
+  MatchEvent,
+  MatchMode,
+  TIMED_MATCH_DURATION_MS,
+} from "../types/game";
 
 type ViewId = "home" | "create" | "createBot" | "accept" | "playing" | "bot" | "waiting" | "connect";
 
 interface WaitingMatchInfo {
   matchId: number;
   goals: GoalTarget;
+  mode?: MatchMode;
+  durationMs?: number;
   isFree: boolean;
   stakeAmount: string;
   creatorAddress: string; // Dirección del creador para verificar propiedad
@@ -17,6 +26,8 @@ interface ActiveMatchInfo {
   matchId: string;
   playerSide: "creator" | "challenger";
   goalTarget: GoalTarget;
+  mode?: MatchMode;
+  durationMs?: number;
   userAddress: string; // Dirección del usuario para verificar propiedad
 }
 
@@ -37,6 +48,8 @@ interface GameStore {
   currentMatchId?: string;
   playerSide: "creator" | "challenger";
   matchGoalTarget: GoalTarget;
+  matchMode: MatchMode;
+  matchDurationMs?: number;
   matchStatus: "idle" | "playing" | "ended";
   playing?: PlayingSnapshot;
   lastEvent?: MatchEvent;
@@ -52,6 +65,8 @@ interface GameStore {
   setCurrentMatchId: (matchId?: string) => void;
   setPlayerSide: (side: "creator" | "challenger") => void;
   setMatchGoalTarget: (goal: GoalTarget) => void;
+  setMatchMode: (mode: MatchMode) => void;
+  setMatchDurationMs: (durationMs?: number) => void;
   setMatchStatus: (status: "idle" | "playing" | "ended") => void;
   setPlayingSnapshot: (snapshot?: PlayingSnapshot) => void;
   applyRealtimeSnapshot: (snapshot: PlayingSnapshot) => void;
@@ -95,6 +110,8 @@ export const useGameStore = create<GameStore>()(
       currentMatchId: undefined,
       playerSide: "creator",
       matchGoalTarget: 3,
+      matchMode: "goals",
+      matchDurationMs: undefined,
       matchStatus: "idle",
       playing: defaultSnapshot(),
       waitingMatch: undefined,
@@ -109,6 +126,13 @@ export const useGameStore = create<GameStore>()(
       setCurrentMatchId: (currentMatchId) => set({ currentMatchId }),
       setPlayerSide: (playerSide) => set({ playerSide }),
       setMatchGoalTarget: (matchGoalTarget) => set({ matchGoalTarget }),
+      setMatchMode: (matchMode) =>
+        set({
+          matchMode,
+          matchDurationMs:
+            matchMode === "time" ? TIMED_MATCH_DURATION_MS : undefined,
+        }),
+      setMatchDurationMs: (matchDurationMs) => set({ matchDurationMs }),
       setMatchStatus: (matchStatus) => set({ matchStatus }),
       setPlayingSnapshot: (playing) => set({ playing }),
       applyRealtimeSnapshot: (playing) => set({ playing }),
