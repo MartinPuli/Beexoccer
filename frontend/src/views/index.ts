@@ -7,3 +7,4 @@ export { BotMatchScreen } from "./BotMatchScreen";
 export { WaitingScreen } from "./WaitingScreen";
 export { ConnectWalletScreen } from "./ConnectWalletScreen";
 export { RankingScreen } from "./RankingScreen";
+export { TeamSelectScreen } from "./TeamSelectScreen";

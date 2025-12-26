@@ -9,7 +9,17 @@ import {
   TIMED_MATCH_DURATION_MS,
 } from "../types/game";
 
-type ViewId = "home" | "create" | "createBot" | "accept" | "playing" | "bot" | "waiting" | "connect" | "ranking";
+type ViewId =
+  | "home"
+  | "create"
+  | "createBot"
+  | "accept"
+  | "playing"
+  | "bot"
+  | "waiting"
+  | "connect"
+  | "ranking"
+  | "teamSelect";
 
 interface WaitingMatchInfo {
   matchId: number;
@@ -57,6 +67,7 @@ interface GameStore {
   activeMatch?: ActiveMatchInfo;
   pendingRematch?: PendingRematch;
   consecutiveTimeouts: number; // Contador de timeouts seguidos
+  selectedTeamId?: string;
   setView: (view: ViewId) => void;
   setAlias: (alias: string) => void;
   setBalance: (balance: string) => void;
@@ -79,6 +90,7 @@ interface GameStore {
   setPendingRematch: (info?: PendingRematch) => void;
   resetTimeoutCounter: () => void;
   clearSession: () => void;
+  setSelectedTeamId: (teamId?: string) => void;
 }
 
 const TURN_DURATION_MS = 15_000;
@@ -118,6 +130,7 @@ export const useGameStore = create<GameStore>()(
       activeMatch: undefined,
       pendingRematch: undefined,
       consecutiveTimeouts: 0,
+      selectedTeamId: "river",
       setView: (view) => set({ view }),
       setAlias: (alias) => set({ alias }),
       setBalance: (balance) => set({ balance }),
@@ -140,6 +153,7 @@ export const useGameStore = create<GameStore>()(
       setWaitingMatch: (waitingMatch) => set({ waitingMatch }),
       setActiveMatch: (activeMatch) => set({ activeMatch }),
       setPendingRematch: (pendingRematch) => set({ pendingRematch }),
+      setSelectedTeamId: (selectedTeamId) => set({ selectedTeamId }),
       resetTimeoutCounter: () => set({ consecutiveTimeouts: 0 }),
       clearSession: () => set({ 
         waitingMatch: undefined, 
@@ -215,7 +229,8 @@ export const useGameStore = create<GameStore>()(
         // Solo persistir datos de sesión críticos
         waitingMatch: state.waitingMatch,
         activeMatch: state.activeMatch,
-        userAddress: state.userAddress
+        userAddress: state.userAddress,
+        selectedTeamId: state.selectedTeamId,
       })
     }
   )

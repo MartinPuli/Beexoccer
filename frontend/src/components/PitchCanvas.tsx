@@ -7,6 +7,7 @@ interface PitchCanvasProps {
   highlightId?: string;
   activePlayer?: "creator" | "challenger";
   isPlayerTurn?: boolean;
+  mySide?: "creator" | "challenger";
   children?: ReactNode;
   aimLine?: { from: { x: number; y: number }; to: { x: number; y: number } };
   shotPower?: number;
@@ -292,7 +293,7 @@ const isIOS = typeof navigator !== 'undefined' &&
   /iPad|iPhone|iPod/.test(navigator.userAgent) && 
   !(window as unknown as { MSStream?: unknown }).MSStream;
 
-export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTurn, children, aimLine, shotPower: shotPowerProp = 0, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onTouchStart, onTouchMove, onTouchEnd, lowPerf = false }: Readonly<PitchCanvasProps>) {
+export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTurn, mySide, children, aimLine, shotPower: shotPowerProp = 0, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onTouchStart, onTouchMove, onTouchEnd, lowPerf = false }: Readonly<PitchCanvasProps>) {
   // Sistema de rotación 3D realista para la pelota
   const lastBallPosRef = useRef({ x: ball.x, y: ball.y });
   const [ballRotation, setBallRotation] = useState({ rotateX: 0, rotateY: 0 });
@@ -567,10 +568,9 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
 
         {/* Fichas */}
         {chips.map((chip) => {
-          // Azul = mi ficha, Rojo = rival (ya transformado por PlayingScreen)
-          const isMyChip = chip.fill === "#00a8ff";
+          const isMyChip = mySide ? chip.owner === mySide : chip.fill === "#00a8ff";
           const chipColor = chip.fill || (isMyChip ? "var(--accent-blue, #00a8ff)" : "var(--accent-red, #ff4d5a)");
-          const borderColor = isMyChip ? "#0066cc" : "#cc0022";
+          const borderColor = chip.stroke || (isMyChip ? "#0066cc" : "#cc0022");
           // Glow solo si es mi turno y es mi ficha
           const isActive = isPlayerTurn && isMyChip;
           const isSelected = highlightId === chip.id;

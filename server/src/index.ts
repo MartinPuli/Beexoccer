@@ -29,6 +29,147 @@ const TURN_MS = 15_000; // 15 segundos por turno (igual que frontend)
 const MAX_SIM_MS = 10_000;
 const MAX_CONSECUTIVE_TIMEOUTS = 3;
 
+type TeamKit = {
+  primary: string;
+  secondary: string;
+};
+
+type TeamDef = {
+  id: string;
+  home: TeamKit;
+  away: TeamKit;
+};
+
+const ARGENTINA_TEAMS_2025: TeamDef[] = [
+  { id: "aldosivi", home: { primary: "#ffd100", secondary: "#00843d" }, away: { primary: "#ffffff", secondary: "#00843d" } },
+  { id: "atletico-tucuman", home: { primary: "#1e5aa8", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#1e5aa8" } },
+  { id: "belgrano", home: { primary: "#4aa6ff", secondary: "#0b2d59" }, away: { primary: "#ffffff", secondary: "#4aa6ff" } },
+  { id: "central-cordoba-sde", home: { primary: "#000000", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#000000" } },
+  { id: "estudiantes-lp", home: { primary: "#d6001c", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#d6001c" } },
+  { id: "gimnasia-lp", home: { primary: "#0b2d59", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#0b2d59" } },
+  { id: "godoy-cruz", home: { primary: "#1e5aa8", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#1e5aa8" } },
+  { id: "independiente-rivadavia", home: { primary: "#1e5aa8", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#1e5aa8" } },
+  { id: "instituto", home: { primary: "#d6001c", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#d6001c" } },
+  { id: "newells", home: { primary: "#000000", secondary: "#d6001c" }, away: { primary: "#ffffff", secondary: "#d6001c" } },
+  { id: "rosario-central", home: { primary: "#f6c800", secondary: "#1e5aa8" }, away: { primary: "#1e5aa8", secondary: "#f6c800" } },
+  { id: "san-martin-sj", home: { primary: "#0b2d59", secondary: "#000000" }, away: { primary: "#ffffff", secondary: "#0b2d59" } },
+  { id: "sarmiento-junin", home: { primary: "#00843d", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#00843d" } },
+  { id: "talleres", home: { primary: "#1e5aa8", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#1e5aa8" } },
+  { id: "union", home: { primary: "#d6001c", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#d6001c" } },
+  { id: "argentinos", home: { primary: "#d6001c", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#d6001c" } },
+  { id: "banfield", home: { primary: "#00843d", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#00843d" } },
+  { id: "barracas-central", home: { primary: "#d6001c", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#d6001c" } },
+  { id: "boca", home: { primary: "#0b2d59", secondary: "#f6c800" }, away: { primary: "#f6c800", secondary: "#0b2d59" } },
+  { id: "defensa-y-justicia", home: { primary: "#00843d", secondary: "#f6c800" }, away: { primary: "#ffffff", secondary: "#00843d" } },
+  { id: "deportivo-riestra", home: { primary: "#000000", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#000000" } },
+  { id: "huracan", home: { primary: "#ffffff", secondary: "#d6001c" }, away: { primary: "#d6001c", secondary: "#ffffff" } },
+  { id: "independiente", home: { primary: "#d6001c", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#d6001c" } },
+  { id: "lanus", home: { primary: "#6a0f2d", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#6a0f2d" } },
+  { id: "platense", home: { primary: "#6a0f2d", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#6a0f2d" } },
+  { id: "racing", home: { primary: "#4aa6ff", secondary: "#ffffff" }, away: { primary: "#ffffff", secondary: "#4aa6ff" } },
+  { id: "river", home: { primary: "#ffffff", secondary: "#d6001c" }, away: { primary: "#d6001c", secondary: "#ffffff" } },
+  { id: "san-lorenzo", home: { primary: "#0b2d59", secondary: "#d6001c" }, away: { primary: "#d6001c", secondary: "#0b2d59" } },
+  { id: "tigre", home: { primary: "#1e5aa8", secondary: "#d6001c" }, away: { primary: "#ffffff", secondary: "#1e5aa8" } },
+  { id: "velez", home: { primary: "#ffffff", secondary: "#0b2d59" }, away: { primary: "#0b2d59", secondary: "#ffffff" } },
+];
+
+function getTeamKit(teamId: string | undefined, which: "home" | "away"): TeamKit | undefined {
+  if (!teamId) return undefined;
+  const t = ARGENTINA_TEAMS_2025.find((x) => x.id === teamId);
+  if (!t) return undefined;
+  return which === "home" ? t.home : t.away;
+}
+
+function buildChips(creatorKit?: TeamKit, challengerKit?: TeamKit): Vec2[] {
+  const creatorColor = creatorKit?.primary || "#00a8ff";
+  const creatorStroke = creatorKit?.secondary;
+  const challengerColor = challengerKit?.primary || "#ff4d5a";
+  const challengerStroke = challengerKit?.secondary;
+
+  return [
+    {
+      id: "creator-1",
+      x: 300,
+      y: 750,
+      vx: 0,
+      vy: 0,
+      radius: CHIP_RADIUS,
+      owner: "creator",
+      flagEmoji: "",
+      color: creatorColor,
+      stroke: creatorStroke,
+    },
+    {
+      id: "creator-2",
+      x: 150,
+      y: 650,
+      vx: 0,
+      vy: 0,
+      radius: CHIP_RADIUS,
+      owner: "creator",
+      flagEmoji: "",
+      color: creatorColor,
+      stroke: creatorStroke,
+    },
+    {
+      id: "creator-3",
+      x: 450,
+      y: 650,
+      vx: 0,
+      vy: 0,
+      radius: CHIP_RADIUS,
+      owner: "creator",
+      flagEmoji: "",
+      color: creatorColor,
+      stroke: creatorStroke,
+    },
+    {
+      id: "challenger-1",
+      x: 300,
+      y: 150,
+      vx: 0,
+      vy: 0,
+      radius: CHIP_RADIUS,
+      owner: "challenger",
+      flagEmoji: "",
+      color: challengerColor,
+      stroke: challengerStroke,
+    },
+    {
+      id: "challenger-2",
+      x: 150,
+      y: 250,
+      vx: 0,
+      vy: 0,
+      radius: CHIP_RADIUS,
+      owner: "challenger",
+      flagEmoji: "",
+      color: challengerColor,
+      stroke: challengerStroke,
+    },
+    {
+      id: "challenger-3",
+      x: 450,
+      y: 250,
+      vx: 0,
+      vy: 0,
+      radius: CHIP_RADIUS,
+      owner: "challenger",
+      flagEmoji: "",
+      color: challengerColor,
+      stroke: challengerStroke,
+    },
+  ];
+}
+
+function applyTeamKitsToState(state: MatchState) {
+  const creatorTeamId = state.creatorTeamId;
+  const challengerTeamId = state.challengerTeamId;
+  const creatorKit = getTeamKit(creatorTeamId, "home");
+  const challengerKit = getTeamKit(challengerTeamId, "away");
+  state.chips = buildChips(creatorKit, challengerKit);
+}
+
 type PlayerSide = "creator" | "challenger";
 
 type MatchMode = "goals" | "time";
@@ -45,6 +186,7 @@ interface Lobby {
   id: number;
   creator: string;
   creatorAlias: string;
+  creatorTeamId?: string;
   goals: number;
   mode?: MatchMode;
   durationMs?: number;
@@ -91,6 +233,7 @@ interface SnapshotPayload {
     y: number;
     radius: number;
     fill: string;
+    stroke?: string;
     flagEmoji: string;
     owner: PlayerSide;
   }>;
@@ -136,6 +279,7 @@ interface ClientToServerEvents {
     goals: number;
     isFree: boolean;
     stakeAmount: string;
+    teamId?: string;
     mode?: MatchMode;
     durationMs?: number;
   }) => void;
@@ -143,6 +287,7 @@ interface ClientToServerEvents {
     matchId: string;
     challenger: string;
     challengerAlias: string;
+    teamId?: string;
   }) => void;
   cancelLobby: (payload: { matchId: string }) => void;
   // Free lobbies events
@@ -226,6 +371,7 @@ interface Vec2 {
   owner: PlayerSide;
   flagEmoji: string;
   color: string;
+  stroke?: string;
 }
 
 interface Ball {
@@ -256,6 +402,8 @@ interface MatchState {
   connected: { creator: boolean; challenger: boolean };
   rematch: { creator: boolean; challenger: boolean };
   consecutiveTimeouts: { creator: number; challenger: number };
+  creatorTeamId?: string;
+  challengerTeamId?: string;
   // Match configuration for rematch with blockchain
   matchConfig?: {
     isFree: boolean;
@@ -404,75 +552,7 @@ function updateRankingIfPossible(state: MatchState, winner: PlayerSide) {
 const matches = new Map<string, MatchState>();
 
 function defaultChips(): Vec2[] {
-  // Creator tiene fichas abajo (y mayor), Challenger tiene fichas arriba
-  return [
-    {
-      id: "creator-1",
-      x: 300,
-      y: 750,
-      vx: 0,
-      vy: 0,
-      radius: CHIP_RADIUS,
-      owner: "creator",
-      flagEmoji: "",
-      color: "#00a8ff",
-    },
-    {
-      id: "creator-2",
-      x: 150,
-      y: 650,
-      vx: 0,
-      vy: 0,
-      radius: CHIP_RADIUS,
-      owner: "creator",
-      flagEmoji: "",
-      color: "#00a8ff",
-    },
-    {
-      id: "creator-3",
-      x: 450,
-      y: 650,
-      vx: 0,
-      vy: 0,
-      radius: CHIP_RADIUS,
-      owner: "creator",
-      flagEmoji: "",
-      color: "#00a8ff",
-    },
-    {
-      id: "challenger-1",
-      x: 300,
-      y: 150,
-      vx: 0,
-      vy: 0,
-      radius: CHIP_RADIUS,
-      owner: "challenger",
-      flagEmoji: "",
-      color: "#ff4d5a",
-    },
-    {
-      id: "challenger-2",
-      x: 150,
-      y: 250,
-      vx: 0,
-      vy: 0,
-      radius: CHIP_RADIUS,
-      owner: "challenger",
-      flagEmoji: "",
-      color: "#ff4d5a",
-    },
-    {
-      id: "challenger-3",
-      x: 450,
-      y: 250,
-      vx: 0,
-      vy: 0,
-      radius: CHIP_RADIUS,
-      owner: "challenger",
-      flagEmoji: "",
-      color: "#ff4d5a",
-    },
-  ];
+  return buildChips();
 }
 
 function defaultBall(): Ball {
@@ -510,6 +590,7 @@ function ensureMatch(matchId: string): MatchState {
       rematch: { creator: false, challenger: false },
       consecutiveTimeouts: { creator: 0, challenger: 0 },
     };
+    applyTeamKitsToState(state);
     matches.set(matchId, state);
   }
   return state;
@@ -664,7 +745,7 @@ function handleCollision(a: Vec2 | Ball, b: Vec2 | Ball) {
 
 function resetAfterGoal(state: MatchState, conceded: PlayerSide) {
   state.ball = defaultBall();
-  state.chips = defaultChips();
+  applyTeamKitsToState(state);
   state.simRunning = false;
   const next = conceded; // quien recibió el gol saca
   state.activePlayer = next;
@@ -720,6 +801,7 @@ function toSnapshot(state: MatchState): SnapshotPayload {
       y: c.y,
       radius: c.radius,
       fill: c.color,
+      stroke: c.stroke,
       flagEmoji: c.flagEmoji,
       owner: c.owner,
     })),
@@ -1273,7 +1355,7 @@ io.on(
           // Match gratis: reiniciar directamente
           state.creatorScore = 0;
           state.challengerScore = 0;
-          state.chips = defaultChips();
+          applyTeamKitsToState(state);
           state.ball = defaultBall();
           state.activePlayer = "creator";
           state.ended = false;
@@ -1384,6 +1466,7 @@ io.on(
         goals,
         isFree,
         stakeAmount,
+        teamId,
         mode,
         durationMs,
       }) => {
@@ -1394,6 +1477,7 @@ io.on(
           id: Number(lobbyMatchId),
           creator,
           creatorAlias,
+          creatorTeamId: teamId,
           goals,
           mode,
           durationMs,
@@ -1408,12 +1492,14 @@ io.on(
 
         // Guardar config del match para revancha con blockchain
         const matchState = ensureMatch(lobbyMatchId);
+        matchState.creatorTeamId = teamId;
         matchState.goalTarget = goals;
         matchState.matchMode = mode === "time" ? "time" : "goals";
         matchState.matchDurationMs =
           typeof durationMs === "number" && durationMs > 0 ? durationMs : undefined;
         matchState.matchEndsAt = undefined;
         matchState.goldenGoal = false;
+        applyTeamKitsToState(matchState);
         matchState.matchConfig = {
           isFree,
           stakeAmount,
@@ -1436,7 +1522,7 @@ io.on(
 
     socket.on(
       "joinLobby",
-      ({ matchId: lobbyMatchId, challenger, challengerAlias }) => {
+      ({ matchId: lobbyMatchId, challenger, challengerAlias, teamId }) => {
         // Ensure this socket is in the lobby room so it can receive matchReady.
         socket.join(lobbyMatchId);
 
@@ -1450,6 +1536,10 @@ io.on(
         if (matchState?.matchConfig) {
           matchState.matchConfig.challengerAddress = challenger;
           matchState.matchConfig.challengerAlias = challengerAlias;
+        }
+        if (matchState) {
+          matchState.challengerTeamId = teamId;
+          applyTeamKitsToState(matchState);
         }
 
         // Notify creator that someone joined

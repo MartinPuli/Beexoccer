@@ -46,8 +46,6 @@ function transformForPlayer(
         ...c,
         x: FIELD_WIDTH - c.x,
         y: FIELD_HEIGHT - c.y,
-        // Challenger = azul (yo), Creator = rojo (rival)
-        fill: c.owner === "challenger" ? "#00a8ff" : "#ff4d5a",
         flagEmoji: ""
       })),
       ball: {
@@ -60,8 +58,6 @@ function transformForPlayer(
   return {
     chips: chips.map(c => ({
       ...c,
-      // Creator = azul (yo), Challenger = rojo (rival)
-      fill: c.owner === "creator" ? "#00a8ff" : "#ff4d5a",
       flagEmoji: ""
     })),
     ball
@@ -528,8 +524,8 @@ export function PlayingScreen() {
     
     const { x, y } = getSvgPoint(e);
     
-    // Buscar ficha propia cercana (azules = mías)
-    const myChips = chips.filter((c) => c.fill === "#00a8ff");
+    // Buscar ficha propia cercana
+    const myChips = chips.filter((c) => c.owner === playerSide);
     const hit = myChips.find((c) => Math.hypot(c.x - x, c.y - y) < c.radius + 15);
     
     if (hit) {
@@ -665,7 +661,7 @@ export function PlayingScreen() {
     const touch = e.touches[0];
     const { x, y } = getSvgPointFromTouch(touch, e.currentTarget);
     
-    const myChips = chips.filter((c) => c.fill === "#00a8ff");
+    const myChips = chips.filter((c) => c.owner === playerSide);
     const hit = myChips.find((c) => Math.hypot(c.x - x, c.y - y) < c.radius + 15);
     
     if (hit) {

@@ -99,6 +99,7 @@ type ClientToServerEvents = {
     goals: number;
     isFree: boolean;
     stakeAmount: string;
+    teamId?: string;
     mode?: MatchMode;
     durationMs?: number;
   }) => void;
@@ -106,6 +107,7 @@ type ClientToServerEvents = {
     matchId: string;
     challenger: string;
     challengerAlias: string;
+    teamId?: string;
   }) => void;
   cancelLobby: (payload: { matchId: string }) => void;
   ping: () => void;
@@ -506,6 +508,7 @@ class SocketService {
     goals: number,
     isFree: boolean,
     stakeAmount: string,
+    teamId?: string,
     mode?: MatchMode,
     durationMs?: number
   ) {
@@ -516,6 +519,7 @@ class SocketService {
       goals,
       isFree,
       stakeAmount,
+      teamId,
       mode,
       durationMs,
     };
@@ -530,7 +534,12 @@ class SocketService {
     }
   }
 
-  joinLobby(matchId: string, challenger: string, challengerAlias: string) {
+  joinLobby(
+    matchId: string,
+    challenger: string,
+    challengerAlias: string,
+    teamId?: string
+  ) {
     if (!this.socket?.connected) {
       this.connectLobbies();
       this.socket?.once("connect", () => {
@@ -538,10 +547,11 @@ class SocketService {
           matchId,
           challenger,
           challengerAlias,
+          teamId,
         });
       });
     } else {
-      this.socket.emit("joinLobby", { matchId, challenger, challengerAlias });
+      this.socket.emit("joinLobby", { matchId, challenger, challengerAlias, teamId });
     }
   }
 

@@ -2,14 +2,37 @@ import { useGameStore } from "../hooks/useGameStore";
 import logoImg from "../assets/BEEXOCCER.png";
 import ballImg from "../assets/ball.png";
 import { useState } from "react";
+import { getArgentinaTeam2025 } from "../data/argentinaTeams2025";
 
 export function HomeScreen() {
   const [isHovered, setIsHovered] = useState(false);
   const setView = useGameStore((state) => state.setView);
   const alias = useGameStore((state) => state.alias);
+  const selectedTeamId = useGameStore((state) => state.selectedTeamId);
+  const selectedTeam = getArgentinaTeam2025(selectedTeamId);
 
   return (
     <div className="home-screen">
+      <button
+        onClick={() => setView("teamSelect")}
+        style={{
+          position: "absolute",
+          top: 14,
+          right: 14,
+          padding: "8px 10px",
+          borderRadius: 10,
+          border: "1px solid rgba(0,255,106,0.35)",
+          background: "rgba(0,0,0,0.35)",
+          color: "white",
+          fontWeight: 800,
+          fontSize: 12,
+          cursor: "pointer",
+        }}
+        title="Elegir equipo"
+      >
+        {selectedTeam?.shortName || "EQUIPO"}
+      </button>
+
       {/* Logo con pelota neón */}
       <div 
         className="home-logo" 

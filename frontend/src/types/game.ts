@@ -55,6 +55,7 @@ export interface TokenChip {
   y: number;
   radius: number;
   fill: string;
+  stroke?: string;
   flagEmoji: string;
   owner?: "creator" | "challenger";
 }

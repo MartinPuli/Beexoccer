@@ -3,6 +3,7 @@ import abiJson from "../abi/MatchManager.json";
 import { MatchConfig, MatchLobby } from "../types/game";
 import { walletService } from "./walletService";
 import { socketService } from "./socketService";
+import { useGameStore } from "../hooks/useGameStore";
 import { env } from "../config/env";
 
 // El archivo JSON de Hardhat tiene formato { abi: [...], ... }
@@ -165,6 +166,7 @@ export async function createMatch(config: MatchConfig): Promise<{ matchId: numbe
     // Notify via socket so other clients see the new lobby
     const userAddress = walletService.getUserAddress() || "";
     const userAlias = walletService.getAlias();
+    const teamId = useGameStore.getState().selectedTeamId;
     socketService.createLobby(
       String(matchId),
       userAddress,
@@ -172,6 +174,7 @@ export async function createMatch(config: MatchConfig): Promise<{ matchId: numbe
       config.goals,
       config.isFree,
       config.isFree ? "0" : config.stakeAmount,
+      teamId,
       config.mode,
       config.durationMs
     );
@@ -340,7 +343,8 @@ export async function acceptMatch(matchId: number, match: MatchLobby) {
     // Notify via socket that we joined this lobby
     const userAddress = walletService.getUserAddress() || "";
     const userAlias = walletService.getAlias();
-    socketService.joinLobby(String(matchId), userAddress, userAlias);
+    const teamId = useGameStore.getState().selectedTeamId;
+    socketService.joinLobby(String(matchId), userAddress, userAlias, teamId);
     
     return result;
   } catch (error) {
@@ -379,7 +383,8 @@ export async function joinMatch(matchId: number): Promise<void> {
     // Notify via socket
     const userAddress = walletService.getUserAddress() || "";
     const userAlias = walletService.getAlias();
-    socketService.joinLobby(String(matchId), userAddress, userAlias);
+    const teamId = useGameStore.getState().selectedTeamId;
+    socketService.joinLobby(String(matchId), userAddress, userAlias, teamId);
   } catch (error) {
     handleRpcError(error);
   }
