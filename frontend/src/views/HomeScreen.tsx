@@ -81,7 +81,7 @@ export function HomeScreen() {
         title="Cambiar usuario"
         style={{ zIndex: 5 }}
       >
-        {username || "ELEGIR USUARIO"}
+        {username ? `@${username}` : "ELEGIR USUARIO"}
       </button>
 
       <button
