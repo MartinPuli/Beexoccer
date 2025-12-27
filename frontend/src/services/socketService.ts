@@ -121,15 +121,6 @@ type ClientToServerEvents = {
     alias: string;
   }) => void;
   cancelFreeLobby: (lobbyId: string) => void;
-  // Username unique registry
-  reserveUsername: (
-    payload: { username: string },
-    cb: (res: { ok: boolean; reason?: string; username?: string }) => void
-  ) => void;
-  releaseUsername: (
-    payload: {},
-    cb: (res: { ok: boolean }) => void
-  ) => void;
 };
 
 class SocketService {
@@ -685,79 +676,6 @@ class SocketService {
     } else {
       this.socket.emit("cancelFreeLobby", lobbyId);
     }
-  }
-
-  // ========== USERNAME UNIQUE REGISTRY ==========
-  async reserveUsername(username: string): Promise<{ ok: boolean; reason?: string; username?: string }> {
-    const ACK_TIMEOUT_MS = 4000;
-    if (!this.socket?.connected) {
-      // Reuse lobbies connection; it uses the same REALTIME_URL and keeps one socket instance.
-      this.connectLobbies();
-      await new Promise<void>((resolve) => {
-        if (this.socket?.connected) return resolve();
-        const t = setTimeout(() => resolve(), ACK_TIMEOUT_MS);
-        this.socket?.once("connect", () => {
-          clearTimeout(t);
-          resolve();
-        });
-      });
-    }
-
-    return await new Promise((resolve) => {
-      let done = false;
-      const t = setTimeout(() => {
-        if (done) return;
-        done = true;
-        resolve({ ok: false, reason: "unavailable" });
-      }, ACK_TIMEOUT_MS);
-
-      this.socket?.emit("reserveUsername", { username }, (res) => {
-        if (done) return;
-        done = true;
-        clearTimeout(t);
-        resolve(res);
-      });
-
-      // If socket is missing for any reason, fail fast.
-      if (!this.socket) {
-        clearTimeout(t);
-        resolve({ ok: false, reason: "unavailable" });
-      }
-    });
-  }
-
-  async releaseUsername(): Promise<void> {
-    const ACK_TIMEOUT_MS = 2500;
-    if (!this.socket?.connected) {
-      this.connectLobbies();
-      await new Promise<void>((resolve) => {
-        if (this.socket?.connected) return resolve();
-        const t = setTimeout(() => resolve(), ACK_TIMEOUT_MS);
-        this.socket?.once("connect", () => {
-          clearTimeout(t);
-          resolve();
-        });
-      });
-    }
-
-    await new Promise<void>((resolve) => {
-      let done = false;
-      const t = setTimeout(() => {
-        if (done) return;
-        done = true;
-        resolve();
-      }, ACK_TIMEOUT_MS);
-      this.socket?.emit("releaseUsername", {}, () => {
-        if (done) return;
-        done = true;
-        clearTimeout(t);
-        resolve();
-      });
-      if (!this.socket) {
-        clearTimeout(t);
-        resolve();
-      }
-    });
   }
 }
 

@@ -54,8 +54,6 @@ interface PendingRematch {
 interface GameStore {
   view: ViewId;
   alias: string;
-  username: string;
-  usernameStatus: "unset" | "set";
   balance: string;
   userAddress: string;
   tournamentLobbies: TournamentLobby[];
@@ -76,7 +74,6 @@ interface GameStore {
   selectedTeamId?: string;
   setView: (view: ViewId) => void;
   setAlias: (alias: string) => void;
-  setUsername: (username: string) => void;
   setBalance: (balance: string) => void;
   setUserAddress: (address: string) => void;
   createTournament: (config: TournamentConfig) => string;
@@ -105,6 +102,13 @@ interface GameStore {
 }
 
 const TURN_DURATION_MS = 15_000;
+
+const shortAddress = (addr?: string) => {
+  const a = (addr || "").trim();
+  if (!a) return "WALLET";
+  if (a.length <= 12) return a;
+  return `${a.slice(0, 6)}...${a.slice(-4)}`;
+};
 
 const defaultSnapshot = (): PlayingSnapshot => ({
   activePlayer: "creator",
@@ -187,8 +191,6 @@ export const useGameStore = create<GameStore>()(
     (set) => ({
       view: "home",
       alias: "Invitado",
-      username: "",
-      usernameStatus: "unset",
       balance: "0.00 XO",
       userAddress: "",
       tournamentLobbies: [],
@@ -208,17 +210,16 @@ export const useGameStore = create<GameStore>()(
       selectedTeamId: "river",
       setView: (view) => set({ view }),
       setAlias: (alias) => set({ alias }),
-      setUsername: (username) => set({ username, usernameStatus: username ? "set" : "unset" }),
       setBalance: (balance) => set({ balance }),
       setUserAddress: (userAddress) => set({ userAddress }),
       createTournament: (config) => {
         const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
         const createdAt = Date.now();
         set((state) => {
-          const creatorAlias = state.username || state.alias || "Invitado";
           const creatorAddress = state.userAddress || "";
+          const creatorAlias = shortAddress(creatorAddress) || state.alias || "Invitado";
           const me = {
-            id: state.username || creatorAddress || `local-${id}`,
+            id: creatorAddress || `local-${id}`,
             address: creatorAddress || undefined,
             alias: creatorAlias,
           };
@@ -241,15 +242,15 @@ export const useGameStore = create<GameStore>()(
       selectTournament: (selectedTournamentId) => set({ selectedTournamentId }),
       joinTournament: (tournamentId) => {
         set((state) => {
-          const userAlias = state.username || state.alias || "Invitado";
           const userAddress = state.userAddress || "";
+          const userAlias = shortAddress(userAddress) || state.alias || "Invitado";
           return {
             tournamentLobbies: state.tournamentLobbies.map((t) => {
               if (t.id !== tournamentId) return t;
               if (t.players.length >= t.config.size) return t;
               if (userAddress && t.players.some((p) => p.address?.toLowerCase() === userAddress.toLowerCase())) return t;
 
-              const playerId = state.username || userAddress || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+              const playerId = userAddress || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
               const nextPlayer = { id: playerId, address: userAddress || undefined, alias: userAlias };
               return { ...t, players: [...t.players, nextPlayer] };
             })
@@ -369,8 +370,6 @@ export const useGameStore = create<GameStore>()(
         tournamentLobbies: state.tournamentLobbies,
         selectedTournamentId: state.selectedTournamentId,
         userAddress: state.userAddress,
-        username: state.username,
-        usernameStatus: state.usernameStatus,
         selectedTeamId: state.selectedTeamId,
       })
     }

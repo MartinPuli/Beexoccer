@@ -10,7 +10,6 @@ interface TopNavProps {
  * Sticky navigation used on every screen. Shows the player's alias + balance pulled from XO-CONNECT.
  */
 export function TopNav({ onPlayBot }: Readonly<TopNavProps>) {
-  const alias = useGameStore((state) => state.alias);
   const balance = useGameStore((state) => state.balance);
   const userAddress = useGameStore((state) => state.userAddress);
   const setView = useGameStore((state) => state.setView);
@@ -51,7 +50,6 @@ export function TopNav({ onPlayBot }: Readonly<TopNavProps>) {
               {isConnected ? "🟢" : "🟡"} {shortAddress}
             </span>
           </div>
-          <div className="badge">Alias: <span style={{ color: "var(--neon-green)" }}>{alias}</span></div>
           <div className="badge" style={{ color: "var(--text-muted)" }}>Balance: {balance}</div>
         </div>
         <NeonButton label="Lobby" onClick={() => setView("home")} variant="secondary" />
