@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useGameStore } from "../hooks/useGameStore";
-import { ARGENTINA_TEAMS_2025 } from "../data/argentinaTeams2025";
+import { ARGENTINA_TEAMS_2025, makeTeamBadgeUrl } from "../data/argentinaTeams2025";
 
 export function TeamSelectScreen() {
   const setView = useGameStore((s) => s.setView);
@@ -35,6 +35,7 @@ export function TeamSelectScreen() {
         >
           {teams.map((t) => {
             const active = t.id === selectedTeamId;
+            const badgeUrl = makeTeamBadgeUrl({ teamId: t.id, fill: t.home.primary, stroke: t.home.secondary });
             return (
               <button
                 key={t.id}
@@ -54,6 +55,26 @@ export function TeamSelectScreen() {
               >
                 <span style={{ fontWeight: 800 }}>{t.name}</span>
                 <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  {badgeUrl ? (
+                    <span
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 14,
+                        background: "rgba(0,0,0,0.25)",
+                        border: "1px solid rgba(0,255,106,0.20)",
+                        boxShadow: active
+                          ? "0 0 16px rgba(0,255,106,0.25)"
+                          : "0 0 10px rgba(0,0,0,0.35)",
+                        display: "grid",
+                        placeItems: "center",
+                        overflow: "hidden",
+                      }}
+                      title="Escudo"
+                    >
+                      <img src={badgeUrl} alt={t.shortName} style={{ width: 34, height: 34, display: "block" }} />
+                    </span>
+                  ) : null}
                   <span
                     title="Local"
                     style={{

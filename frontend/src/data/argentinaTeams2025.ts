@@ -27,14 +27,32 @@ export function makeTeamBadgeUrl(params: {
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
   <defs>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feDropShadow dx="0" dy="0" stdDeviation="1.5" flood-color="#00ff6a" flood-opacity="0.22"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#00ff6a" flood-opacity="0.10"/>
+    </filter>
     <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
       <stop offset="1" stop-color="#000000" stop-opacity="0.10"/>
     </linearGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.65"/>
+      <stop offset="0.35" stop-color="#ffffff" stop-opacity="0.15"/>
+      <stop offset="0.65" stop-color="#000000" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.35"/>
+    </linearGradient>
   </defs>
-  <path d="M32 6 C44 6 52 10 52 10 L52 28 C52 42 43 53 32 58 C21 53 12 42 12 28 L12 10 C12 10 20 6 32 6 Z" fill="${fill}" stroke="${stroke}" stroke-width="4"/>
-  <path d="M14 12 C18 10 24 8 32 8 C40 8 46 10 50 12 L50 28 C50 41 42 51 32 55 C22 51 14 41 14 28 Z" fill="url(#g)"/>
-  <text x="32" y="37" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="18" font-weight="900" fill="#fff" stroke="#000" stroke-width="1" paint-order="stroke">${text}</text>
+  <g filter="url(#shadow)">
+    <path d="M32 6 C44 6 52 10 52 10 L52 28 C52 42 43 53 32 58 C21 53 12 42 12 28 L12 10 C12 10 20 6 32 6 Z" fill="${fill}"/>
+    <path d="M32 6 C44 6 52 10 52 10 L52 28 C52 42 43 53 32 58 C21 53 12 42 12 28 L12 10 C12 10 20 6 32 6 Z" fill="none" stroke="${stroke}" stroke-width="4"/>
+    <path d="M32 6 C44 6 52 10 52 10 L52 28 C52 42 43 53 32 58 C21 53 12 42 12 28 L12 10 C12 10 20 6 32 6 Z" fill="url(#metal)" opacity="0.55"/>
+    <path d="M14 12 C18 10 24 8 32 8 C40 8 46 10 50 12 L50 28 C50 41 42 51 32 55 C22 51 14 41 14 28 Z" fill="url(#g)"/>
+    <path d="M16 13 C20 11 25 10 32 10 C39 10 44 11 48 13 L48 28 C48 40 41 49 32 53 C23 49 16 40 16 28 Z" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/>
+    <text x="32" y="38" text-anchor="middle" font-family="Chakra Petch, system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="18" font-weight="900" fill="#fff" stroke="#000" stroke-width="1" paint-order="stroke" filter="url(#glow)">${text}</text>
+  </g>
 </svg>`;
 
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;

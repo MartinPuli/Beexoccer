@@ -79,6 +79,7 @@ export function HomeScreen() {
         className="home-user-badge"
         onClick={openUsername}
         title="Cambiar usuario"
+        style={{ zIndex: 5 }}
       >
         {username ? `@${username}` : "ELEGIR USUARIO"}
       </button>
@@ -89,6 +90,7 @@ export function HomeScreen() {
           position: "absolute",
           top: 14,
           right: 14,
+          zIndex: 5,
           padding: "8px 10px",
           borderRadius: 10,
           border: "1px solid rgba(0,255,106,0.35)",
@@ -106,16 +108,14 @@ export function HomeScreen() {
       {/* Logo con pelota neón */}
       <div 
         className="home-logo" 
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
         style={{
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
           width: '100%',
           marginBottom: '2rem',
-          cursor: 'pointer',
-          position: 'relative'
+          position: 'relative',
+          pointerEvents: 'none'
         }}
       >
         {/* Logo original */}
@@ -139,7 +139,7 @@ export function HomeScreen() {
             top: '50%',
             transform: 'translate(-50%, -50%)',
             marginLeft: '6px',
-            animation: isHovered ? 'spin 1s linear infinite' : 'none',
+            animation: 'spin 5s linear infinite',
             filter: 'drop-shadow(0 0 8px #00ff6a)'
           }}
         />
