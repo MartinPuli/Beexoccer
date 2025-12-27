@@ -19,16 +19,31 @@ export function HomeScreen() {
   const [usernameInput, setUsernameInput] = useState(username || "");
   const [usernameError, setUsernameError] = useState<string>("");
   const [usernameLoading, setUsernameLoading] = useState(false);
+  const [usernameOffline, setUsernameOffline] = useState(false);
+
+  const isValidUsername = (name: string) => {
+    const trimmed = name.trim();
+    if (trimmed.length < 3 || trimmed.length > 16) return false;
+    return /^[a-zA-Z0-9_]+$/.test(trimmed);
+  };
 
   const openUsername = () => {
     setUsernameInput(username || "");
     setUsernameError("");
+    setUsernameOffline(false);
     setIsUsernameOpen(true);
   };
 
   const confirmUsername = async () => {
     const desired = usernameInput.trim();
     setUsernameError("");
+    setUsernameOffline(false);
+
+    if (!isValidUsername(desired)) {
+      setUsernameError("Usuario inválido (3-16, letras/números/_) ");
+      return;
+    }
+
     setUsernameLoading(true);
     try {
       const res = await socketService.reserveUsername(desired);
@@ -36,7 +51,11 @@ export function HomeScreen() {
         if (res.reason === "taken") {
           setUsernameError("Ese usuario ya está en uso");
         } else if (res.reason === "unavailable") {
-          setUsernameError("Servidor no disponible para validar usuarios");
+          // Fallback local: permitir elegir usuario aunque el server no valide.
+          setUsernameOffline(true);
+          setUsername(desired);
+          setIsUsernameOpen(false);
+          return;
         } else {
           setUsernameError("Usuario inválido (3-16, letras/números/_) ");
         }
@@ -45,7 +64,10 @@ export function HomeScreen() {
       setUsername(res.username || desired);
       setIsUsernameOpen(false);
     } catch {
-      setUsernameError("No se pudo validar el usuario");
+      // Fallback local si hubo error de red
+      setUsernameOffline(true);
+      setUsername(desired);
+      setIsUsernameOpen(false);
     } finally {
       setUsernameLoading(false);
     }
@@ -173,7 +195,7 @@ export function HomeScreen() {
                     className="stake-input"
                     value={usernameInput}
                     onChange={(e) => setUsernameInput(e.target.value)}
-                    placeholder="Fede"
+                    placeholder="Escribe tu usuario"
                     autoFocus
                   />
                   <button className="lobby-join" disabled={usernameLoading} onClick={confirmUsername}>
@@ -182,6 +204,10 @@ export function HomeScreen() {
                 </div>
                 {usernameError ? (
                   <div style={{ color: "var(--accent-red)", fontWeight: 800, fontSize: 13 }}>{usernameError}</div>
+                ) : usernameOffline ? (
+                  <div style={{ color: "var(--accent-gold)", fontWeight: 800, fontSize: 13 }}>
+                    Modo offline: el usuario puede no ser único.
+                  </div>
                 ) : (
                   <div style={{ color: "var(--text-muted)", fontWeight: 700, fontSize: 13 }}>
                     3-16 caracteres, letras/números/underscore.

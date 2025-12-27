@@ -229,6 +229,14 @@ export function TournamentsScreen() {
     return `Por goles (${t.config.goals})`;
   };
 
+  const formatCreator = (t: TournamentLobby) => {
+    const a = (t.creatorAlias || "").trim();
+    if (a) return `@${a}`;
+    const addr = t.creatorAddress || "";
+    if (addr.length >= 10) return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+    return addr || "-";
+  };
+
   const onCreate = () => {
     createTournament({
       size,
@@ -280,7 +288,7 @@ export function TournamentsScreen() {
                       {t.config.isFree ? "GRATIS" : `${t.config.entryFee} POL`}
                     </span>
                     <span className="lobby-meta">Cupos: {t.players.length}/{t.config.size}</span>
-                    <span className="lobby-creator">{(t.creatorAddress || "").slice(0, 6)}...{(t.creatorAddress || "").slice(-4)}</span>
+                    <span className="lobby-creator">{formatCreator(t)}</span>
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button className="lobby-join" onClick={() => selectTournament(t.id)}>
@@ -425,11 +433,10 @@ export function TournamentsScreen() {
                 };
 
                 const bubbleRx = 18;
-                const textXPad = 12;
-                const winStroke = "rgba(0,255,106,0.75)";
-                const normalStroke = "rgba(255,255,255,0.14)";
-                const fill = "rgba(0,0,0,0.28)";
-                const lineStroke = "rgba(0,255,106,0.18)";
+                const winStroke = "rgba(0,255,106,0.85)";
+                const normalStroke = "rgba(255,255,255,0.16)";
+                const fill = "url(#bubbleFill)";
+                const lineStroke = "rgba(0,255,106,0.22)";
                 const connPad = 16;
 
                 const colX = (rIdx: number) => layout.padX + rIdx * layout.colGap;
@@ -446,7 +453,12 @@ export function TournamentsScreen() {
                   canClick: boolean,
                   onClick: () => void
                 ) => (
-                  <g key={key} style={{ cursor: canClick ? "pointer" : "default" }} onClick={() => (canClick ? onClick() : null)}>
+                  <g
+                    key={key}
+                    style={{ cursor: canClick ? "pointer" : "default" }}
+                    onClick={() => (canClick ? onClick() : null)}
+                    filter={isWinner ? "url(#glow)" : undefined}
+                  >
                     <rect
                       x={x}
                       y={y}
@@ -459,14 +471,15 @@ export function TournamentsScreen() {
                       strokeWidth={2}
                     />
                     <text
-                      x={x + textXPad}
+                      x={x + layout.bubbleW / 2}
                       y={y + layout.bubbleH / 2 + 4}
                       fill="rgba(224,240,230,0.95)"
-                      fontFamily="monospace"
+                      fontFamily="Chakra Petch, monospace"
                       fontWeight={900}
                       fontSize={12}
+                      textAnchor="middle"
                     >
-                      {label}
+                      {label.length > 14 ? label.slice(0, 12) + ".." : label}
                     </text>
                   </g>
                 );
@@ -496,6 +509,8 @@ export function TournamentsScreen() {
                         fill="none"
                         stroke={lineStroke}
                         strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                       />
                     );
                   }
@@ -599,6 +614,16 @@ export function TournamentsScreen() {
                     viewBox={`0 0 ${svgWidth} ${svgHeight}`}
                     xmlns="http://www.w3.org/2000/svg"
                   >
+                    <defs>
+                      <linearGradient id="bubbleFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="rgba(12, 30, 18, 0.85)" />
+                        <stop offset="100%" stopColor="rgba(0, 0, 0, 0.25)" />
+                      </linearGradient>
+                      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                        <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="rgba(0,255,106,0.55)" />
+                        <feDropShadow dx="0" dy="0" stdDeviation="8" floodColor="rgba(0,255,106,0.18)" />
+                      </filter>
+                    </defs>
                     {lines}
                     {content}
                   </svg>
