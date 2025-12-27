@@ -354,6 +354,8 @@ interface InterServerEvents {}
 interface SocketData {
   matchId: string;
   side: PlayerSide;
+  usernameKey?: string;
+  usernameRaw?: string;
 }
 
 type RealtimeServer = Server<
@@ -1088,6 +1090,21 @@ const io: RealtimeServer = new Server(httpServer, {
   cors: { origin: "*" },
 });
 
+// ========== USERNAME UNIQUE REGISTRY ==========
+// Case-insensitive registry: key = normalized username, value = socket.id
+const reservedUsernames = new Map<string, string>();
+
+function normalizeUsername(name: string) {
+  return name.trim().toLowerCase();
+}
+
+function isValidUsername(name: string) {
+  const trimmed = name.trim();
+  if (trimmed.length < 3 || trimmed.length > 16) return false;
+  // allow letters, numbers, underscore
+  return /^[a-zA-Z0-9_]+$/.test(trimmed);
+}
+
 // Server-side watchdog to enforce turn timeouts even if clients don't send turnTimeout.
 // This prevents desync issues and ensures the "3 consecutive timeouts per player" rule.
 setInterval(() => {
@@ -1598,6 +1615,68 @@ io.on(
         io.to(subId).emit("lobbiesUpdate", waitingLobbies);
       }
       io.to(lobbyMatchId).emit("lobbyCancelled", { matchId: lobbyMatchId });
+    });
+
+    // ========== USERNAME UNIQUE HANDLERS ==========
+    socket.on(
+      "reserveUsername",
+      (
+        payload: { username: string },
+        cb?: (res: { ok: boolean; reason?: string; username?: string }) => void
+      ) => {
+        const desired = payload?.username ?? "";
+        const trimmed = desired.trim();
+        if (!isValidUsername(trimmed)) {
+          cb?.({ ok: false, reason: "invalid" });
+          return;
+        }
+
+        const key = normalizeUsername(trimmed);
+        const current = (socket.data as any).usernameKey as string | undefined;
+        if (current === key) {
+          cb?.({ ok: true, username: trimmed });
+          return;
+        }
+
+        const owner = reservedUsernames.get(key);
+        if (owner && owner !== socket.id) {
+          cb?.({ ok: false, reason: "taken" });
+          return;
+        }
+
+        // release previous username if any
+        if (current) {
+          const prevOwner = reservedUsernames.get(current);
+          if (prevOwner === socket.id) reservedUsernames.delete(current);
+        }
+
+        reservedUsernames.set(key, socket.id);
+        (socket.data as any).usernameKey = key;
+        (socket.data as any).usernameRaw = trimmed;
+        cb?.({ ok: true, username: trimmed });
+      }
+    );
+
+    socket.on(
+      "releaseUsername",
+      (_payload: unknown, cb?: (res: { ok: boolean }) => void) => {
+        const current = (socket.data as any).usernameKey as string | undefined;
+        if (current) {
+          const owner = reservedUsernames.get(current);
+          if (owner === socket.id) reservedUsernames.delete(current);
+        }
+        delete (socket.data as any).usernameKey;
+        delete (socket.data as any).usernameRaw;
+        cb?.({ ok: true });
+      }
+    );
+
+    socket.on("disconnect", () => {
+      const current = (socket.data as any).usernameKey as string | undefined;
+      if (current) {
+        const owner = reservedUsernames.get(current);
+        if (owner === socket.id) reservedUsernames.delete(current);
+      }
     });
 
     // ========== FREE LOBBIES (sin blockchain) ==========

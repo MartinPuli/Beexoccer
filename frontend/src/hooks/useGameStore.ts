@@ -8,6 +8,7 @@ import {
   MatchMode,
   TIMED_MATCH_DURATION_MS,
 } from "../types/game";
+import type { TournamentConfig, TournamentLobby, TournamentSize } from "../types/tournaments";
 
 type ViewId =
   | "home"
@@ -19,7 +20,8 @@ type ViewId =
   | "waiting"
   | "connect"
   | "ranking"
-  | "teamSelect";
+  | "teamSelect"
+  | "tournaments";
 
 interface WaitingMatchInfo {
   matchId: number;
@@ -52,8 +54,12 @@ interface PendingRematch {
 interface GameStore {
   view: ViewId;
   alias: string;
+  username: string;
+  usernameStatus: "unset" | "set";
   balance: string;
   userAddress: string;
+  tournamentLobbies: TournamentLobby[];
+  selectedTournamentId?: string;
   pendingMatches: MatchLobby[];
   currentMatchId?: string;
   playerSide: "creator" | "challenger";
@@ -70,8 +76,13 @@ interface GameStore {
   selectedTeamId?: string;
   setView: (view: ViewId) => void;
   setAlias: (alias: string) => void;
+  setUsername: (username: string) => void;
   setBalance: (balance: string) => void;
   setUserAddress: (address: string) => void;
+  createTournament: (config: TournamentConfig) => string;
+  selectTournament: (tournamentId?: string) => void;
+  joinTournament: (tournamentId: string) => void;
+  setTournamentWinner: (tournamentId: string, matchId: string, winner: "a" | "b") => void;
   setMatches: (matches: MatchLobby[]) => void;
   setCurrentMatchId: (matchId?: string) => void;
   setPlayerSide: (side: "creator" | "challenger") => void;
@@ -111,13 +122,77 @@ const defaultSnapshot = (): PlayingSnapshot => ({
 const rotatePlayer = (current: "creator" | "challenger"): "creator" | "challenger" =>
   current === "creator" ? "challenger" : "creator";
 
+const createTournamentMatchIds = (size: TournamentSize): string[] => {
+  const ids: string[] = [];
+  const makeId = (round: number, order: number) => `main-r${round}-m${order}`;
+  const firstRoundMatches = size / 2;
+  for (let i = 0; i < firstRoundMatches; i++) ids.push(makeId(1, i + 1));
+  let round = 2;
+  let prevRoundCount = firstRoundMatches;
+  while (prevRoundCount > 1) {
+    const roundCount = prevRoundCount / 2;
+    for (let i = 0; i < roundCount; i++) ids.push(makeId(round, i + 1));
+    prevRoundCount = roundCount;
+    round++;
+  }
+  if (size === 16) ids.push("third-place");
+  return ids;
+};
+
+const computeTournamentDescendants = (size: TournamentSize, fromMatchId: string): string[] => {
+  const ids = createTournamentMatchIds(size);
+  const edges = new Map<string, string[]>();
+  const makeId = (round: number, order: number) => `main-r${round}-m${order}`;
+
+  const firstRoundMatches = size / 2;
+  let round = 2;
+  let prevRoundCount = firstRoundMatches;
+  while (prevRoundCount > 1) {
+    const roundCount = prevRoundCount / 2;
+    for (let i = 0; i < roundCount; i++) {
+      const parent = makeId(round, i + 1);
+      const left = makeId(round - 1, i * 2 + 1);
+      const right = makeId(round - 1, i * 2 + 2);
+      edges.set(left, [...(edges.get(left) ?? []), parent]);
+      edges.set(right, [...(edges.get(right) ?? []), parent]);
+    }
+    prevRoundCount = roundCount;
+    round++;
+  }
+
+  if (size === 16) {
+    const semi1 = makeId(3, 1);
+    const semi2 = makeId(3, 2);
+    edges.set(semi1, [...(edges.get(semi1) ?? []), "third-place"]);
+    edges.set(semi2, [...(edges.get(semi2) ?? []), "third-place"]);
+  }
+
+  const visited = new Set<string>();
+  const stack = [fromMatchId];
+  while (stack.length) {
+    const cur = stack.pop()!;
+    const next = edges.get(cur) ?? [];
+    for (const n of next) {
+      if (visited.has(n)) continue;
+      visited.add(n);
+      stack.push(n);
+    }
+  }
+
+  return ids.filter((id) => visited.has(id));
+};
+
 export const useGameStore = create<GameStore>()(
   persist(
     (set) => ({
       view: "home",
       alias: "Invitado",
+      username: "",
+      usernameStatus: "unset",
       balance: "0.00 XO",
       userAddress: "",
+      tournamentLobbies: [],
+      selectedTournamentId: undefined,
       pendingMatches: [],
       currentMatchId: undefined,
       playerSide: "creator",
@@ -133,8 +208,70 @@ export const useGameStore = create<GameStore>()(
       selectedTeamId: "river",
       setView: (view) => set({ view }),
       setAlias: (alias) => set({ alias }),
+      setUsername: (username) => set({ username, usernameStatus: username ? "set" : "unset" }),
       setBalance: (balance) => set({ balance }),
       setUserAddress: (userAddress) => set({ userAddress }),
+      createTournament: (config) => {
+        const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const createdAt = Date.now();
+        set((state) => {
+          const creatorAlias = state.username || state.alias || "Invitado";
+          const creatorAddress = state.userAddress || "";
+          const me = {
+            id: state.username || creatorAddress || `local-${id}`,
+            address: creatorAddress || undefined,
+            alias: creatorAlias,
+          };
+          const lobby: TournamentLobby = {
+            id,
+            createdAt,
+            creatorAddress,
+            creatorAlias,
+            config,
+            players: [me],
+            results: {},
+          };
+          return {
+            tournamentLobbies: [lobby, ...state.tournamentLobbies],
+            selectedTournamentId: id,
+          };
+        });
+        return id;
+      },
+      selectTournament: (selectedTournamentId) => set({ selectedTournamentId }),
+      joinTournament: (tournamentId) => {
+        set((state) => {
+          const userAlias = state.username || state.alias || "Invitado";
+          const userAddress = state.userAddress || "";
+          return {
+            tournamentLobbies: state.tournamentLobbies.map((t) => {
+              if (t.id !== tournamentId) return t;
+              if (t.players.length >= t.config.size) return t;
+              if (userAddress && t.players.some((p) => p.address?.toLowerCase() === userAddress.toLowerCase())) return t;
+
+              const playerId = state.username || userAddress || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+              const nextPlayer = { id: playerId, address: userAddress || undefined, alias: userAlias };
+              return { ...t, players: [...t.players, nextPlayer] };
+            })
+          };
+        });
+      },
+      setTournamentWinner: (tournamentId, matchId, winner) => {
+        set((state) => {
+          const t = state.tournamentLobbies.find((x) => x.id === tournamentId);
+          if (!t) return state;
+          const descendants = computeTournamentDescendants(t.config.size as TournamentSize, matchId);
+          const nextResults = { ...t.results, [matchId]: { winner } };
+          for (const depId of descendants) {
+            delete nextResults[depId];
+          }
+          return {
+            tournamentLobbies: state.tournamentLobbies.map((x) =>
+              x.id === tournamentId ? { ...x, results: nextResults } : x
+            ),
+          };
+        });
+      },
       setMatches: (pendingMatches) => set({ pendingMatches }),
       setCurrentMatchId: (currentMatchId) => set({ currentMatchId }),
       setPlayerSide: (playerSide) => set({ playerSide }),
@@ -229,7 +366,11 @@ export const useGameStore = create<GameStore>()(
         // Solo persistir datos de sesión críticos
         waitingMatch: state.waitingMatch,
         activeMatch: state.activeMatch,
+        tournamentLobbies: state.tournamentLobbies,
+        selectedTournamentId: state.selectedTournamentId,
         userAddress: state.userAddress,
+        username: state.username,
+        usernameStatus: state.usernameStatus,
         selectedTeamId: state.selectedTeamId,
       })
     }

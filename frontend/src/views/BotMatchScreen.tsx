@@ -293,7 +293,6 @@ export function BotMatchScreen() {
   const myBadgeUrl = makeTeamBadgeUrl({ teamId: selectedTeamId, fill: myFill, stroke: myStroke });
 
   const [isMobile, setIsMobile] = useState(false);
-
   const chipsRef = useRef<MovingChip[]>([...initPlayerChips(myFill, myStroke, myBadgeUrl), ...initBotChips()]);
   const ballRef = useRef<BallState>(initBall());
 

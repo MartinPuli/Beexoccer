@@ -3,16 +3,64 @@ import logoImg from "../assets/BEEXOCCER.png";
 import ballImg from "../assets/ball.png";
 import { useState } from "react";
 import { getArgentinaTeam2025 } from "../data/argentinaTeams2025";
+import { socketService } from "../services/socketService";
 
 export function HomeScreen() {
   const [isHovered, setIsHovered] = useState(false);
   const setView = useGameStore((state) => state.setView);
   const alias = useGameStore((state) => state.alias);
+  const username = useGameStore((state) => state.username);
+  const usernameStatus = useGameStore((state) => state.usernameStatus);
+  const setUsername = useGameStore((state) => state.setUsername);
   const selectedTeamId = useGameStore((state) => state.selectedTeamId);
   const selectedTeam = getArgentinaTeam2025(selectedTeamId);
 
+  const [isUsernameOpen, setIsUsernameOpen] = useState(usernameStatus === "unset");
+  const [usernameInput, setUsernameInput] = useState(username || "");
+  const [usernameError, setUsernameError] = useState<string>("");
+  const [usernameLoading, setUsernameLoading] = useState(false);
+
+  const openUsername = () => {
+    setUsernameInput(username || "");
+    setUsernameError("");
+    setIsUsernameOpen(true);
+  };
+
+  const confirmUsername = async () => {
+    const desired = usernameInput.trim();
+    setUsernameError("");
+    setUsernameLoading(true);
+    try {
+      const res = await socketService.reserveUsername(desired);
+      if (!res.ok) {
+        if (res.reason === "taken") {
+          setUsernameError("Ese usuario ya está en uso");
+        } else if (res.reason === "unavailable") {
+          setUsernameError("Servidor no disponible para validar usuarios");
+        } else {
+          setUsernameError("Usuario inválido (3-16, letras/números/_) ");
+        }
+        return;
+      }
+      setUsername(res.username || desired);
+      setIsUsernameOpen(false);
+    } catch {
+      setUsernameError("No se pudo validar el usuario");
+    } finally {
+      setUsernameLoading(false);
+    }
+  };
+
   return (
     <div className="home-screen">
+      <button
+        className="home-user-badge"
+        onClick={openUsername}
+        title="Cambiar usuario"
+      >
+        {username ? `@${username}` : "ELEGIR USUARIO"}
+      </button>
+
       <button
         onClick={() => setView("teamSelect")}
         style={{
@@ -97,17 +145,53 @@ export function HomeScreen() {
         RANKING
       </button>
 
-      {/* Torneos como en el mock */}
-      <div className="torneos-box">
-        <span className="torneos-lock">🔒</span>
-        <span className="torneos-soon">PRÓXIMAMENTE</span>
-        <span className="torneos-title">TORNEOS</span>
-      </div>
+      <button className="home-btn primary" onClick={() => setView("tournaments")}>
+        TORNEOS
+      </button>
 
       {/* Wallet */}
       <p className="home-wallet">
         Wallet Conectada: {alias || "0x1234..."}
       </p>
+
+      {isUsernameOpen ? (
+        <div className="tournament-modal-overlay" onMouseDown={() => (usernameStatus === "unset" ? null : setIsUsernameOpen(false))}>
+          <div className="tournament-modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="tournament-modal-header">
+              <button className="create-back" onClick={() => (usernameStatus === "unset" ? null : setIsUsernameOpen(false))}>
+                ←
+              </button>
+              <span className="create-title">Elige tu usuario</span>
+              <span style={{ width: 32 }} />
+            </div>
+
+            <div className="tournament-modal-body">
+              <div className="create-section">
+                <span className="create-label">Usuario</span>
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <input
+                    className="stake-input"
+                    value={usernameInput}
+                    onChange={(e) => setUsernameInput(e.target.value)}
+                    placeholder="Fede"
+                    autoFocus
+                  />
+                  <button className="lobby-join" disabled={usernameLoading} onClick={confirmUsername}>
+                    {usernameLoading ? "..." : "CONFIRMAR"}
+                  </button>
+                </div>
+                {usernameError ? (
+                  <div style={{ color: "var(--accent-red)", fontWeight: 800, fontSize: 13 }}>{usernameError}</div>
+                ) : (
+                  <div style={{ color: "var(--text-muted)", fontWeight: 700, fontSize: 13 }}>
+                    3-16 caracteres, letras/números/underscore.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -41,6 +41,7 @@ import {
   HomeScreen,
   PlayingScreen,
   RankingScreen,
+  TournamentsScreen,
   TeamSelectScreen,
   WaitingScreen
 } from "./views";
@@ -351,6 +352,8 @@ export default function App() {
         return <RankingScreen />;
       case "teamSelect":
         return <TeamSelectScreen />;
+      case "tournaments":
+        return <TournamentsScreen />;
       default:
         return <HomeScreen />;
     }
