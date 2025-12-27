@@ -231,7 +231,7 @@ export function TournamentsScreen() {
 
   const formatCreator = (t: TournamentLobby) => {
     const a = (t.creatorAlias || "").trim();
-    if (a) return `@${a}`;
+    if (a) return a;
     const addr = t.creatorAddress || "";
     if (addr.length >= 10) return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
     return addr || "-";
