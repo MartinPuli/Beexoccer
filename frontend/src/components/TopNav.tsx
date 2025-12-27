@@ -29,13 +29,14 @@ export function TopNav({ onPlayBot }: Readonly<TopNavProps>) {
       background: "rgba(10, 26, 16, 0.95)",
       borderBottom: "1px solid rgba(17, 177, 58, 0.2)"
     }}>
-      <div style={{ flex: 1 }}></div>
       <div className="top-nav-logo" style={{ 
         display: "flex", 
         justifyContent: "center",
-        flex: 1
+        alignItems: "center",
+        flex: "0 0 auto",
+        pointerEvents: "none"
       }}>
-        <img src={logo} alt="Beexoccer" style={{ height: "50px", width: "auto" }} />
+        <img src={logo} alt="Beexoccer" style={{ height: "50px", width: "auto", display: "block" }} />
       </div>
       <div style={{ 
         display: "flex", 
