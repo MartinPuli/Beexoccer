@@ -327,6 +327,8 @@ export function BotMatchScreen() {
   const showEndRef = useRef(false);
   const myScoreRef = useRef(0);
   const botScoreRef = useRef(0);
+  // Track if current turn is a kickoff (first move after goal/reset) - goals during kickoff are not valid
+  const isKickoffRef = useRef(true);
   const botStatsRef = useRef({
     shots: 0,
     passes: 0,
@@ -1194,6 +1196,8 @@ export function BotMatchScreen() {
     turnTakenRef.current = false;
     turnStartTimeRef.current = Date.now();
     goalScoredRef.current = false;
+    // Mark next move as kickoff - goals during kickoff don't count
+    isKickoffRef.current = true;
     setGoalAnimation(null);
     setTurnLostAnimation(false);
     setTurnTimeLeft(TURN_TIME);
@@ -1292,9 +1296,19 @@ export function BotMatchScreen() {
       }
 
       // Comprobar goles (con debouncing via goalScoredRef)
+      // IMPORTANT: Goals during kickoff (first move after reset) don't count
       const b = ballRef.current;
       if (!goalScoredRef.current) {
-        if (b.y < BOUNDARY_TOP - 10 && b.x > GOAL_LEFT && b.x < GOAL_RIGHT) {
+        const ballInTopGoal = b.y < BOUNDARY_TOP - 10 && b.x > GOAL_LEFT && b.x < GOAL_RIGHT;
+        const ballInBottomGoal = b.y > BOUNDARY_BOTTOM + 10 && b.x > GOAL_LEFT && b.x < GOAL_RIGHT;
+        
+        // If ball enters goal during kickoff, reset ball position (no goal counts)
+        if (isKickoffRef.current && (ballInTopGoal || ballInBottomGoal)) {
+          // Reset ball to center - kickoff goal doesn't count
+          ballRef.current = initBall();
+          setBall({...ballRef.current});
+          // Don't mark as goal scored, just reset the ball
+        } else if (ballInTopGoal) {
           goalScoredRef.current = true;
           const newScore = myScore + 1;
           setMyScore(newScore);
@@ -1314,7 +1328,7 @@ export function BotMatchScreen() {
               showGoalAnim("you");
             }
           }
-        } else if (b.y > BOUNDARY_BOTTOM + 10 && b.x > GOAL_LEFT && b.x < GOAL_RIGHT) {
+        } else if (ballInBottomGoal) {
           goalScoredRef.current = true;
           const newScore = botScore + 1;
           setBotScore(newScore);
@@ -1359,6 +1373,8 @@ export function BotMatchScreen() {
 
       // Cambiar turno si no hay movimiento y ya se tomó turno
       if (!isMoving() && turnTakenRef.current && !goalScoredRef.current) {
+        // Clear kickoff flag after the first move completes - subsequent moves can score
+        isKickoffRef.current = false;
         if (active === "creator") {
           setActive("challenger");
           setSelectedChipId("bot-1");

@@ -406,6 +406,8 @@ interface MatchState {
   consecutiveTimeouts: { creator: number; challenger: number };
   creatorTeamId?: string;
   challengerTeamId?: string;
+  // Track if current move is a kickoff (first move after goal/reset) - goals during kickoff don't count
+  isKickoff: boolean;
   // Match configuration for rematch with blockchain
   matchConfig?: {
     isFree: boolean;
@@ -591,6 +593,8 @@ function ensureMatch(matchId: string): MatchState {
       connected: { creator: false, challenger: false },
       rematch: { creator: false, challenger: false },
       consecutiveTimeouts: { creator: 0, challenger: 0 },
+      // First move of the match is a kickoff - goals during kickoff don't count
+      isKickoff: true,
     };
     applyTeamKitsToState(state);
     matches.set(matchId, state);
@@ -751,6 +755,8 @@ function resetAfterGoal(state: MatchState, conceded: PlayerSide) {
   state.simRunning = false;
   const next = conceded; // quien recibió el gol saca
   state.activePlayer = next;
+  // Mark next move as kickoff - goals during kickoff don't count
+  state.isKickoff = true;
 
   // Only resume timer when both players are connected.
   state.awaitingInput = false;
@@ -839,6 +845,8 @@ function finishTurn(state: MatchState) {
   state.simRunning = false;
   state.activePlayer =
     state.activePlayer === "creator" ? "challenger" : "creator";
+  // Clear kickoff flag after first move completes - subsequent moves can score
+  state.isKickoff = false;
 
   // Only resume timer when both players are connected.
   state.awaitingInput = false;
@@ -942,6 +950,16 @@ function simulateStep(
     if (state.ended) {
       return false;
     }
+    
+    // IMPORTANT: Goals during kickoff (first move after goal/reset) don't count
+    // Reset ball to center instead of counting the goal
+    if (state.isKickoff) {
+      state.ball = defaultBall();
+      io.to(state.id).emit("snapshot", toSnapshot(state));
+      // Continue simulation - don't count as goal
+      return true;
+    }
+    
     if (scorer === "creator") state.creatorScore += 1;
     else state.challengerScore += 1;
 

@@ -4,9 +4,12 @@ import "modern-css-reset";
 import "./styles/theme.css";
 import "./styles/layout.css";
 import App from "./App";
+import { DaimoPayProvider } from "./components/DaimoPayProvider";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    <DaimoPayProvider>
+      <App />
+    </DaimoPayProvider>
   </React.StrictMode>
 );

@@ -18,6 +18,8 @@ async function main() {
     console.log(`  isCompleted: ${m.isCompleted}`);
     console.log(`  isFree: ${m.isFree}`);
     console.log(`  goalsTarget: ${m.goalsTarget}`);
+    console.log(`  stakeAmount: ${ethers.formatEther(m.stakeAmount)} POL`);
+    console.log(`  stakeToken: ${m.stakeToken}`);
   }
 }
 
