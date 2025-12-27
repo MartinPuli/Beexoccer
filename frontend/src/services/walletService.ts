@@ -5,7 +5,7 @@
  * - MetaMask: Usa window.ethereum, muestra dirección como alias
  */
 
-import { BrowserProvider, JsonRpcProvider, formatUnits, Signer } from "ethers";
+import { BrowserProvider, JsonRpcProvider, formatUnits, Signer, Contract } from "ethers";
 
 // @ts-expect-error - XO Connect types
 import { XOConnectProvider, XOConnect } from "xo-connect";
@@ -26,6 +26,18 @@ export interface TokenInfo {
 const POLYGON_CHAIN_ID = 137;
 const POLYGON_CHAIN_ID_HEX = "0x89";
 const POLYGON_RPC = "https://polygon.drpc.org";
+
+// Tokens soportados en Polygon Mainnet
+const SUPPORTED_TOKENS: Omit<TokenInfo, "balance">[] = [
+  { symbol: "POL", name: "Polygon", address: "native", decimals: 18, type: "native", icon: "🟣" },
+  { symbol: "USDC", name: "USD Coin", address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", decimals: 6, type: "erc20", icon: "💵" },
+  { symbol: "USDT", name: "Tether USD", address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", decimals: 6, type: "erc20", icon: "💲" },
+];
+
+// ERC20 ABI mínimo para consultar balances
+const ERC20_ABI = [
+  "function balanceOf(address owner) view returns (uint256)",
+];
 
 const XO_CONNECT_CONFIG = {
   defaultChainId: POLYGON_CHAIN_ID_HEX,
@@ -192,20 +204,29 @@ class WalletService {
     if (!this.userAddress) return;
 
     const provider = this.getReadProvider();
-    try {
-      const balance = await provider.getBalance(this.userAddress);
-      this.tokenBalances = [{
-        symbol: "POL",
-        name: "Polygon",
-        address: "native",
-        decimals: 18,
-        balance: Number(formatUnits(balance, 18)).toFixed(4),
-        type: "native",
-        icon: "🟣"
-      }];
-    } catch {
-      this.tokenBalances = [{ symbol: "POL", name: "Polygon", address: "native", decimals: 18, balance: "0", type: "native", icon: "🟣" }];
+    const balances: TokenInfo[] = [];
+
+    for (const token of SUPPORTED_TOKENS) {
+      try {
+        let balance: bigint;
+        
+        if (token.type === "native") {
+          balance = await provider.getBalance(this.userAddress);
+        } else {
+          const contract = new Contract(token.address, ERC20_ABI, provider);
+          balance = await contract.balanceOf(this.userAddress);
+        }
+        
+        balances.push({
+          ...token,
+          balance: Number(formatUnits(balance, token.decimals)).toFixed(4)
+        });
+      } catch {
+        balances.push({ ...token, balance: "0" });
+      }
     }
+
+    this.tokenBalances = balances;
   }
 
   // Public API

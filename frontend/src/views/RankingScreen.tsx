@@ -72,10 +72,16 @@ export function RankingScreen() {
           </div>
         )}
 
-        {!loading && !error && data && (
+        {!loading && !error && data && data.players.length > 0 && (
           <div style={{ width: "100%" }}>
-            <div className="turn-indicator" style={{ marginBottom: 12 }}>
-              Top jugadores
+            <div style={{ 
+              textAlign: "center", 
+              marginBottom: 16, 
+              color: "white",
+              fontSize: "1.1rem",
+              fontWeight: 600
+            }}>
+              🏆 Top jugadores
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -86,24 +92,25 @@ export function RankingScreen() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "10px 12px",
+                    padding: "12px 16px",
                     borderRadius: 12,
                     background: "rgba(0,0,0,0.35)",
                     border: "1px solid rgba(0,255,106,0.25)",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     <div
                       style={{
-                        width: 42,
-                        textAlign: "left",
+                        width: 36,
+                        textAlign: "center",
                         fontWeight: 800,
-                        color: "#00ff6a",
+                        color: p.rank === 1 ? "#ffd700" : p.rank === 2 ? "#c0c0c0" : p.rank === 3 ? "#cd7f32" : "#00ff6a",
+                        fontSize: p.rank <= 3 ? "1.2rem" : "1rem",
                       }}
                     >
-                      #{p.rank}
+                      {p.rank === 1 ? "🥇" : p.rank === 2 ? "🥈" : p.rank === 3 ? "🥉" : `#${p.rank}`}
                     </div>
-                    <div style={{ fontWeight: 700, color: "white" }}>{p.id}</div>
+                    <div style={{ fontWeight: 600, color: "white" }}>{p.alias || p.id}</div>
                   </div>
                   <div style={{ fontWeight: 800, color: "#ffe45b" }}>{p.xo} XO</div>
                 </div>
@@ -113,7 +120,14 @@ export function RankingScreen() {
         )}
 
         {!loading && !error && data && data.players.length === 0 && (
-          <div className="turn-indicator">Aún no hay jugadores rankeados esta semana.</div>
+          <div style={{ 
+            textAlign: "center", 
+            color: "white", 
+            padding: "40px 20px",
+            fontSize: "1rem"
+          }}>
+            Aún no hay jugadores rankeados esta semana.
+          </div>
         )}
       </div>
     </div>

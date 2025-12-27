@@ -1,126 +1,101 @@
-import { ChangeEvent, FormEvent, useState, useEffect } from "react";
+import { ChangeEvent, FormEvent, useState } from "react";
 import { createMatch } from "../services/matchService";
 import { useGameStore } from "../hooks/useGameStore";
 import { GoalTarget, MatchMode, TIMED_MATCH_DURATION_MS } from "../types/game";
-import { walletService, TokenInfo } from "../services/walletService";
 import { toast } from "../components/Toast";
+import { BeexoccerPayButtonCustom } from "../components/BeexoccerPayButton";
+import { env } from "../config/env";
+
+// Stake amounts in USDC
+const STAKE_OPTIONS = ["1", "5", "10", "25", "50"];
 
 export function CreateMatchScreen() {
   const [goals, setGoals] = useState<GoalTarget>(3);
   const [matchMode, setMatchMode] = useState<MatchMode>("goals");
   const [isBet, setIsBet] = useState(false);
-  const [stakeAmount, setStakeAmount] = useState("10");
-  const [selectedToken, setSelectedToken] = useState("POL");
-  const [tokens, setTokens] = useState<TokenInfo[]>([]);
+  const [stakeAmount, setStakeAmount] = useState("5");
   const [loading, setLoading] = useState(false);
+  const [paymentPending, setPaymentPending] = useState(false);
   const setView = useGameStore((state) => state.setView);
   const setWaitingMatch = useGameStore((state) => state.setWaitingMatch);
   const userAddress = useGameStore((state) => state.userAddress);
 
-  // Cargar tokens disponibles
-  useEffect(() => {
-    const loadTokens = async () => {
-      try {
-        // Primero inicializar el servicio
-        await walletService.init();
-        // Luego obtener tokens
-        const tokenList = walletService.getTokens();
-        if (tokenList.length === 0) {
-          // Si no hay tokens, hacer fetch
-          await walletService.fetchTokenBalances();
-          setTokens(walletService.getTokens());
-        } else {
-          setTokens(tokenList);
-        }
-      } catch {
-        // Usar tokens mock en caso de error
-        setTokens([
-          { symbol: "POL", name: "Polygon", address: "native", decimals: 18, type: "native", balance: "0" }
-        ]);
-      }
-    };
-    loadTokens();
-  }, []);
-
-  const currentToken = tokens.find(t => t.symbol === selectedToken);
-  const currentBalance = currentToken?.balance || "0";
-
-  const handleSubmit = async (event: FormEvent) => {
+  // Handler para crear partida GRATIS (sin Daimo Pay)
+  const handleCreateFreeMatch = async (event: FormEvent) => {
     event.preventDefault();
     setLoading(true);
     try {
-      // Para partidas gratuitas: stakeAmount = 0 y stakeToken = address(0)
-      // Para partidas con apuesta: usar el token seleccionado
-      let tokenAddress = "0x0000000000000000000000000000000000000000";
-      let amount = "0";
-      
-      if (isBet) {
-        const token = tokens.find(t => t.symbol === selectedToken);
-        // Para tokens nativos (POL), usar address zero
-        // Para ERC20, usar la dirección del contrato
-        tokenAddress = token?.type === "native" || token?.address === "native"
-          ? "0x0000000000000000000000000000000000000000"
-          : token?.address || "0x0000000000000000000000000000000000000000";
-        amount = stakeAmount;
-      }
-      
       const result = await createMatch({
         goals,
         mode: matchMode,
         durationMs: matchMode === "time" ? TIMED_MATCH_DURATION_MS : undefined,
-        isFree: !isBet,
-        stakeAmount: amount,
-        stakeToken: tokenAddress
+        isFree: true,
+        stakeAmount: "0",
+        stakeToken: "0x0000000000000000000000000000000000000000"
       });
       
       toast.success("¡Partida creada!", `Match #${result.matchId} esperando rival`);
       
-      // Guardar info de la partida y ir a pantalla de espera
       setWaitingMatch({
         matchId: result.matchId,
         goals,
         mode: matchMode,
         durationMs: matchMode === "time" ? TIMED_MATCH_DURATION_MS : undefined,
-        isFree: !isBet,
-        stakeAmount: isBet ? stakeAmount : "0",
+        isFree: true,
+        stakeAmount: "0",
         creatorAddress: userAddress
       });
       setView("waiting");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
-      // Analizar el tipo de error
-      if (errorMessage.includes("insufficient funds")) {
-        toast.error(
-          "Sin fondos para gas",
-          "Necesitas más POL para pagar la transacción",
-          {
-            label: "Obtener POL gratis",
-            onClick: () => window.open("https://faucet.polygon.technology/", "_blank")
-          }
-        );
-      } else if (errorMessage.includes("user rejected") || errorMessage.includes("ACTION_REJECTED")) {
-        toast.warning("Transacción cancelada", "Rechazaste la transacción en tu wallet");
-      } else if (errorMessage.includes("Red incorrecta")) {
-        toast.error("Red incorrecta", "Cambia a Polygon Amoy en MetaMask");
-      } else if (errorMessage.includes("Internal JSON-RPC") || errorMessage.includes("-32603")) {
-        // Error de RPC - puede ser problema de red o de nonce
-        toast.error(
-          "Error de conexión",
-          "Prueba: 1) Refrescar la página, 2) Reconectar MetaMask, 3) Cambiar el RPC de Polygon Amoy",
-          {
-            label: "Ver guía de solución",
-            onClick: () => {
-              alert(`Para solucionar este error:\n\n1. Abre MetaMask → Configuración → Redes\n2. Busca "Polygon Amoy" y elimínala\n3. Refresca esta página (la red se agregará automáticamente)\n4. Si persiste, ve a MetaMask → Configuración → Avanzado → Restablecer cuenta`);
-            }
-          }
-        );
-      } else {
-        toast.error("Error al crear partida", errorMessage.slice(0, 100));
-      }
+      toast.error("Error al crear partida", errorMessage.slice(0, 100));
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handlers para Daimo Pay (partidas con apuesta)
+  const handlePaymentStarted = () => {
+    setPaymentPending(true);
+    toast.info("Procesando pago...", "Completa el pago para crear la partida");
+  };
+
+  const handlePaymentCompleted = async (event: unknown) => {
+    setPaymentPending(false);
+    console.log("Payment completed:", event);
+    
+    try {
+      // Crear la partida después de que el pago fue exitoso
+      const result = await createMatch({
+        goals,
+        mode: matchMode,
+        durationMs: matchMode === "time" ? TIMED_MATCH_DURATION_MS : undefined,
+        isFree: false,
+        stakeAmount: stakeAmount,
+        stakeToken: "USDC" // Daimo Pay siempre paga en USDC
+      });
+      
+      toast.success("¡Pago completado!", `Match #${result.matchId} creado con ${stakeAmount} USDC`);
+      
+      setWaitingMatch({
+        matchId: result.matchId,
+        goals,
+        mode: matchMode,
+        durationMs: matchMode === "time" ? TIMED_MATCH_DURATION_MS : undefined,
+        isFree: false,
+        stakeAmount: stakeAmount,
+        creatorAddress: userAddress
+      });
+      setView("waiting");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error("Error al crear partida", errorMessage.slice(0, 100));
+    }
+  };
+
+  const handlePaymentBounced = () => {
+    setPaymentPending(false);
+    toast.error("Pago fallido", "El pago fue rechazado o cancelado");
   };
 
   return (
@@ -131,7 +106,7 @@ export function CreateMatchScreen() {
         <span style={{ width: 32 }} />
       </div>
 
-      <form className="create-body" onSubmit={handleSubmit}>
+      <form className="create-body" onSubmit={handleCreateFreeMatch}>
         {/* Modo de juego */}
         <div className="create-section">
           <span className="create-label">Tipo de partido</span>
@@ -187,53 +162,77 @@ export function CreateMatchScreen() {
           </div>
         </div>
 
-        {/* Selector de token y cantidad */}
+        {/* Selector de cantidad USDC con Daimo Pay */}
         {isBet && (
           <div className="create-section">
-            <span className="create-label">Apuesta</span>
+            <span className="create-label">Apuesta (USDC)</span>
             
-            {/* Input de cantidad */}
-            <input
-              type="number"
-              className="stake-input full-width"
-              value={stakeAmount}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setStakeAmount(e.target.value)}
-              placeholder="Cantidad"
-              min="0"
-              step="0.1"
-            />
-            
-            {/* Selector de token debajo */}
-            <div className="token-selector-row">
-              {tokens.map(token => (
+            {/* Botones de cantidad predefinida */}
+            <div className="goals-row" style={{ flexWrap: "wrap", gap: 8 }}>
+              {STAKE_OPTIONS.map(amount => (
                 <button
-                  key={token.symbol}
+                  key={amount}
                   type="button"
-                  className={`token-btn ${selectedToken === token.symbol ? "active" : ""}`}
-                  onClick={() => setSelectedToken(token.symbol)}
+                  className={`goal-btn ${stakeAmount === amount ? "active" : ""}`}
+                  onClick={() => setStakeAmount(amount)}
+                  style={{ minWidth: 60 }}
                 >
-                  <span className="token-icon">{token.icon}</span>
-                  <span className="token-name">{token.symbol}</span>
+                  ${amount}
                 </button>
               ))}
             </div>
             
-            <div className="stake-balance">
-              Balance: {currentBalance} {selectedToken}
+            {/* Input personalizado */}
+            <div style={{ marginTop: 12 }}>
+              <input
+                type="number"
+                className="stake-input full-width"
+                value={stakeAmount}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setStakeAmount(e.target.value)}
+                placeholder="Cantidad personalizada"
+                min="1"
+                step="1"
+              />
+            </div>
+            
+            <div className="stake-balance" style={{ marginTop: 8, textAlign: "center", color: "#888" }}>
+              💳 Paga desde cualquier wallet o exchange con Daimo Pay
             </div>
           </div>
         )}
       </form>
 
       <div className="create-footer">
-        <button
-          type="submit"
-          className="create-submit"
-          disabled={loading}
-          onClick={handleSubmit}
-        >
-          {loading ? "Enviando..." : "Enviar a blockchain"}
-        </button>
+        {/* Partida gratis: botón normal */}
+        {!isBet && (
+          <button
+            type="submit"
+            className="create-submit"
+            disabled={loading}
+            onClick={handleCreateFreeMatch}
+          >
+            {loading ? "Creando..." : "Crear partida gratis"}
+          </button>
+        )}
+
+        {/* Partida con apuesta: Daimo Pay button */}
+        {isBet && (
+          <BeexoccerPayButtonCustom
+            amount={stakeAmount}
+            toAddress={env.matchManagerAddress as `0x${string}`}
+            intent="Apostar"
+            onPaymentStarted={handlePaymentStarted}
+            onPaymentCompleted={handlePaymentCompleted}
+            onPaymentBounced={handlePaymentBounced}
+            metadata={{ 
+              matchGoals: String(goals),
+              matchMode: matchMode,
+              creator: userAddress 
+            }}
+          >
+            {paymentPending ? "Procesando..." : `💰 Apostar ${stakeAmount} USDC`}
+          </BeexoccerPayButtonCustom>
+        )}
       </div>
     </div>
   );
