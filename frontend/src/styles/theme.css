@@ -82,6 +82,7 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  position: relative;
   background: linear-gradient(180deg, var(--dark-panel) 0%, #061008 100%);
   border-radius: 0;
   border: none;
@@ -92,6 +93,35 @@ body {
   box-shadow: 
     0 20px 60px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.home-user-badge {
+  position: absolute !important;
+  top: 14px;
+  left: 14px;
+  z-index: 6;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: fit-content !important;
+  max-width: calc(100% - 140px);
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 255, 106, 0.35) !important;
+  background: rgba(0, 0, 0, 0.35) !important;
+  color: var(--text-white) !important;
+  font-weight: 900;
+  font-size: 12px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-user-badge:hover {
+  border-color: rgba(0, 255, 106, 0.6);
 }
 
 .home-logo {

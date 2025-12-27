@@ -79,9 +79,8 @@ export function HomeScreen() {
         className="home-user-badge"
         onClick={openUsername}
         title="Cambiar usuario"
-        style={{ zIndex: 5 }}
       >
-        {username ? `@${username}` : "ELEGIR USUARIO"}
+        {username ? `${username}` : "ELEGIR USUARIO"}
       </button>
 
       <button
