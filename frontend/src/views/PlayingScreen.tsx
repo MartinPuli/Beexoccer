@@ -4,6 +4,7 @@ import { useGameStore } from "../hooks/useGameStore";
 import { socketService } from "../services/socketService";
 import { reportResult } from "../services/matchService";
 import { TokenChip, PlayingSnapshot } from "../types/game";
+import { makeTeamBadgeUrl } from "../data/argentinaTeams2025";
 
 /**
  * PlayingScreen - Partida online 1v1 con sincronización por sockets
@@ -180,10 +181,18 @@ export function PlayingScreen() {
         isChallenger
       );
 
+      const creatorBadgeTeamId = snapshot.creatorTeamId;
+      const challengerBadgeTeamId = snapshot.challengerTeamId;
+      const chipsWithBadges = transformedChips.map((c) => {
+        const teamIdForChip = c.owner === "creator" ? creatorBadgeTeamId : challengerBadgeTeamId;
+        const badgeUrl = makeTeamBadgeUrl({ teamId: teamIdForChip, fill: c.fill, stroke: c.stroke });
+        return { ...c, badgeUrl };
+      });
+
       // Throttle visual updates on mobile: write to refs every snapshot,
       // and update React state at a capped frequency.
       latestSnapshotRef.current = {
-        chips: transformedChips,
+        chips: chipsWithBadges,
         ball: transformedBall,
         activePlayer: snapshot.activePlayer,
         challengerScore: snapshot.challengerScore,
@@ -197,7 +206,7 @@ export function PlayingScreen() {
 
       // If not throttling (desktop), apply immediately
       if (!isMobileRef.current) {
-        setChips(transformedChips);
+        setChips(chipsWithBadges);
         setBall(transformedBall);
         setActivePlayer(snapshot.activePlayer);
         setAwaitingInput(snapshot.awaitingInput ?? true);

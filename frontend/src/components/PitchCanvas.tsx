@@ -617,17 +617,28 @@ export function PitchCanvas({ chips, ball, highlightId, activePlayer, isPlayerTu
                 strokeWidth="4"
                 filter={isActive ? "url(#activeGlow)" : "url(#chipGlow)"}
               />
-              {/* Icono */}
-              <text
-                x={chip.x}
-                y={chip.y + 7}
-                textAnchor="middle"
-                fontSize="20"
-                fill="#fff"
-                fontWeight="bold"
-              >
-                {chip.flagEmoji}
-              </text>
+              {/* Icono / Escudo */}
+              {chip.badgeUrl ? (
+                <image
+                  href={chip.badgeUrl}
+                  x={chip.x - 18}
+                  y={chip.y - 18}
+                  width={36}
+                  height={36}
+                  preserveAspectRatio="xMidYMid meet"
+                />
+              ) : (
+                <text
+                  x={chip.x}
+                  y={chip.y + 7}
+                  textAnchor="middle"
+                  fontSize="20"
+                  fill="#fff"
+                  fontWeight="bold"
+                >
+                  {chip.flagEmoji}
+                </text>
+              )}
             </g>
           );
         })}

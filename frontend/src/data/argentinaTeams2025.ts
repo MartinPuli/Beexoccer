@@ -7,15 +7,45 @@ export type Team = {
   id: string;
   name: string;
   shortName: string;
+  badge: string;
   home: Kit;
   away: Kit;
 };
+
+export function makeTeamBadgeUrl(params: {
+  teamId?: string;
+  fill: string;
+  stroke?: string;
+}): string | undefined {
+  const team = getArgentinaTeam2025(params.teamId);
+  if (!team) return undefined;
+
+  const text = team.badge;
+  const fill = params.fill;
+  const stroke = params.stroke || "#ffffff";
+
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.10"/>
+    </linearGradient>
+  </defs>
+  <path d="M32 6 C44 6 52 10 52 10 L52 28 C52 42 43 53 32 58 C21 53 12 42 12 28 L12 10 C12 10 20 6 32 6 Z" fill="${fill}" stroke="${stroke}" stroke-width="4"/>
+  <path d="M14 12 C18 10 24 8 32 8 C40 8 46 10 50 12 L50 28 C50 41 42 51 32 55 C22 51 14 41 14 28 Z" fill="url(#g)"/>
+  <text x="32" y="37" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="18" font-weight="900" fill="#fff" stroke="#000" stroke-width="1" paint-order="stroke">${text}</text>
+</svg>`;
+
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
 
 export const ARGENTINA_TEAMS_2025: Team[] = [
   {
     id: "aldosivi",
     name: "Aldosivi",
     shortName: "Aldosivi",
+    badge: "CAA",
     home: { primary: "#ffd100", secondary: "#00843d" },
     away: { primary: "#ffffff", secondary: "#00843d" },
   },
@@ -23,6 +53,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "atletico-tucuman",
     name: "Atlético Tucumán",
     shortName: "Atlético",
+    badge: "CAT",
     home: { primary: "#1e5aa8", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#1e5aa8" },
   },
@@ -30,6 +61,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "belgrano",
     name: "Belgrano",
     shortName: "Belgrano",
+    badge: "CAB",
     home: { primary: "#4aa6ff", secondary: "#0b2d59" },
     away: { primary: "#ffffff", secondary: "#4aa6ff" },
   },
@@ -37,6 +69,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "central-cordoba-sde",
     name: "Central Córdoba (SdE)",
     shortName: "C. Córdoba",
+    badge: "CC",
     home: { primary: "#000000", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#000000" },
   },
@@ -44,6 +77,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "estudiantes-lp",
     name: "Estudiantes (LP)",
     shortName: "Estudiantes",
+    badge: "EDEL",
     home: { primary: "#d6001c", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#d6001c" },
   },
@@ -51,6 +85,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "gimnasia-lp",
     name: "Gimnasia y Esgrima (LP)",
     shortName: "Gimnasia",
+    badge: "GELP",
     home: { primary: "#0b2d59", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#0b2d59" },
   },
@@ -58,6 +93,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "godoy-cruz",
     name: "Godoy Cruz",
     shortName: "Godoy Cruz",
+    badge: "GCAT",
     home: { primary: "#1e5aa8", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#1e5aa8" },
   },
@@ -65,6 +101,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "independiente-rivadavia",
     name: "Independiente Rivadavia",
     shortName: "Ind. Rivadavia",
+    badge: "CSIR",
     home: { primary: "#1e5aa8", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#1e5aa8" },
   },
@@ -72,6 +109,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "instituto",
     name: "Instituto",
     shortName: "Instituto",
+    badge: "IACC",
     home: { primary: "#d6001c", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#d6001c" },
   },
@@ -79,6 +117,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "newells",
     name: "Newell's Old Boys",
     shortName: "Newell's",
+    badge: "NOB",
     home: { primary: "#000000", secondary: "#d6001c" },
     away: { primary: "#ffffff", secondary: "#d6001c" },
   },
@@ -86,6 +125,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "rosario-central",
     name: "Rosario Central",
     shortName: "Central",
+    badge: "CARC",
     home: { primary: "#f6c800", secondary: "#1e5aa8" },
     away: { primary: "#1e5aa8", secondary: "#f6c800" },
   },
@@ -93,6 +133,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "san-martin-sj",
     name: "San Martín (SJ)",
     shortName: "San Martín",
+    badge: "CASM",
     home: { primary: "#0b2d59", secondary: "#000000" },
     away: { primary: "#ffffff", secondary: "#0b2d59" },
   },
@@ -100,6 +141,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "sarmiento-junin",
     name: "Sarmiento (J)",
     shortName: "Sarmiento",
+    badge: "CASJ",
     home: { primary: "#00843d", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#00843d" },
   },
@@ -107,6 +149,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "talleres",
     name: "Talleres (C)",
     shortName: "Talleres",
+    badge: "CATC",
     home: { primary: "#1e5aa8", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#1e5aa8" },
   },
@@ -114,6 +157,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "union",
     name: "Unión",
     shortName: "Unión",
+    badge: "CAU",
     home: { primary: "#d6001c", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#d6001c" },
   },
@@ -121,6 +165,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "argentinos",
     name: "Argentinos Juniors",
     shortName: "Argentinos",
+    badge: "CAAJ",
     home: { primary: "#d6001c", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#d6001c" },
   },
@@ -128,6 +173,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "banfield",
     name: "Banfield",
     shortName: "Banfield",
+    badge: "CAB",
     home: { primary: "#00843d", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#00843d" },
   },
@@ -135,6 +181,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "barracas-central",
     name: "Barracas Central",
     shortName: "Barracas",
+    badge: "CBC",
     home: { primary: "#d6001c", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#d6001c" },
   },
@@ -142,6 +189,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "boca",
     name: "Boca Juniors",
     shortName: "Boca",
+    badge: "CABJ",
     home: { primary: "#0b2d59", secondary: "#f6c800" },
     away: { primary: "#f6c800", secondary: "#0b2d59" },
   },
@@ -149,6 +197,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "defensa-y-justicia",
     name: "Defensa y Justicia",
     shortName: "Defensa",
+    badge: "CDYJ",
     home: { primary: "#00843d", secondary: "#f6c800" },
     away: { primary: "#ffffff", secondary: "#00843d" },
   },
@@ -156,6 +205,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "deportivo-riestra",
     name: "Deportivo Riestra",
     shortName: "Riestra",
+    badge: "DR",
     home: { primary: "#000000", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#000000" },
   },
@@ -163,6 +213,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "huracan",
     name: "Huracán",
     shortName: "Huracán",
+    badge: "CAH",
     home: { primary: "#ffffff", secondary: "#d6001c" },
     away: { primary: "#d6001c", secondary: "#ffffff" },
   },
@@ -170,6 +221,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "independiente",
     name: "Independiente",
     shortName: "Independiente",
+    badge: "CAI",
     home: { primary: "#d6001c", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#d6001c" },
   },
@@ -177,6 +229,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "lanus",
     name: "Lanús",
     shortName: "Lanús",
+    badge: "CAL",
     home: { primary: "#6a0f2d", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#6a0f2d" },
   },
@@ -184,6 +237,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "platense",
     name: "Platense",
     shortName: "Platense",
+    badge: "CAP",
     home: { primary: "#6a0f2d", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#6a0f2d" },
   },
@@ -191,6 +245,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "racing",
     name: "Racing",
     shortName: "Racing",
+    badge: "RAC",
     home: { primary: "#4aa6ff", secondary: "#ffffff" },
     away: { primary: "#ffffff", secondary: "#4aa6ff" },
   },
@@ -198,6 +253,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "river",
     name: "River Plate",
     shortName: "River",
+    badge: "CARP",
     home: { primary: "#ffffff", secondary: "#d6001c" },
     away: { primary: "#d6001c", secondary: "#ffffff" },
   },
@@ -205,6 +261,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "san-lorenzo",
     name: "San Lorenzo",
     shortName: "San Lorenzo",
+    badge: "CASLA",
     home: { primary: "#0b2d59", secondary: "#d6001c" },
     away: { primary: "#d6001c", secondary: "#0b2d59" },
   },
@@ -212,6 +269,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "tigre",
     name: "Tigre",
     shortName: "Tigre",
+    badge: "CATI",
     home: { primary: "#1e5aa8", secondary: "#d6001c" },
     away: { primary: "#ffffff", secondary: "#1e5aa8" },
   },
@@ -219,6 +277,7 @@ export const ARGENTINA_TEAMS_2025: Team[] = [
     id: "velez",
     name: "Vélez Sarsfield",
     shortName: "Vélez",
+    badge: "CVS",
     home: { primary: "#ffffff", secondary: "#0b2d59" },
     away: { primary: "#0b2d59", secondary: "#ffffff" },
   },

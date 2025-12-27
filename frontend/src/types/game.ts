@@ -40,6 +40,8 @@ export interface PlayingSnapshot {
   awaitingInput?: boolean; // True when a player is expected to shoot; false while simulation runs / waiting.
   creatorScore: number;
   challengerScore: number;
+  creatorTeamId?: string;
+  challengerTeamId?: string;
   matchMode?: MatchMode;
   matchEndsAt?: number;
   timeRemainingMs?: number;
@@ -56,6 +58,7 @@ export interface TokenChip {
   radius: number;
   fill: string;
   stroke?: string;
+  badgeUrl?: string;
   flagEmoji: string;
   owner?: "creator" | "challenger";
 }

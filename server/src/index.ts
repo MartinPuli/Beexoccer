@@ -221,6 +221,8 @@ interface SnapshotPayload {
   awaitingInput: boolean;
   creatorScore: number;
   challengerScore: number;
+  creatorTeamId?: string;
+  challengerTeamId?: string;
   matchMode?: MatchMode;
   matchEndsAt?: number;
   timeRemainingMs?: number;
@@ -782,6 +784,8 @@ function toSnapshot(state: MatchState): SnapshotPayload {
     awaitingInput: state.awaitingInput,
     creatorScore: state.creatorScore,
     challengerScore: state.challengerScore,
+    creatorTeamId: state.creatorTeamId,
+    challengerTeamId: state.challengerTeamId,
     matchMode: state.matchMode,
     matchEndsAt: state.matchEndsAt,
     timeRemainingMs:

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { PitchCanvas } from "../components/PitchCanvas";
 import { useGameStore } from "../hooks/useGameStore";
 import { TIMED_MATCH_DURATION_MS, TokenChip } from "../types/game";
-import { getArgentinaTeam2025 } from "../data/argentinaTeams2025";
+import { getArgentinaTeam2025, makeTeamBadgeUrl } from "../data/argentinaTeams2025";
 
 /**
  * BotMatchScreen (refactor compatible)
@@ -59,10 +59,10 @@ interface BallState {
 const CHIP_RADIUS = 32;  // Fichas más grandes
 const BALL_RADIUS = 20;  // Pelota tamaño ajustado
 
-const initPlayerChips = (fill: string, stroke?: string): MovingChip[] => [
-  { id: "you-1", x: 300, y: 750, radius: CHIP_RADIUS, fill, stroke, flagEmoji: "", owner: "creator", vx: 0, vy: 0 },
-  { id: "you-2", x: 150, y: 650, radius: CHIP_RADIUS, fill, stroke, flagEmoji: "", owner: "creator", vx: 0, vy: 0 },
-  { id: "you-3", x: 450, y: 650, radius: CHIP_RADIUS, fill, stroke, flagEmoji: "", owner: "creator", vx: 0, vy: 0 },
+const initPlayerChips = (fill: string, stroke?: string, badgeUrl?: string): MovingChip[] => [
+  { id: "you-1", x: 300, y: 750, radius: CHIP_RADIUS, fill, stroke, badgeUrl, flagEmoji: "", owner: "creator", vx: 0, vy: 0 },
+  { id: "you-2", x: 150, y: 650, radius: CHIP_RADIUS, fill, stroke, badgeUrl, flagEmoji: "", owner: "creator", vx: 0, vy: 0 },
+  { id: "you-3", x: 450, y: 650, radius: CHIP_RADIUS, fill, stroke, badgeUrl, flagEmoji: "", owner: "creator", vx: 0, vy: 0 },
 ];
 
 const initBotChips = (): MovingChip[] => [
@@ -290,10 +290,11 @@ export function BotMatchScreen() {
   const selectedTeam = getArgentinaTeam2025(selectedTeamId);
   const myFill = selectedTeam?.home.primary || "#00a8ff";
   const myStroke = selectedTeam?.home.secondary || "#0066cc";
+  const myBadgeUrl = makeTeamBadgeUrl({ teamId: selectedTeamId, fill: myFill, stroke: myStroke });
 
   const [isMobile, setIsMobile] = useState(false);
 
-  const chipsRef = useRef<MovingChip[]>([...initPlayerChips(myFill, myStroke), ...initBotChips()]);
+  const chipsRef = useRef<MovingChip[]>([...initPlayerChips(myFill, myStroke, myBadgeUrl), ...initBotChips()]);
   const ballRef = useRef<BallState>(initBall());
 
   const [chips, setChips] = useState<MovingChip[]>(chipsRef.current);
@@ -1182,7 +1183,7 @@ export function BotMatchScreen() {
   // RESET campo (compatible)
   const resetField = useCallback((scorer: "you" | "bot") => {
     // 1. Resetear fichas y pelota
-    chipsRef.current = [...initPlayerChips(myFill, myStroke), ...initBotChips()];
+    chipsRef.current = [...initPlayerChips(myFill, myStroke, myBadgeUrl), ...initBotChips()];
     ballRef.current = initBall();
     
     // 2. Actualizar estados
@@ -1204,7 +1205,7 @@ export function BotMatchScreen() {
       setActive("creator");
       setSelectedChipId("you-1");
     }
-  }, []);
+  }, [myBadgeUrl, myFill, myStroke]);
 
   // Helper: ¿hay movimiento?
   const isMoving = useCallback(() => {
@@ -1379,7 +1380,7 @@ export function BotMatchScreen() {
 
     simRef.current = requestAnimationFrame(loop);
     return () => { if (simRef.current) cancelAnimationFrame(simRef.current); };
-  }, [active, goalAnimation, showEnd, turnLostAnimation, myScore, botScore, goalTarget, matchMode, isMoving, botShoot, showGoalAnim, showTurnLost]);
+  }, [active, goalAnimation, showEnd, turnLostAnimation, myScore, botScore, goalTarget, matchMode, goldenGoal, resetField, botShoot, showGoalAnim, showTurnLost]);
 
   /* =========================
      TEMPORIZADOR DE TURNO
