@@ -291,6 +291,8 @@ export function BotMatchScreen() {
   const myFill = selectedTeam?.home.primary || "#00a8ff";
   const myStroke = selectedTeam?.home.secondary || "#0066cc";
 
+  const [isMobile, setIsMobile] = useState(false);
+
   const chipsRef = useRef<MovingChip[]>([...initPlayerChips(myFill, myStroke), ...initBotChips()]);
   const ballRef = useRef<BallState>(initBall());
 
@@ -333,6 +335,13 @@ export function BotMatchScreen() {
     successfulPasses: 0,
     interceptions: 0,
   });
+
+  useEffect(() => {
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const mobileUa = /Android|iPhone|iPad|iPod/i.test(ua);
+    const smallScreen = typeof window !== "undefined" ? window.innerWidth < 768 : false;
+    setIsMobile(mobileUa || smallScreen);
+  }, []);
 
   useEffect(() => {
     showEndRef.current = showEnd;

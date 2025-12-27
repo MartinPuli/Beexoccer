@@ -22,7 +22,17 @@ export function TeamSelectScreen() {
       </div>
 
       <div className="create-body" style={{ width: "100%" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            width: "100%",
+            maxHeight: "70vh",
+            overflowY: "auto",
+            paddingRight: 6,
+          }}
+        >
           {teams.map((t) => {
             const active = t.id === selectedTeamId;
             return (
