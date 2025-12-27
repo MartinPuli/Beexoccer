@@ -65,7 +65,16 @@ export function RankingScreen() {
       </div>
 
       <div className="create-body">
-        {loading && <div className="turn-indicator">Cargando ranking...</div>}
+        {loading && (
+          <div style={{
+            textAlign: "center",
+            color: "white",
+            padding: "40px 20px",
+            fontSize: "1rem"
+          }}>
+            Cargando ranking...
+          </div>
+        )}
         {error && (
           <div className="turn-indicator" style={{ color: "var(--accent-red)" }}>
             Error: {error}
