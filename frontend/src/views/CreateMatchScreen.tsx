@@ -100,7 +100,7 @@ export function CreateMatchScreen() {
   };
 
   return (
-    <div className="create-screen">
+    <div className="create-screen create-match-scrollable">
       <div className="create-header">
         <button className="create-back" onClick={() => setView("accept")}>←</button>
         <span className="create-title">Crear Partida</span>

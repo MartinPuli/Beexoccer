@@ -559,6 +559,12 @@ body {
   gap: 28px;
 }
 
+/* Scroll solo en CreateMatchScreen */
+.create-match-scrollable .create-body {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .create-section {
   display: flex;
   flex-direction: column;
