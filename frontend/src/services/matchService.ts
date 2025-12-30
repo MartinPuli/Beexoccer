@@ -1,4 +1,4 @@
-import { Contract, InterfaceAbi, formatEther, parseEther } from "ethers";
+import { Contract, InterfaceAbi, formatEther, parseEther, parseUnits } from "ethers";
 import abiJson from "../abi/MatchManager.json";
 import { MatchConfig, MatchLobby } from "../types/game";
 import { walletService } from "./walletService";
@@ -113,8 +113,7 @@ export async function createMatch(config: MatchConfig): Promise<{ matchId: numbe
       stakeToken = ZERO_ADDRESS;
       txValue = 0n;
     } else {
-      stakeWei = parseEther(config.stakeAmount || "0");
-      if (stakeWei === 0n) {
+      if (!config.stakeAmount || config.stakeAmount === "0") {
         throw new Error("El monto de apuesta debe ser mayor a 0");
       }
       
@@ -127,10 +126,28 @@ export async function createMatch(config: MatchConfig): Promise<{ matchId: numbe
       
       if (isNativeToken) {
         stakeToken = ZERO_ADDRESS;
+        stakeWei = parseEther(config.stakeAmount);
         txValue = stakeWei;
       } else {
+        // Token ERC20 (USDC/USDT) - detectar decimales
         stakeToken = config.stakeToken!;
+        
+        // Detectar decimales del token (USDC/USDT usan 6, POL usa 18)
+        const tokenInfo = walletService.getTokenInfo(
+          // Buscar por dirección
+          stakeToken === "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359" ? "USDC" :
+          stakeToken === "0xc2132D05D31c914a87C6611C10748AEb04B58e8F" ? "USDT" :
+          "POL"
+        );
+        
+        const decimals = tokenInfo?.decimals || 18;
+        stakeWei = parseUnits(config.stakeAmount, decimals);
         txValue = 0n;
+        
+        // Aprobar tokens antes de crear el match
+        console.log(`Aprobando ${config.stakeAmount} tokens (${decimals} decimals) en ${stakeToken}...`);
+        await walletService.approveToken(stakeToken, MATCH_MANAGER_ADDRESS, stakeWei);
+        console.log("Tokens aprobados exitosamente");
       }
     }
     
@@ -331,6 +348,13 @@ export async function acceptMatch(matchId: number, match: MatchLobby) {
       isNativeToken,
       valueToSend: (!isFree && isNativeToken) ? stakeAmount.toString() : "0"
     });
+    
+    // Si es token ERC20, aprobar antes de unirse
+    if (!isFree && !isNativeToken) {
+      console.log(`[acceptMatch] Aprobando ${stakeAmount} tokens en ${stakeToken}...`);
+      await walletService.approveToken(stakeToken, MATCH_MANAGER_ADDRESS, stakeAmount);
+      console.log("[acceptMatch] Tokens aprobados exitosamente");
+    }
     
     const tx = await contract.joinMatch(matchId, {
       value: (!isFree && isNativeToken) ? stakeAmount : 0n
