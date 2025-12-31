@@ -13,6 +13,5 @@ export const env = {
   matchManagerAddress: "0x8087441101595dd8FEcA1f02179a74ec2A1FeBBf",
 
   // URL del servidor de tiempo real (usar localhost para desarrollo, producción para deploy)
-  realtimeUrl: "https://beexoccer-production.up.railway.app",
+  realtimeUrl: "https://beexoccer.onrender.com",
 };
- 
