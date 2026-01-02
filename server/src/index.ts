@@ -1085,7 +1085,12 @@ const httpServer = createServer((req, res) => {
   res.end(JSON.stringify({ error: "not_found" }));
 });
 const io: RealtimeServer = new Server(httpServer, {
-  cors: { origin: "*" },
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+    credentials: true,
+    allowedHeaders: ["*"],
+  },
 });
 
 // Server-side watchdog to enforce turn timeouts even if clients don't send turnTimeout.
