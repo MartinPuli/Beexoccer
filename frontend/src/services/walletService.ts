@@ -34,9 +34,11 @@ const SUPPORTED_TOKENS: Omit<TokenInfo, "balance">[] = [
   { symbol: "USDT", name: "Tether USD", address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", decimals: 6, type: "erc20", icon: "💲" },
 ];
 
-// ERC20 ABI mínimo para consultar balances
+// ERC20 ABI mínimo para consultar balances y aprobar
 const ERC20_ABI = [
   "function balanceOf(address owner) view returns (uint256)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
 ];
 
 const XO_CONNECT_CONFIG = {
@@ -248,6 +250,50 @@ class WalletService {
 
   getTokens(): TokenInfo[] {
     return this.tokenBalances;
+  }
+
+  /**
+   * Obtiene la dirección del contrato para un símbolo de token
+   */
+  getTokenAddress(symbol: string): string {
+    const token = SUPPORTED_TOKENS.find(t => t.symbol.toLowerCase() === symbol.toLowerCase());
+    if (!token) {
+      throw new Error(`Token ${symbol} no soportado`);
+    }
+    return token.address === "native" ? "0x0000000000000000000000000000000000000000" : token.address;
+  }
+
+  /**
+   * Obtiene información completa del token
+   */
+  getTokenInfo(symbol: string): Omit<TokenInfo, "balance"> | undefined {
+    return SUPPORTED_TOKENS.find(t => t.symbol.toLowerCase() === symbol.toLowerCase());
+  }
+
+  /**
+   * Aprueba tokens ERC20 para que el contrato pueda transferirlos
+   * @param tokenAddress Dirección del contrato ERC20
+   * @param spenderAddress Dirección del contrato que gastará los tokens (MatchManager)
+   * @param amount Cantidad en unidades base (wei para POL, unidades mínimas para tokens)
+   */
+  async approveToken(tokenAddress: string, spenderAddress: string, amount: bigint): Promise<void> {
+    const signer = await this.getSigner();
+    const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
+    
+    // Verificar allowance actual
+    const owner = await signer.getAddress();
+    const currentAllowance = await tokenContract.allowance(owner, spenderAddress);
+    
+    // Si ya tiene suficiente allowance, no hacer nada
+    if (currentAllowance >= amount) {
+      console.log("Ya tiene suficiente allowance");
+      return;
+    }
+    
+    // Aprobar tokens
+    const tx = await tokenContract.approve(spenderAddress, amount);
+    await tx.wait();
+    console.log(`Aprobación exitosa: ${amount.toString()} tokens`);
   }
 
   getProvider(): BrowserProvider {
