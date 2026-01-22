@@ -49,6 +49,10 @@ declare module "hardhat/types/runtime" {
       name: "MatchManager",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MatchManager__factory>;
+    getContractFactory(
+      name: "TournamentManager",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.TournamentManager__factory>;
 
     getContractAt(
       name: "IERC1363",
@@ -95,6 +99,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.MatchManager>;
+    getContractAt(
+      name: "TournamentManager",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.TournamentManager>;
 
     deployContract(
       name: "IERC1363",
@@ -132,6 +141,10 @@ declare module "hardhat/types/runtime" {
       name: "MatchManager",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MatchManager>;
+    deployContract(
+      name: "TournamentManager",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.TournamentManager>;
 
     deployContract(
       name: "IERC1363",
@@ -178,6 +191,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MatchManager>;
+    deployContract(
+      name: "TournamentManager",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.TournamentManager>;
 
     // default types
     getContractFactory(

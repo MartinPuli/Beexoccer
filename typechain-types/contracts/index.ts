@@ -2,3 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export type { MatchManager } from "./MatchManager";
+export type { TournamentManager } from "./TournamentManager";

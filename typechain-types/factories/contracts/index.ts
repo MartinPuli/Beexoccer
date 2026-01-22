@@ -2,3 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export { MatchManager__factory } from "./MatchManager__factory";
+export { TournamentManager__factory } from "./TournamentManager__factory";
