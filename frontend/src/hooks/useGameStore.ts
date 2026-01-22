@@ -9,7 +9,6 @@ import {
   TIMED_MATCH_DURATION_MS,
 } from "../types/game";
 import type { TournamentConfig, TournamentLobby, TournamentSize } from "../types/tournaments";
-import { socketService } from "../services/socketService";
 
 type ViewId =
   | "home"
@@ -216,6 +215,7 @@ export const useGameStore = create<GameStore>()(
       setUserAddress: (userAddress) => set({ userAddress }),
       setTournamentLobbies: (tournamentLobbies) => set({ tournamentLobbies }),
       createTournament: async (config) => {
+        const { socketService } = await import("../services/socketService");
         const state = useGameStore.getState();
         const creatorAddress = state.userAddress || "";
         const creatorAlias = shortAddress(creatorAddress) || state.alias || "Invitado";
@@ -246,6 +246,7 @@ export const useGameStore = create<GameStore>()(
       },
       selectTournament: (selectedTournamentId) => set({ selectedTournamentId }),
       joinTournament: async (tournamentId) => {
+        const { socketService } = await import("../services/socketService");
         const state = useGameStore.getState();
         const userAddress = state.userAddress || "";
         const userAlias = shortAddress(userAddress) || state.alias || "Invitado";
@@ -262,6 +263,7 @@ export const useGameStore = create<GameStore>()(
         }));
       },
       setTournamentWinner: async (tournamentId, matchId, winner) => {
+        const { socketService } = await import("../services/socketService");
         const state = useGameStore.getState();
         const t = state.tournamentLobbies.find((x) => x.id === tournamentId);
         if (!t) return;
