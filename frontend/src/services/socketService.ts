@@ -6,6 +6,7 @@ import {
   GoalTarget,
   MatchMode,
 } from "../types/game";
+import { TournamentLobby, TournamentConfig } from "../types/tournaments";
 import { env } from "../config/env";
 
 // URL del servidor de tiempo real
@@ -65,6 +66,8 @@ type ServerToClientEvents = {
   freeLobbiesUpdate: (lobbies: FreeLobby[]) => void;
   freeMatchReady: (data: { matchId: string; rivalAlias: string }) => void;
   freeLobbyRemoved: (lobbyId: string) => void;
+  // Tournament events
+  tournamentsUpdate: (lobbies: TournamentLobby[]) => void;
 };
 
 type ClientToServerEvents = {
@@ -121,6 +124,27 @@ type ClientToServerEvents = {
     alias: string;
   }) => void;
   cancelFreeLobby: (lobbyId: string) => void;
+  // Tournaments
+  subscribeTournaments: () => void;
+  unsubscribeTournaments: () => void;
+  createTournament: (payload: {
+    config: TournamentConfig;
+    creatorAddress?: string;
+    creatorAlias?: string;
+    playerAlias?: string;
+    playerId?: string;
+  }, callback: (resp: { ok: boolean; error?: string; lobby?: TournamentLobby }) => void) => void;
+  joinTournament: (payload: {
+    tournamentId: string;
+    address?: string;
+    alias?: string;
+    playerId?: string;
+  }, callback: (resp: { ok: boolean; error?: string; lobby?: TournamentLobby }) => void) => void;
+  reportTournamentResult: (payload: {
+    tournamentId: string;
+    matchId: string;
+    winner: "a" | "b";
+  }, callback: (resp: { ok: boolean; error?: string; lobby?: TournamentLobby }) => void) => void;
 };
 
 class SocketService {
@@ -142,6 +166,8 @@ class SocketService {
   private rematchDeclinedCallbacks: ((data: {
     bySide: "creator" | "challenger";
   }) => void)[] = [];
+  // Tournament callbacks
+  private tournamentsCallbacks: ((lobbies: TournamentLobby[]) => void)[] = [];
   // Free lobbies callbacks
   private freeLobbiesCallbacks: ((lobbies: FreeLobby[]) => void)[] = [];
   private freeMatchReadyCallbacks: ((data: {
@@ -157,6 +183,10 @@ class SocketService {
   private reconnecting = false;
   private latency = 0;
   private pingInterval?: ReturnType<typeof setInterval>;
+  private lobbiesHandlersReady = false;
+  private tournamentsHandlersReady = false;
+  private wantsTournamentSubscription = false;
+  private tournamentsHandlersReady = false;
 
   connect(
     matchId: string,
@@ -272,6 +302,26 @@ class SocketService {
     }
   }
 
+  private attachLobbiesHandlers() {
+    if (!this.socket || this.lobbiesHandlersReady) return;
+    this.lobbiesHandlersReady = true;
+    this.socket.on("lobbiesUpdate", (lobbies) => {
+      for (const cb of this.lobbiesCallbacks) cb(lobbies);
+    });
+
+    this.socket.on("lobbyCreated", (lobby) => {
+      for (const cb of this.lobbyCreatedCallbacks) cb(lobby);
+    });
+  }
+
+  private attachTournamentHandlers() {
+    if (!this.socket || this.tournamentsHandlersReady) return;
+    this.tournamentsHandlersReady = true;
+    this.socket.on("tournamentsUpdate", (lobbies) => {
+      for (const cb of this.tournamentsCallbacks) cb(lobbies);
+    });
+  }
+
   private notifyConnection(connected: boolean) {
     for (const cb of this.connectionCallbacks) cb(connected);
   }
@@ -300,6 +350,7 @@ class SocketService {
 
   connectLobbies() {
     if (this.socket?.connected) {
+      this.attachLobbiesHandlers();
       this.socket.emit("subscribeLobbies");
       return;
     }
@@ -319,18 +370,108 @@ class SocketService {
       this.socket.on("connect", () => {
         this.retryCount = 0;
         this.socket?.emit("subscribeLobbies");
+        if (this.wantsTournamentSubscription) {
+          this.attachTournamentHandlers();
+          this.socket?.emit("subscribeTournaments");
+        }
       });
 
-      this.socket.on("lobbiesUpdate", (lobbies) => {
-        for (const cb of this.lobbiesCallbacks) cb(lobbies);
-      });
-
-      this.socket.on("lobbyCreated", (lobby) => {
-        for (const cb of this.lobbyCreatedCallbacks) cb(lobby);
-      });
+      this.attachLobbiesHandlers();
+      if (this.wantsTournamentSubscription) {
+        this.attachTournamentHandlers();
+      }
     } catch {
       // Silently fail
     }
+  }
+
+  connectTournaments() {
+    this.wantsTournamentSubscription = true;
+
+    if (this.socket?.connected) {
+      this.attachTournamentHandlers();
+      this.socket.emit("subscribeTournaments");
+      return;
+    }
+
+    try {
+      this.socket = io(REALTIME_URL, {
+        transports: ["websocket", "polling"],
+        timeout: 10000,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+      });
+
+      this.socket.on("connect_error", () => {
+        this.retryCount++;
+      });
+
+      this.socket.on("connect", () => {
+        this.retryCount = 0;
+        this.socket?.emit("subscribeTournaments");
+      });
+
+      this.attachTournamentHandlers();
+      this.attachLobbiesHandlers();
+    } catch {
+      // Silently fail
+    }
+  }
+
+  async createTournamentLobby(params: {
+    config: TournamentConfig;
+    creatorAddress?: string;
+    creatorAlias?: string;
+    playerAlias?: string;
+    playerId?: string;
+  }): Promise<TournamentLobby> {
+    this.connectTournaments();
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("timeout creando torneo")), 8000);
+      this.socket?.emit("createTournament", params, (resp?: { ok: boolean; error?: string; lobby?: TournamentLobby }) => {
+        clearTimeout(timeout);
+        if (resp?.ok && resp.lobby) return resolve(resp.lobby);
+        return reject(new Error(resp?.error || "No se pudo crear el torneo"));
+      });
+    });
+  }
+
+  unsubscribeTournaments() {
+    this.wantsTournamentSubscription = false;
+    this.socket?.emit("unsubscribeTournaments");
+    this.offTournaments();
+  }
+
+  async joinTournamentLobby(params: {
+    tournamentId: string;
+    address?: string;
+    alias?: string;
+    playerId?: string;
+  }): Promise<TournamentLobby> {
+    this.connectTournaments();
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("timeout uniendo a torneo")), 8000);
+      this.socket?.emit("joinTournament", params, (resp?: { ok: boolean; error?: string; lobby?: TournamentLobby }) => {
+        clearTimeout(timeout);
+        if (resp?.ok && resp.lobby) return resolve(resp.lobby);
+        return reject(new Error(resp?.error || "No se pudo unir al torneo"));
+      });
+    });
+  }
+
+  async reportTournamentResult(params: { tournamentId: string; matchId: string; winner: "a" | "b" }) {
+    this.connectTournaments();
+
+    return new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("timeout reportando resultado")), 8000);
+      this.socket?.emit("reportTournamentResult", params, (resp?: { ok: boolean; error?: string }) => {
+        clearTimeout(timeout);
+        if (resp?.ok) return resolve();
+        return reject(new Error(resp?.error || "No se pudo reportar resultado"));
+      });
+    });
   }
 
   getCurrentSide(): "creator" | "challenger" | undefined {
@@ -343,6 +484,10 @@ class SocketService {
 
   onLobbiesUpdate(cb: (lobbies: MatchLobby[]) => void) {
     this.lobbiesCallbacks.push(cb);
+  }
+
+  onTournamentsUpdate(cb: (lobbies: TournamentLobby[]) => void) {
+    this.tournamentsCallbacks.push(cb);
   }
 
   onLobbyCreated(cb: (lobby: MatchLobby) => void) {
@@ -362,6 +507,11 @@ class SocketService {
     this.socket?.off("lobbyCancelled");
   }
 
+  offTournaments() {
+    this.tournamentsCallbacks = [];
+    this.socket?.off("tournamentsUpdate");
+  }
+
   disconnect() {
     this.stopPing();
     this.socket?.disconnect();
@@ -369,6 +519,9 @@ class SocketService {
     this.currentMatchId = undefined;
     this.currentSide = undefined;
     this.reconnecting = false;
+    this.lobbiesHandlersReady = false;
+    this.tournamentsHandlersReady = false;
+    this.wantsTournamentSubscription = false;
   }
 
   onSnapshot(cb: (payload: PlayingSnapshot) => void) {
@@ -392,6 +545,7 @@ class SocketService {
     this.socket?.off("matchEnded");
     this.socket?.off("playerForfeited");
     this.offLobbies();
+    this.offTournaments();
     this.offRematch();
     this.matchReadyCallbacks = [];
   }

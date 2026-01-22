@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useGameStore } from "../hooks/useGameStore";
 import type { GoalTarget, MatchMode } from "../types/game";
 import { TIMED_MATCH_DURATION_MS } from "../types/game";
 import type { TournamentLobby, TournamentPlayer, TournamentSize } from "../types/tournaments";
+import { socketService } from "../services/socketService";
+import { toast } from "../components/Toast";
 
 function prizeDistribution(size: TournamentSize) {
   if (size === 4) return [{ place: 1, pct: 100 }];
@@ -195,6 +197,7 @@ export function TournamentsScreen() {
   const selectTournament = useGameStore((s) => s.selectTournament);
   const joinTournament = useGameStore((s) => s.joinTournament);
   const setTournamentWinner = useGameStore((s) => s.setTournamentWinner);
+  const setTournamentLobbies = useGameStore((s) => s.setTournamentLobbies);
 
   const [size, setSize] = useState<TournamentSize>(4);
   const [mode, setMode] = useState<MatchMode>("goals");
@@ -215,6 +218,26 @@ export function TournamentsScreen() {
     () => prizeDistribution(selectedTournament ? selectedTournament.config.size : size),
     [selectedTournament, size]
   );
+
+  const handleJoin = async (tournamentId: string) => {
+    try {
+      await joinTournament(tournamentId);
+      toast.success("Te uniste", "Esperando bracket listo");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "No se pudo unir al torneo";
+      toast.error("Error", msg);
+    }
+  };
+
+  useEffect(() => {
+    socketService.connectTournaments();
+    const handler = (lobbies: TournamentLobby[]) => setTournamentLobbies(lobbies);
+    socketService.onTournamentsUpdate(handler);
+
+    return () => {
+      socketService.unsubscribeTournaments();
+    };
+  }, [setTournamentLobbies]);
 
   const myLower = (userAddress || "").toLowerCase();
 
@@ -237,21 +260,32 @@ export function TournamentsScreen() {
     return addr || "-";
   };
 
-  const onCreate = () => {
-    createTournament({
-      size,
-      mode,
-      goals,
-      durationMs: mode === "time" ? TIMED_MATCH_DURATION_MS : undefined,
-      isFree: !isBet,
-      entryFee: isBet ? entryFee : "0",
-    });
-    setIsCreateOpen(false);
+  const onCreate = async () => {
+    try {
+      const id = await createTournament({
+        size,
+        mode,
+        goals,
+        durationMs: mode === "time" ? TIMED_MATCH_DURATION_MS : undefined,
+        isFree: !isBet,
+        entryFee: isBet ? entryFee : "0",
+      });
+      toast.success("Torneo creado", `ID ${id}`);
+      setIsCreateOpen(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "No se pudo crear el torneo";
+      toast.error("Error", msg);
+    }
   };
 
-  const onSetWinner = (matchId: string, winner: "a" | "b") => {
+  const onSetWinner = async (matchId: string, winner: "a" | "b") => {
     if (!selectedTournament) return;
-    setTournamentWinner(selectedTournament.id, matchId, winner);
+    try {
+      await setTournamentWinner(selectedTournament.id, matchId, winner);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "No se pudo guardar el resultado";
+      toast.error("Error", msg);
+    }
   };
 
   return (
@@ -294,7 +328,7 @@ export function TournamentsScreen() {
                     <button className="lobby-join" onClick={() => selectTournament(t.id)}>
                       VER
                     </button>
-                    <button className="lobby-join" disabled={!canJoin(t)} onClick={() => joinTournament(t.id)}>
+                    <button className="lobby-join" disabled={!canJoin(t)} onClick={() => handleJoin(t.id)}>
                       UNIRSE
                     </button>
                   </div>
@@ -406,7 +440,7 @@ export function TournamentsScreen() {
               </div>
               <div className="tournament-detail-meta">{formatMatchType(selectedTournament)}</div>
               <div className="tournament-detail-actions">
-                <button className="lobby-join" disabled={!canJoin(selectedTournament)} onClick={() => joinTournament(selectedTournament.id)}>
+                <button className="lobby-join" disabled={!canJoin(selectedTournament)} onClick={() => handleJoin(selectedTournament.id)}>
                   UNIRSE
                 </button>
               </div>

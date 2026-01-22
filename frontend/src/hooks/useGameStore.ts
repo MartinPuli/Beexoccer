@@ -9,6 +9,7 @@ import {
   TIMED_MATCH_DURATION_MS,
 } from "../types/game";
 import type { TournamentConfig, TournamentLobby, TournamentSize } from "../types/tournaments";
+import { socketService } from "../services/socketService";
 
 type ViewId =
   | "home"
@@ -76,10 +77,11 @@ interface GameStore {
   setAlias: (alias: string) => void;
   setBalance: (balance: string) => void;
   setUserAddress: (address: string) => void;
-  createTournament: (config: TournamentConfig) => string;
+  setTournamentLobbies: (lobbies: TournamentLobby[]) => void;
+  createTournament: (config: TournamentConfig) => Promise<string>;
   selectTournament: (tournamentId?: string) => void;
-  joinTournament: (tournamentId: string) => void;
-  setTournamentWinner: (tournamentId: string, matchId: string, winner: "a" | "b") => void;
+  joinTournament: (tournamentId: string) => Promise<void>;
+  setTournamentWinner: (tournamentId: string, matchId: string, winner: "a" | "b") => Promise<void>;
   setMatches: (matches: MatchLobby[]) => void;
   setCurrentMatchId: (matchId?: string) => void;
   setPlayerSide: (side: "creator" | "challenger") => void;
@@ -212,66 +214,71 @@ export const useGameStore = create<GameStore>()(
       setAlias: (alias) => set({ alias }),
       setBalance: (balance) => set({ balance }),
       setUserAddress: (userAddress) => set({ userAddress }),
-      createTournament: (config) => {
-        const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-        const createdAt = Date.now();
-        set((state) => {
-          const creatorAddress = state.userAddress || "";
-          const creatorAlias = shortAddress(creatorAddress) || state.alias || "Invitado";
-          const me = {
-            id: creatorAddress || `local-${id}`,
-            address: creatorAddress || undefined,
-            alias: creatorAlias,
-          };
-          const lobby: TournamentLobby = {
-            id,
-            createdAt,
-            creatorAddress,
-            creatorAlias,
-            config,
-            players: [me],
-            results: {},
-          };
-          return {
-            tournamentLobbies: [lobby, ...state.tournamentLobbies],
-            selectedTournamentId: id,
-          };
+      setTournamentLobbies: (tournamentLobbies) => set({ tournamentLobbies }),
+      createTournament: async (config) => {
+        const state = useGameStore.getState();
+        const creatorAddress = state.userAddress || "";
+        const creatorAlias = shortAddress(creatorAddress) || state.alias || "Invitado";
+        const normalizedConfig: TournamentConfig = {
+          ...config,
+          durationMs:
+            config.mode === "time"
+              ? typeof config.durationMs === "number"
+                ? config.durationMs
+                : TIMED_MATCH_DURATION_MS
+              : undefined,
+        };
+
+        const lobby = await socketService.createTournamentLobby({
+          config: normalizedConfig,
+          creatorAddress,
+          creatorAlias,
+          playerAlias: creatorAlias,
+          playerId: creatorAddress || `local-${Date.now()}`,
         });
-        return id;
+
+        set((state) => ({
+          tournamentLobbies: [lobby, ...state.tournamentLobbies.filter((t) => t.id !== lobby.id)],
+          selectedTournamentId: lobby.id,
+        }));
+
+        return lobby.id;
       },
       selectTournament: (selectedTournamentId) => set({ selectedTournamentId }),
-      joinTournament: (tournamentId) => {
-        set((state) => {
-          const userAddress = state.userAddress || "";
-          const userAlias = shortAddress(userAddress) || state.alias || "Invitado";
-          return {
-            tournamentLobbies: state.tournamentLobbies.map((t) => {
-              if (t.id !== tournamentId) return t;
-              if (t.players.length >= t.config.size) return t;
-              if (userAddress && t.players.some((p) => p.address?.toLowerCase() === userAddress.toLowerCase())) return t;
+      joinTournament: async (tournamentId) => {
+        const state = useGameStore.getState();
+        const userAddress = state.userAddress || "";
+        const userAlias = shortAddress(userAddress) || state.alias || "Invitado";
 
-              const playerId = userAddress || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-              const nextPlayer = { id: playerId, address: userAddress || undefined, alias: userAlias };
-              return { ...t, players: [...t.players, nextPlayer] };
-            })
-          };
+        const lobby = await socketService.joinTournamentLobby({
+          tournamentId,
+          address: userAddress || undefined,
+          alias: userAlias,
+          playerId: userAddress || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         });
+
+        set((state) => ({
+          tournamentLobbies: state.tournamentLobbies.map((t) => (t.id === lobby.id ? lobby : t)),
+        }));
       },
-      setTournamentWinner: (tournamentId, matchId, winner) => {
-        set((state) => {
-          const t = state.tournamentLobbies.find((x) => x.id === tournamentId);
-          if (!t) return state;
-          const descendants = computeTournamentDescendants(t.config.size as TournamentSize, matchId);
-          const nextResults = { ...t.results, [matchId]: { winner } };
-          for (const depId of descendants) {
-            delete nextResults[depId];
-          }
-          return {
-            tournamentLobbies: state.tournamentLobbies.map((x) =>
-              x.id === tournamentId ? { ...x, results: nextResults } : x
-            ),
-          };
-        });
+      setTournamentWinner: async (tournamentId, matchId, winner) => {
+        const state = useGameStore.getState();
+        const t = state.tournamentLobbies.find((x) => x.id === tournamentId);
+        if (!t) return;
+
+        await socketService.reportTournamentResult({ tournamentId, matchId, winner });
+
+        // Optimistic local update while waiting for broadcast
+        const descendants = computeTournamentDescendants(t.config.size as TournamentSize, matchId);
+        const nextResults = { ...t.results, [matchId]: { winner } };
+        for (const depId of descendants) {
+          delete nextResults[depId];
+        }
+        set((state) => ({
+          tournamentLobbies: state.tournamentLobbies.map((x) =>
+            x.id === tournamentId ? { ...x, results: nextResults } : x
+          ),
+        }));
       },
       setMatches: (pendingMatches) => set({ pendingMatches }),
       setCurrentMatchId: (currentMatchId) => set({ currentMatchId }),

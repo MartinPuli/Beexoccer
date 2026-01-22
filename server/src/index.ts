@@ -28,6 +28,7 @@ const CHIP_RADIUS = 32; // Radio de las fichas
 const TURN_MS = 15_000; // 15 segundos por turno (igual que frontend)
 const MAX_SIM_MS = 10_000;
 const MAX_CONSECUTIVE_TIMEOUTS = 3;
+const TIMED_MATCH_DURATION_MS = 180_000;
 
 type TeamKit = {
   primary: string;
@@ -215,6 +216,10 @@ const lobbySubscribers = new Set<string>(); // socket ids subscribed to lobby up
 const freeLobbies = new Map<string, FreeLobby>();
 const freeLobbySubscribers = new Set<string>();
 
+// Tournament storage (shared across clients)
+const tournaments = loadTournaments();
+const tournamentSubscribers = new Set<string>();
+
 interface SnapshotPayload {
   activePlayer: PlayerSide;
   turnEndsAt: number;
@@ -261,13 +266,13 @@ interface ClientToServerEvents {
   acceptRematch: (payload: { matchId: string }) => void;
   declineRematch: (payload: { matchId: string }) => void;
   // Rematch blockchain flow
-  rematchBlockchainCreated: (payload: { 
-    oldMatchId: string; 
+  rematchBlockchainCreated: (payload: {
+    oldMatchId: string;
     newMatchId: string;
     creatorAddress: string;
   }) => void;
-  rematchBlockchainJoined: (payload: { 
-    oldMatchId: string; 
+  rematchBlockchainJoined: (payload: {
+    oldMatchId: string;
     newMatchId: string;
   }) => void;
   turnTimeout: (payload: { matchId?: string }) => void;
@@ -339,8 +344,8 @@ interface ServerToClientEvents {
     };
     initiatorSide: PlayerSide;
   }) => void;
-  rematchBlockchainReady: (data: { 
-    newMatchId: string; 
+  rematchBlockchainReady: (data: {
+    newMatchId: string;
     oldMatchId: string;
   }) => void;
   // Free lobbies events
@@ -349,7 +354,7 @@ interface ServerToClientEvents {
   freeLobbyRemoved: (lobbyId: string) => void;
 }
 
-interface InterServerEvents {}
+interface InterServerEvents { }
 
 interface SocketData {
   matchId: string;
@@ -506,6 +511,132 @@ function computeWinDelta(winnerXo: number, loserXo: number) {
 }
 
 let weeklyRanking: WeeklyRankingState = loadWeeklyRanking(Date.now());
+
+// ========== TOURNAMENTS (in-memory + file persistence) ==========
+type TournamentSize = 4 | 8 | 16;
+
+type TournamentConfig = {
+  size: TournamentSize;
+  mode: MatchMode;
+  goals: number;
+  durationMs?: number;
+  isFree: boolean;
+  entryFee: string;
+};
+
+type TournamentPlayer = {
+  id: string;
+  address?: string;
+  alias: string;
+};
+
+type TournamentMatchResult = {
+  winner: "a" | "b";
+};
+
+type TournamentLobby = {
+  id: string;
+  createdAt: number;
+  creatorAddress: string;
+  creatorAlias: string;
+  config: TournamentConfig;
+  players: TournamentPlayer[];
+  results: Record<string, TournamentMatchResult | undefined>;
+};
+
+const tournamentsFilePath = join(process.cwd(), "data", "tournaments.json");
+
+function loadTournaments(): Map<string, TournamentLobby> {
+  try {
+    if (!existsSync(tournamentsFilePath)) return new Map();
+    const parsed = JSON.parse(readFileSync(tournamentsFilePath, "utf8")) as TournamentLobby[];
+    if (!Array.isArray(parsed)) return new Map();
+    const map = new Map<string, TournamentLobby>();
+    for (const t of parsed) {
+      if (!t?.id) continue;
+      map.set(t.id, t);
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+function saveTournaments(map: Map<string, TournamentLobby>) {
+  const dir = dirname(tournamentsFilePath);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  const arr = Array.from(map.values());
+  writeFileSync(tournamentsFilePath, JSON.stringify(arr), "utf8");
+}
+
+function broadcastTournaments(io: Server, subs: Set<string>, map: Map<string, TournamentLobby>) {
+  const payload = Array.from(map.values()).sort((a, b) => b.createdAt - a.createdAt);
+  for (const subId of subs) {
+    io.to(subId).emit("tournamentsUpdate", payload);
+  }
+}
+
+function createTournamentMatchIds(size: TournamentSize): string[] {
+  const ids: string[] = [];
+  const makeId = (round: number, order: number) => `main-r${round}-m${order}`;
+  const firstRoundMatches = size / 2;
+  for (let i = 0; i < firstRoundMatches; i++) ids.push(makeId(1, i + 1));
+  let round = 2;
+  let prevRoundCount = firstRoundMatches;
+  while (prevRoundCount > 1) {
+    const roundCount = prevRoundCount / 2;
+    for (let i = 0; i < roundCount; i++) ids.push(makeId(round, i + 1));
+    prevRoundCount = roundCount;
+    round++;
+  }
+  if (size === 16) ids.push("third-place");
+  return ids;
+}
+
+function computeTournamentDescendants(size: TournamentSize, fromMatchId: string): string[] {
+  const ids = createTournamentMatchIds(size);
+  const edges = new Map<string, string[]>();
+  const makeId = (round: number, order: number) => `main-r${round}-m${order}`;
+
+  const firstRoundMatches = size / 2;
+  let round = 2;
+  let prevRoundCount = firstRoundMatches;
+  while (prevRoundCount > 1) {
+    const roundCount = prevRoundCount / 2;
+    for (let i = 0; i < roundCount; i++) {
+      const parent = makeId(round, i + 1);
+      const left = makeId(round - 1, i * 2 + 1);
+      const right = makeId(round - 1, i * 2 + 2);
+      edges.set(left, [...(edges.get(left) ?? []), parent]);
+      edges.set(right, [...(edges.get(right) ?? []), parent]);
+    }
+    prevRoundCount = roundCount;
+    round++;
+  }
+
+  if (size === 16) {
+    const semi1 = makeId(3, 1);
+    const semi2 = makeId(3, 2);
+    edges.set(semi1, [...(edges.get(semi1) ?? []), "third-place"]);
+    edges.set(semi2, [...(edges.get(semi2) ?? []), "third-place"]);
+  }
+
+  const visited = new Set<string>();
+  const stack = [fromMatchId];
+  while (stack.length) {
+    const cur = stack.pop()!;
+    const next = edges.get(cur) ?? [];
+    for (const n of next) {
+      if (visited.has(n)) continue;
+      visited.add(n);
+      stack.push(n);
+    }
+  }
+
+  return ids.filter((id) => visited.has(id));
+}
 
 function applyWeeklyRankingMatchResult(payload: {
   winnerAddress: string;
@@ -883,9 +1014,8 @@ function applyTurnTimeout(
 
     io.to(state.id).emit("event", {
       type: "timeout",
-      message: `${
-        timedOutSide === "creator" ? "Creador" : "Retador"
-      } pierde por inactividad`,
+      message: `${timedOutSide === "creator" ? "Creador" : "Retador"
+        } pierde por inactividad`,
       accent: "#ff4f64",
       timestamp: Date.now(),
       from: timedOutSide,
@@ -950,7 +1080,7 @@ function simulateStep(
     if (state.ended) {
       return false;
     }
-    
+
     // IMPORTANT: Goals during kickoff (first move after goal/reset) don't count
     // Reset ball to center instead of counting the goal
     if (state.isKickoff) {
@@ -959,7 +1089,7 @@ function simulateStep(
       // Continue simulation - don't count as goal
       return true;
     }
-    
+
     if (scorer === "creator") state.creatorScore += 1;
     else state.challengerScore += 1;
 
@@ -988,8 +1118,8 @@ function simulateStep(
         state.creatorScore >= state.goalTarget
           ? "creator"
           : state.challengerScore >= state.goalTarget
-          ? "challenger"
-          : null;
+            ? "challenger"
+            : null;
       if (winner) {
         state.ended = true;
         state.simRunning = false;
@@ -1294,14 +1424,14 @@ io.on(
     // Handler para unirse a un match (usado en revancha)
     socket.on("joinMatch", (newMatchId: string) => {
       if (!newMatchId) return;
-      
+
       // Unirse al nuevo room
       socket.join(newMatchId);
       socket.data.matchId = newMatchId;
-      
+
       // Actualizar el matchId local del handler
       matchId = newMatchId;
-      
+
       const state = matches.get(newMatchId);
       if (state) {
         // Marcar como conectado según el lado
@@ -1310,7 +1440,7 @@ io.on(
         } else {
           state.connected.challenger = true;
         }
-        
+
         // Si ambos están conectados, enviar snapshot
         if (bothPlayersConnected(state)) {
           resumeTurnIfReady(state);
@@ -1428,9 +1558,9 @@ io.on(
       newState.connected.creator = true;
 
       // Notificar al rival que debe unirse al nuevo match
-      io.to(oldMatchId).emit("rematchBlockchainReady", { 
-        newMatchId, 
-        oldMatchId 
+      io.to(oldMatchId).emit("rematchBlockchainReady", {
+        newMatchId,
+        oldMatchId
       });
     });
 
@@ -1478,6 +1608,148 @@ io.on(
     socket.on("unsubscribeLobbies", () => {
       lobbySubscribers.delete(socket.id);
     });
+
+    // Tournament lobby system
+    socket.on("subscribeTournaments", () => {
+      tournamentSubscribers.add(socket.id);
+      const list = Array.from(tournaments.values()).sort((a, b) => b.createdAt - a.createdAt);
+      socket.emit("tournamentsUpdate", list);
+    });
+
+    socket.on("unsubscribeTournaments", () => {
+      tournamentSubscribers.delete(socket.id);
+    });
+
+    socket.on(
+      "createTournament",
+      (
+        payload: {
+          config: TournamentConfig;
+          creatorAddress?: string;
+          creatorAlias?: string;
+          playerAlias?: string;
+          playerId?: string;
+        },
+        ack?: (resp: { ok: boolean; error?: string; lobby?: TournamentLobby }) => void
+      ) => {
+        try {
+          const cfg = payload?.config;
+          if (!cfg || !cfg.size || !cfg.mode || !cfg.goals) {
+            ack?.({ ok: false, error: "config inválida" });
+            return;
+          }
+
+          const id = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+          const playerId = payload.playerId || payload.creatorAddress || `local-${id}`;
+          const alias = payload.playerAlias || payload.creatorAlias || "Invitado";
+
+          const lobby: TournamentLobby = {
+            id,
+            createdAt: Date.now(),
+            creatorAddress: payload.creatorAddress || "",
+            creatorAlias: payload.creatorAlias || alias,
+            config: {
+              size: cfg.size,
+              mode: cfg.mode === "time" ? "time" : "goals",
+              goals: cfg.goals,
+              durationMs: cfg.mode === "time" ? cfg.durationMs || TIMED_MATCH_DURATION_MS : undefined,
+              isFree: !!cfg.isFree,
+              entryFee: cfg.entryFee ?? "0",
+            },
+            players: [
+              {
+                id: playerId,
+                address: payload.creatorAddress || undefined,
+                alias,
+              },
+            ],
+            results: {},
+          };
+
+          tournaments.set(id, lobby);
+          saveTournaments(tournaments);
+          broadcastTournaments(io, tournamentSubscribers, tournaments);
+          ack?.({ ok: true, lobby });
+        } catch (err) {
+          const error = err instanceof Error ? err.message : "error inesperado";
+          ack?.({ ok: false, error });
+        }
+      }
+    );
+
+    socket.on(
+      "joinTournament",
+      (
+        payload: {
+          tournamentId: string;
+          address?: string;
+          alias?: string;
+          playerId?: string;
+        },
+        ack?: (resp: { ok: boolean; error?: string; lobby?: TournamentLobby }) => void
+      ) => {
+        const { tournamentId } = payload || {};
+        if (!tournamentId) {
+          ack?.({ ok: false, error: "tournamentId requerido" });
+          return;
+        }
+        const lobby = tournaments.get(tournamentId);
+        if (!lobby) {
+          ack?.({ ok: false, error: "torneo no encontrado" });
+          return;
+        }
+
+        const addr = (payload.address || "").toLowerCase();
+        const already = lobby.players.some((p) => p.address?.toLowerCase() === addr);
+        if (already) {
+          ack?.({ ok: true, lobby });
+          return;
+        }
+
+        if (lobby.players.length >= lobby.config.size) {
+          ack?.({ ok: false, error: "torneo lleno" });
+          return;
+        }
+
+        lobby.players.push({
+          id: payload.playerId || payload.address || `p-${Date.now()}`,
+          address: payload.address || undefined,
+          alias: payload.alias || "Invitado",
+        });
+
+        saveTournaments(tournaments);
+        broadcastTournaments(io, tournamentSubscribers, tournaments);
+        ack?.({ ok: true, lobby });
+      }
+    );
+
+    socket.on(
+      "reportTournamentResult",
+      (
+        payload: { tournamentId: string; matchId: string; winner: "a" | "b" },
+        ack?: (resp: { ok: boolean; error?: string; lobby?: TournamentLobby }) => void
+      ) => {
+        const { tournamentId, matchId, winner } = payload || {};
+        const lobby = tournamentId ? tournaments.get(tournamentId) : undefined;
+        if (!lobby) {
+          ack?.({ ok: false, error: "torneo no encontrado" });
+          return;
+        }
+        if (winner !== "a" && winner !== "b") {
+          ack?.({ ok: false, error: "winner inválido" });
+          return;
+        }
+
+        const nextResults = { ...lobby.results, [matchId]: { winner } };
+        const descendants = computeTournamentDescendants(lobby.config.size, matchId);
+        for (const depId of descendants) delete nextResults[depId];
+        lobby.results = nextResults;
+
+        saveTournaments(tournaments);
+        broadcastTournaments(io, tournamentSubscribers, tournaments);
+        ack?.({ ok: true, lobby });
+      }
+    );
 
     socket.on(
       "createLobby",

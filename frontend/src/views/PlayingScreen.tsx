@@ -4,7 +4,7 @@ import { useGameStore } from "../hooks/useGameStore";
 import { socketService } from "../services/socketService";
 import { reportResult } from "../services/matchService";
 import { TokenChip, PlayingSnapshot } from "../types/game";
-import { makeTeamBadgeUrl } from "../data/argentinaTeams2025";
+import { makeTeamBadgeUrl, getArgentinaTeam2025 } from "../data/argentinaTeams2025";
 
 /**
  * PlayingScreen - Partida online 1v1 con sincronización por sockets
@@ -76,6 +76,7 @@ export function PlayingScreen() {
   const setCurrentMatchId = useGameStore((s) => s.setCurrentMatchId);
   const setActiveMatch = useGameStore((s) => s.setActiveMatch);
   const alias = useGameStore((s) => s.alias);
+  const selectedTeamId = useGameStore((s) => s.selectedTeamId);
 
   const isChallenger = playerSide === "challenger";
 
@@ -181,12 +182,15 @@ export function PlayingScreen() {
         isChallenger
       );
 
-      const creatorBadgeTeamId = snapshot.creatorTeamId;
-      const challengerBadgeTeamId = snapshot.challengerTeamId;
+      const creatorTeamId = snapshot.creatorTeamId || (!isChallenger ? selectedTeamId : undefined);
+      const challengerTeamId = snapshot.challengerTeamId || (isChallenger ? selectedTeamId : undefined);
       const chipsWithBadges = transformedChips.map((c) => {
-        const teamIdForChip = c.owner === "creator" ? creatorBadgeTeamId : challengerBadgeTeamId;
-        const badgeUrl = makeTeamBadgeUrl({ teamId: teamIdForChip, fill: c.fill, stroke: c.stroke });
-        return { ...c, badgeUrl };
+        const teamIdForChip = c.owner === "creator" ? creatorTeamId : challengerTeamId;
+        const kit = teamIdForChip ? getArgentinaTeam2025(teamIdForChip) : undefined;
+        const fill = kit ? kit.home.primary : c.fill;
+        const stroke = kit ? kit.home.secondary : c.stroke;
+        const badgeUrl = makeTeamBadgeUrl({ teamId: teamIdForChip, fill, stroke });
+        return { ...c, fill, stroke, badgeUrl };
       });
 
       // Throttle visual updates on mobile: write to refs every snapshot,
