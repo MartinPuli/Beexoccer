@@ -1,0 +1,369 @@
+{
+    "_format": "hh-sol-artifact-1",
+    "contractName": "TournamentManager",
+    "sourceName": "contracts/TournamentManager.sol",
+    "abi": [
+        {
+            "inputs": [],
+            "stateMutability": "nonpayable",
+            "type": "constructor"
+        },
+        {
+            "inputs": [],
+            "name": "AlreadyJoined",
+            "type": "error"
+        },
+        {
+            "inputs": [],
+            "name": "InvalidEntryFee",
+            "type": "error"
+        },
+        {
+            "inputs": [],
+            "name": "InvalidTournamentSize",
+            "type": "error"
+        },
+        {
+            "inputs": [],
+            "name": "NotCreator",
+            "type": "error"
+        },
+        {
+            "inputs": [],
+            "name": "NotOwner",
+            "type": "error"
+        },
+        {
+            "inputs": [],
+            "name": "ReentrancyGuardReentrantCall",
+            "type": "error"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "token",
+                    "type": "address"
+                }
+            ],
+            "name": "SafeERC20FailedOperation",
+            "type": "error"
+        },
+        {
+            "inputs": [],
+            "name": "TournamentFull",
+            "type": "error"
+        },
+        {
+            "inputs": [],
+            "name": "TournamentNotActive",
+            "type": "error"
+        },
+        {
+            "inputs": [],
+            "name": "TournamentNotOpen",
+            "type": "error"
+        },
+        {
+            "anonymous": false,
+            "inputs": [
+                {
+                    "indexed": true,
+                    "internalType": "uint256",
+                    "name": "tournamentId",
+                    "type": "uint256"
+                },
+                {
+                    "indexed": true,
+                    "internalType": "address",
+                    "name": "player",
+                    "type": "address"
+                }
+            ],
+            "name": "PlayerJoined",
+            "type": "event"
+        },
+        {
+            "anonymous": false,
+            "inputs": [
+                {
+                    "indexed": true,
+                    "internalType": "uint256",
+                    "name": "tournamentId",
+                    "type": "uint256"
+                }
+            ],
+            "name": "TournamentCancelled",
+            "type": "event"
+        },
+        {
+            "anonymous": false,
+            "inputs": [
+                {
+                    "indexed": true,
+                    "internalType": "uint256",
+                    "name": "tournamentId",
+                    "type": "uint256"
+                },
+                {
+                    "indexed": true,
+                    "internalType": "address",
+                    "name": "creator",
+                    "type": "address"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "uint256",
+                    "name": "entryFee",
+                    "type": "uint256"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "uint8",
+                    "name": "size",
+                    "type": "uint8"
+                }
+            ],
+            "name": "TournamentCreated",
+            "type": "event"
+        },
+        {
+            "anonymous": false,
+            "inputs": [
+                {
+                    "indexed": true,
+                    "internalType": "uint256",
+                    "name": "tournamentId",
+                    "type": "uint256"
+                },
+                {
+                    "indexed": true,
+                    "internalType": "address",
+                    "name": "winner",
+                    "type": "address"
+                },
+                {
+                    "indexed": false,
+                    "internalType": "uint256",
+                    "name": "prizeAmount",
+                    "type": "uint256"
+                }
+            ],
+            "name": "TournamentEnded",
+            "type": "event"
+        },
+        {
+            "anonymous": false,
+            "inputs": [
+                {
+                    "indexed": true,
+                    "internalType": "uint256",
+                    "name": "tournamentId",
+                    "type": "uint256"
+                }
+            ],
+            "name": "TournamentStarted",
+            "type": "event"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "tournamentId",
+                    "type": "uint256"
+                }
+            ],
+            "name": "cancelTournament",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "uint8",
+                    "name": "size",
+                    "type": "uint8"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "entryFee",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "address",
+                    "name": "entryToken",
+                    "type": "address"
+                }
+            ],
+            "name": "createTournament",
+            "outputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "tournamentId",
+                    "type": "uint256"
+                }
+            ],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "tournamentId",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "address",
+                    "name": "firstPlace",
+                    "type": "address"
+                },
+                {
+                    "internalType": "address",
+                    "name": "secondPlace",
+                    "type": "address"
+                },
+                {
+                    "internalType": "address",
+                    "name": "thirdPlace",
+                    "type": "address"
+                }
+            ],
+            "name": "distributePrizes",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "address",
+                    "name": "",
+                    "type": "address"
+                }
+            ],
+            "name": "isPlayerInTournament",
+            "outputs": [
+                {
+                    "internalType": "bool",
+                    "name": "",
+                    "type": "bool"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "tournamentId",
+                    "type": "uint256"
+                }
+            ],
+            "name": "joinTournament",
+            "outputs": [],
+            "stateMutability": "payable",
+            "type": "function"
+        },
+        {
+            "inputs": [],
+            "name": "owner",
+            "outputs": [
+                {
+                    "internalType": "address",
+                    "name": "",
+                    "type": "address"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [],
+            "name": "tournamentCount",
+            "outputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "",
+                    "type": "uint256"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "",
+                    "type": "uint256"
+                }
+            ],
+            "name": "tournaments",
+            "outputs": [
+                {
+                    "internalType": "address",
+                    "name": "creator",
+                    "type": "address"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "entryFee",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "address",
+                    "name": "entryToken",
+                    "type": "address"
+                },
+                {
+                    "internalType": "uint8",
+                    "name": "size",
+                    "type": "uint8"
+                },
+                {
+                    "internalType": "uint8",
+                    "name": "playerCount",
+                    "type": "uint8"
+                },
+                {
+                    "internalType": "enum TournamentManager.TournamentState",
+                    "name": "state",
+                    "type": "uint8"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "totalPrizePool",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "address",
+                    "name": "winner",
+                    "type": "address"
+                }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "newOwner",
+                    "type": "address"
+                }
+            ],
+            "name": "transferOwnership",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        }
+    ]
+}

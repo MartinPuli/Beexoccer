@@ -186,14 +186,16 @@ function computeBracketLayout(size: TournamentSize) {
   return { rounds, bubbleW, bubbleH, slotGap, colGap, padX, padY, width, height, topYByRound };
 }
 
+import { createTournament as createTournamentOnChain, joinTournament as joinTournamentOnChain } from "../services/tournamentService";
+
 export function TournamentsScreen() {
   const setView = useGameStore((s) => s.setView);
   const userAddress = useGameStore((s) => s.userAddress);
   const tournamentLobbies = useGameStore((s) => s.tournamentLobbies);
   const selectedTournamentId = useGameStore((s) => s.selectedTournamentId);
-  const createTournament = useGameStore((s) => s.createTournament);
+  const createTournamentStore = useGameStore((s) => s.createTournament);
   const selectTournament = useGameStore((s) => s.selectTournament);
-  const joinTournament = useGameStore((s) => s.joinTournament);
+  const joinTournamentStore = useGameStore((s) => s.joinTournament);
   const setTournamentWinner = useGameStore((s) => s.setTournamentWinner);
 
   const [size, setSize] = useState<TournamentSize>(4);
@@ -202,6 +204,7 @@ export function TournamentsScreen() {
   const [isBet, setIsBet] = useState(false);
   const [entryFee, setEntryFee] = useState("10");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const selectedTournament = useMemo(
     () => tournamentLobbies.find((t) => t.id === selectedTournamentId) ?? null,
@@ -237,16 +240,60 @@ export function TournamentsScreen() {
     return addr || "-";
   };
 
-  const onCreate = () => {
-    createTournament({
-      size,
-      mode,
-      goals,
-      durationMs: mode === "time" ? TIMED_MATCH_DURATION_MS : undefined,
-      isFree: !isBet,
-      entryFee: isBet ? entryFee : "0",
-    });
-    setIsCreateOpen(false);
+  const onCreate = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+    try {
+      let externalId: string | undefined = undefined;
+      const config = {
+        size,
+        mode,
+        goals,
+        durationMs: mode === "time" ? TIMED_MATCH_DURATION_MS : undefined,
+        isFree: !isBet,
+        entryFee: isBet ? entryFee : "0",
+      };
+
+      if (isBet) {
+        if (!userAddress) {
+          alert("Conecta tu wallet para crear un torneo pago");
+          setIsLoading(false);
+          return;
+        }
+        const txId = await createTournamentOnChain(config);
+        externalId = txId.toString();
+      }
+
+      createTournamentStore(config, externalId);
+      setIsCreateOpen(false);
+    } catch (e) {
+      console.error(e);
+      alert("Error al crear torneo: " + (e as Error).message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const onJoin = async (t: TournamentLobby) => {
+    if (isLoading) return;
+    setIsLoading(true);
+    try {
+      if (!t.config.isFree) {
+        if (!userAddress) {
+          alert("Conecta tu wallet para unirte");
+          setIsLoading(false);
+          return;
+        }
+        // Need to join on chain
+        await joinTournamentOnChain(t.id, t.config.entryFee);
+      }
+      joinTournamentStore(t.id);
+    } catch (e) {
+      console.error(e);
+      alert("Error al unirse: " + (e as Error).message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const onSetWinner = (matchId: string, winner: "a" | "b") => {
@@ -294,8 +341,8 @@ export function TournamentsScreen() {
                     <button className="lobby-join" onClick={() => selectTournament(t.id)}>
                       VER
                     </button>
-                    <button className="lobby-join" disabled={!canJoin(t)} onClick={() => joinTournament(t.id)}>
-                      UNIRSE
+                    <button className="lobby-join" disabled={!canJoin(t) || isLoading} onClick={() => onJoin(t)}>
+                      {isLoading ? "..." : "UNIRSE"}
                     </button>
                   </div>
                 </div>

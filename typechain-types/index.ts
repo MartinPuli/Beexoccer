@@ -24,3 +24,5 @@ export type { Strings } from "./@openzeppelin/contracts/utils/Strings";
 export { Strings__factory } from "./factories/@openzeppelin/contracts/utils/Strings__factory";
 export type { MatchManager } from "./contracts/MatchManager";
 export { MatchManager__factory } from "./factories/contracts/MatchManager__factory";
+export type { TournamentManager } from "./contracts/TournamentManager";
+export { TournamentManager__factory } from "./factories/contracts/TournamentManager__factory";
