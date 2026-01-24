@@ -76,12 +76,7 @@ interface GameStore {
   setAlias: (alias: string) => void;
   setBalance: (balance: string) => void;
   setUserAddress: (address: string) => void;
-<<<<<<< HEAD
   createTournament: (config: TournamentConfig, externalId?: string) => string;
-=======
-  setTournamentLobbies: (lobbies: TournamentLobby[]) => void;
-  createTournament: (config: TournamentConfig) => Promise<string>;
->>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
   selectTournament: (tournamentId?: string) => void;
   joinTournament: (tournamentId: string) => Promise<void>;
   setTournamentWinner: (tournamentId: string, matchId: string, winner: "a" | "b") => Promise<void>;
@@ -217,7 +212,6 @@ export const useGameStore = create<GameStore>()(
       setAlias: (alias) => set({ alias }),
       setBalance: (balance) => set({ balance }),
       setUserAddress: (userAddress) => set({ userAddress }),
-<<<<<<< HEAD
       createTournament: (config, externalId) => {
         const id = externalId || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
         const createdAt = Date.now();
@@ -242,38 +236,8 @@ export const useGameStore = create<GameStore>()(
             tournamentLobbies: [lobby, ...state.tournamentLobbies],
             selectedTournamentId: id,
           };
-=======
-      setTournamentLobbies: (tournamentLobbies) => set({ tournamentLobbies }),
-      createTournament: async (config) => {
-        const { socketService } = await import("../services/socketService");
-        const state = useGameStore.getState();
-        const creatorAddress = state.userAddress || "";
-        const creatorAlias = shortAddress(creatorAddress) || state.alias || "Invitado";
-        const normalizedConfig: TournamentConfig = {
-          ...config,
-          durationMs:
-            config.mode === "time"
-              ? typeof config.durationMs === "number"
-                ? config.durationMs
-                : TIMED_MATCH_DURATION_MS
-              : undefined,
-        };
-
-        const lobby = await socketService.createTournamentLobby({
-          config: normalizedConfig,
-          creatorAddress,
-          creatorAlias,
-          playerAlias: creatorAlias,
-          playerId: creatorAddress || `local-${Date.now()}`,
->>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
         });
-
-        set((state) => ({
-          tournamentLobbies: [lobby, ...state.tournamentLobbies.filter((t) => t.id !== lobby.id)],
-          selectedTournamentId: lobby.id,
-        }));
-
-        return lobby.id;
+        return id;
       },
       selectTournament: (selectedTournamentId) => set({ selectedTournamentId }),
       joinTournament: async (tournamentId) => {
