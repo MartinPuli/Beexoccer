@@ -26,12 +26,27 @@ import type {
 export interface TournamentManagerInterface extends Interface {
   getFunction(
     nameOrSignature:
+<<<<<<< HEAD
       | "cancelTournament"
       | "createTournament"
       | "distributePrizes"
       | "isPlayerInTournament"
       | "joinTournament"
       | "owner"
+=======
+      | "calculatePrizes"
+      | "completeTournament"
+      | "createTournament"
+      | "emergencyWithdraw"
+      | "getTournament"
+      | "getTournamentPlayers"
+      | "getTournamentResults"
+      | "hasPlayerJoined"
+      | "joinTournament"
+      | "owner"
+      | "playerJoined"
+      | "startTournament"
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
       | "tournamentCount"
       | "tournaments"
       | "transferOwnership"
@@ -40,13 +55,20 @@ export interface TournamentManagerInterface extends Interface {
   getEvent(
     nameOrSignatureOrTopic:
       | "PlayerJoined"
+<<<<<<< HEAD
       | "TournamentCancelled"
       | "TournamentCreated"
       | "TournamentEnded"
+=======
+      | "PrizeDistributed"
+      | "TournamentCompleted"
+      | "TournamentCreated"
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
       | "TournamentStarted"
   ): EventFragment;
 
   encodeFunctionData(
+<<<<<<< HEAD
     functionFragment: "cancelTournament",
     values: [BigNumberish]
   ): string;
@@ -60,6 +82,44 @@ export interface TournamentManagerInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "isPlayerInTournament",
+=======
+    functionFragment: "calculatePrizes",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "completeTournament",
+    values: [BigNumberish, AddressLike, AddressLike, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "createTournament",
+    values: [
+      BigNumberish,
+      BigNumberish,
+      AddressLike,
+      BigNumberish,
+      BigNumberish,
+      BigNumberish
+    ]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "emergencyWithdraw",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getTournament",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getTournamentPlayers",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getTournamentResults",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "hasPlayerJoined",
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
     values: [BigNumberish, AddressLike]
   ): string;
   encodeFunctionData(
@@ -68,6 +128,17 @@ export interface TournamentManagerInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
+<<<<<<< HEAD
+=======
+    functionFragment: "playerJoined",
+    values: [BigNumberish, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "startTournament",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
     functionFragment: "tournamentCount",
     values?: undefined
   ): string;
@@ -81,7 +152,15 @@ export interface TournamentManagerInterface extends Interface {
   ): string;
 
   decodeFunctionResult(
+<<<<<<< HEAD
     functionFragment: "cancelTournament",
+=======
+    functionFragment: "calculatePrizes",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "completeTournament",
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -89,11 +168,31 @@ export interface TournamentManagerInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+<<<<<<< HEAD
     functionFragment: "distributePrizes",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
     functionFragment: "isPlayerInTournament",
+=======
+    functionFragment: "emergencyWithdraw",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getTournament",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getTournamentPlayers",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getTournamentResults",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "hasPlayerJoined",
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -102,6 +201,17 @@ export interface TournamentManagerInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
+<<<<<<< HEAD
+=======
+    functionFragment: "playerJoined",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "startTournament",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
     functionFragment: "tournamentCount",
     data: BytesLike
   ): Result;
@@ -116,11 +226,31 @@ export interface TournamentManagerInterface extends Interface {
 }
 
 export namespace PlayerJoinedEvent {
+<<<<<<< HEAD
   export type InputTuple = [tournamentId: BigNumberish, player: AddressLike];
   export type OutputTuple = [tournamentId: bigint, player: string];
   export interface OutputObject {
     tournamentId: bigint;
     player: string;
+=======
+  export type InputTuple = [
+    tournamentId: BigNumberish,
+    player: AddressLike,
+    currentPlayers: BigNumberish,
+    maxPlayers: BigNumberish
+  ];
+  export type OutputTuple = [
+    tournamentId: bigint,
+    player: string,
+    currentPlayers: bigint,
+    maxPlayers: bigint
+  ];
+  export interface OutputObject {
+    tournamentId: bigint;
+    player: string;
+    currentPlayers: bigint;
+    maxPlayers: bigint;
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -128,11 +258,66 @@ export namespace PlayerJoinedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+<<<<<<< HEAD
 export namespace TournamentCancelledEvent {
   export type InputTuple = [tournamentId: BigNumberish];
   export type OutputTuple = [tournamentId: bigint];
   export interface OutputObject {
     tournamentId: bigint;
+=======
+export namespace PrizeDistributedEvent {
+  export type InputTuple = [
+    tournamentId: BigNumberish,
+    recipient: AddressLike,
+    amount: BigNumberish,
+    place: string
+  ];
+  export type OutputTuple = [
+    tournamentId: bigint,
+    recipient: string,
+    amount: bigint,
+    place: string
+  ];
+  export interface OutputObject {
+    tournamentId: bigint;
+    recipient: string;
+    amount: bigint;
+    place: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace TournamentCompletedEvent {
+  export type InputTuple = [
+    tournamentId: BigNumberish,
+    firstPlace: AddressLike,
+    secondPlace: AddressLike,
+    thirdPlace: AddressLike,
+    firstPrize: BigNumberish,
+    secondPrize: BigNumberish,
+    thirdPrize: BigNumberish
+  ];
+  export type OutputTuple = [
+    tournamentId: bigint,
+    firstPlace: string,
+    secondPlace: string,
+    thirdPlace: string,
+    firstPrize: bigint,
+    secondPrize: bigint,
+    thirdPrize: bigint
+  ];
+  export interface OutputObject {
+    tournamentId: bigint;
+    firstPlace: string;
+    secondPlace: string;
+    thirdPlace: string;
+    firstPrize: bigint;
+    secondPrize: bigint;
+    thirdPrize: bigint;
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -144,18 +329,31 @@ export namespace TournamentCreatedEvent {
   export type InputTuple = [
     tournamentId: BigNumberish,
     creator: AddressLike,
+<<<<<<< HEAD
     entryFee: BigNumberish,
     size: BigNumberish
+=======
+    size: BigNumberish,
+    entryFee: BigNumberish,
+    entryToken: AddressLike
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
   ];
   export type OutputTuple = [
     tournamentId: bigint,
     creator: string,
+<<<<<<< HEAD
     entryFee: bigint,
     size: bigint
+=======
+    size: bigint,
+    entryFee: bigint,
+    entryToken: string
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
   ];
   export interface OutputObject {
     tournamentId: bigint;
     creator: string;
+<<<<<<< HEAD
     entryFee: bigint;
     size: bigint;
   }
@@ -180,6 +378,11 @@ export namespace TournamentEndedEvent {
     tournamentId: bigint;
     winner: string;
     prizeAmount: bigint;
+=======
+    size: bigint;
+    entryFee: bigint;
+    entryToken: string;
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -242,6 +445,7 @@ export interface TournamentManager extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+<<<<<<< HEAD
   cancelTournament: TypedContractMethod<
     [tournamentId: BigNumberish],
     [void],
@@ -255,6 +459,21 @@ export interface TournamentManager extends BaseContract {
   >;
 
   distributePrizes: TypedContractMethod<
+=======
+  calculatePrizes: TypedContractMethod<
+    [tournamentId: BigNumberish],
+    [
+      [bigint, bigint, bigint] & {
+        firstPrize: bigint;
+        secondPrize: bigint;
+        thirdPrize: bigint;
+      }
+    ],
+    "view"
+  >;
+
+  completeTournament: TypedContractMethod<
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
     [
       tournamentId: BigNumberish,
       firstPlace: AddressLike,
@@ -265,8 +484,67 @@ export interface TournamentManager extends BaseContract {
     "nonpayable"
   >;
 
+<<<<<<< HEAD
   isPlayerInTournament: TypedContractMethod<
     [arg0: BigNumberish, arg1: AddressLike],
+=======
+  createTournament: TypedContractMethod<
+    [
+      size: BigNumberish,
+      entryFee: BigNumberish,
+      entryToken: AddressLike,
+      firstPlacePct: BigNumberish,
+      secondPlacePct: BigNumberish,
+      thirdPlacePct: BigNumberish
+    ],
+    [bigint],
+    "nonpayable"
+  >;
+
+  emergencyWithdraw: TypedContractMethod<
+    [tournamentId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  getTournament: TypedContractMethod<
+    [tournamentId: BigNumberish],
+    [
+      [string, bigint, bigint, bigint, bigint, string, bigint, bigint] & {
+        creator: string;
+        createdAt: bigint;
+        size: bigint;
+        status: bigint;
+        entryFee: bigint;
+        entryToken: string;
+        playerCount: bigint;
+        totalPrizePool: bigint;
+      }
+    ],
+    "view"
+  >;
+
+  getTournamentPlayers: TypedContractMethod<
+    [tournamentId: BigNumberish],
+    [string[]],
+    "view"
+  >;
+
+  getTournamentResults: TypedContractMethod<
+    [tournamentId: BigNumberish],
+    [
+      [string, string, string] & {
+        firstPlace: string;
+        secondPlace: string;
+        thirdPlace: string;
+      }
+    ],
+    "view"
+  >;
+
+  hasPlayerJoined: TypedContractMethod<
+    [tournamentId: BigNumberish, player: AddressLike],
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
     [boolean],
     "view"
   >;
@@ -279,11 +557,27 @@ export interface TournamentManager extends BaseContract {
 
   owner: TypedContractMethod<[], [string], "view">;
 
+<<<<<<< HEAD
+=======
+  playerJoined: TypedContractMethod<
+    [arg0: BigNumberish, arg1: AddressLike],
+    [boolean],
+    "view"
+  >;
+
+  startTournament: TypedContractMethod<
+    [tournamentId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
   tournamentCount: TypedContractMethod<[], [bigint], "view">;
 
   tournaments: TypedContractMethod<
     [arg0: BigNumberish],
     [
+<<<<<<< HEAD
       [string, bigint, string, bigint, bigint, bigint, bigint, string] & {
         creator: string;
         entryFee: bigint;
@@ -293,6 +587,36 @@ export interface TournamentManager extends BaseContract {
         state: bigint;
         totalPrizePool: bigint;
         winner: string;
+=======
+      [
+        string,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        string,
+        string,
+        string,
+        string,
+        bigint
+      ] & {
+        creator: string;
+        createdAt: bigint;
+        size: bigint;
+        status: bigint;
+        firstPlacePct: bigint;
+        secondPlacePct: bigint;
+        thirdPlacePct: bigint;
+        entryFee: bigint;
+        entryToken: string;
+        firstPlaceWinner: string;
+        secondPlaceWinner: string;
+        thirdPlaceWinner: string;
+        totalPrizePool: bigint;
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
       }
     ],
     "view"
@@ -309,6 +633,7 @@ export interface TournamentManager extends BaseContract {
   ): T;
 
   getFunction(
+<<<<<<< HEAD
     nameOrSignature: "cancelTournament"
   ): TypedContractMethod<[tournamentId: BigNumberish], [void], "nonpayable">;
   getFunction(
@@ -320,6 +645,22 @@ export interface TournamentManager extends BaseContract {
   >;
   getFunction(
     nameOrSignature: "distributePrizes"
+=======
+    nameOrSignature: "calculatePrizes"
+  ): TypedContractMethod<
+    [tournamentId: BigNumberish],
+    [
+      [bigint, bigint, bigint] & {
+        firstPrize: bigint;
+        secondPrize: bigint;
+        thirdPrize: bigint;
+      }
+    ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "completeTournament"
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
   ): TypedContractMethod<
     [
       tournamentId: BigNumberish,
@@ -331,9 +672,66 @@ export interface TournamentManager extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+<<<<<<< HEAD
     nameOrSignature: "isPlayerInTournament"
   ): TypedContractMethod<
     [arg0: BigNumberish, arg1: AddressLike],
+=======
+    nameOrSignature: "createTournament"
+  ): TypedContractMethod<
+    [
+      size: BigNumberish,
+      entryFee: BigNumberish,
+      entryToken: AddressLike,
+      firstPlacePct: BigNumberish,
+      secondPlacePct: BigNumberish,
+      thirdPlacePct: BigNumberish
+    ],
+    [bigint],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "emergencyWithdraw"
+  ): TypedContractMethod<[tournamentId: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "getTournament"
+  ): TypedContractMethod<
+    [tournamentId: BigNumberish],
+    [
+      [string, bigint, bigint, bigint, bigint, string, bigint, bigint] & {
+        creator: string;
+        createdAt: bigint;
+        size: bigint;
+        status: bigint;
+        entryFee: bigint;
+        entryToken: string;
+        playerCount: bigint;
+        totalPrizePool: bigint;
+      }
+    ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "getTournamentPlayers"
+  ): TypedContractMethod<[tournamentId: BigNumberish], [string[]], "view">;
+  getFunction(
+    nameOrSignature: "getTournamentResults"
+  ): TypedContractMethod<
+    [tournamentId: BigNumberish],
+    [
+      [string, string, string] & {
+        firstPlace: string;
+        secondPlace: string;
+        thirdPlace: string;
+      }
+    ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "hasPlayerJoined"
+  ): TypedContractMethod<
+    [tournamentId: BigNumberish, player: AddressLike],
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
     [boolean],
     "view"
   >;
@@ -344,6 +742,19 @@ export interface TournamentManager extends BaseContract {
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+<<<<<<< HEAD
+=======
+    nameOrSignature: "playerJoined"
+  ): TypedContractMethod<
+    [arg0: BigNumberish, arg1: AddressLike],
+    [boolean],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "startTournament"
+  ): TypedContractMethod<[tournamentId: BigNumberish], [void], "nonpayable">;
+  getFunction(
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
     nameOrSignature: "tournamentCount"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
@@ -351,6 +762,7 @@ export interface TournamentManager extends BaseContract {
   ): TypedContractMethod<
     [arg0: BigNumberish],
     [
+<<<<<<< HEAD
       [string, bigint, string, bigint, bigint, bigint, bigint, string] & {
         creator: string;
         entryFee: bigint;
@@ -360,6 +772,36 @@ export interface TournamentManager extends BaseContract {
         state: bigint;
         totalPrizePool: bigint;
         winner: string;
+=======
+      [
+        string,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        string,
+        string,
+        string,
+        string,
+        bigint
+      ] & {
+        creator: string;
+        createdAt: bigint;
+        size: bigint;
+        status: bigint;
+        firstPlacePct: bigint;
+        secondPlacePct: bigint;
+        thirdPlacePct: bigint;
+        entryFee: bigint;
+        entryToken: string;
+        firstPlaceWinner: string;
+        secondPlaceWinner: string;
+        thirdPlaceWinner: string;
+        totalPrizePool: bigint;
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
       }
     ],
     "view"
@@ -376,11 +818,26 @@ export interface TournamentManager extends BaseContract {
     PlayerJoinedEvent.OutputObject
   >;
   getEvent(
+<<<<<<< HEAD
     key: "TournamentCancelled"
   ): TypedContractEvent<
     TournamentCancelledEvent.InputTuple,
     TournamentCancelledEvent.OutputTuple,
     TournamentCancelledEvent.OutputObject
+=======
+    key: "PrizeDistributed"
+  ): TypedContractEvent<
+    PrizeDistributedEvent.InputTuple,
+    PrizeDistributedEvent.OutputTuple,
+    PrizeDistributedEvent.OutputObject
+  >;
+  getEvent(
+    key: "TournamentCompleted"
+  ): TypedContractEvent<
+    TournamentCompletedEvent.InputTuple,
+    TournamentCompletedEvent.OutputTuple,
+    TournamentCompletedEvent.OutputObject
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
   >;
   getEvent(
     key: "TournamentCreated"
@@ -390,6 +847,7 @@ export interface TournamentManager extends BaseContract {
     TournamentCreatedEvent.OutputObject
   >;
   getEvent(
+<<<<<<< HEAD
     key: "TournamentEnded"
   ): TypedContractEvent<
     TournamentEndedEvent.InputTuple,
@@ -397,6 +855,8 @@ export interface TournamentManager extends BaseContract {
     TournamentEndedEvent.OutputObject
   >;
   getEvent(
+=======
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
     key: "TournamentStarted"
   ): TypedContractEvent<
     TournamentStartedEvent.InputTuple,
@@ -405,7 +865,11 @@ export interface TournamentManager extends BaseContract {
   >;
 
   filters: {
+<<<<<<< HEAD
     "PlayerJoined(uint256,address)": TypedContractEvent<
+=======
+    "PlayerJoined(uint256,address,uint256,uint256)": TypedContractEvent<
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
       PlayerJoinedEvent.InputTuple,
       PlayerJoinedEvent.OutputTuple,
       PlayerJoinedEvent.OutputObject
@@ -416,6 +880,7 @@ export interface TournamentManager extends BaseContract {
       PlayerJoinedEvent.OutputObject
     >;
 
+<<<<<<< HEAD
     "TournamentCancelled(uint256)": TypedContractEvent<
       TournamentCancelledEvent.InputTuple,
       TournamentCancelledEvent.OutputTuple,
@@ -428,6 +893,31 @@ export interface TournamentManager extends BaseContract {
     >;
 
     "TournamentCreated(uint256,address,uint256,uint8)": TypedContractEvent<
+=======
+    "PrizeDistributed(uint256,address,uint256,string)": TypedContractEvent<
+      PrizeDistributedEvent.InputTuple,
+      PrizeDistributedEvent.OutputTuple,
+      PrizeDistributedEvent.OutputObject
+    >;
+    PrizeDistributed: TypedContractEvent<
+      PrizeDistributedEvent.InputTuple,
+      PrizeDistributedEvent.OutputTuple,
+      PrizeDistributedEvent.OutputObject
+    >;
+
+    "TournamentCompleted(uint256,address,address,address,uint256,uint256,uint256)": TypedContractEvent<
+      TournamentCompletedEvent.InputTuple,
+      TournamentCompletedEvent.OutputTuple,
+      TournamentCompletedEvent.OutputObject
+    >;
+    TournamentCompleted: TypedContractEvent<
+      TournamentCompletedEvent.InputTuple,
+      TournamentCompletedEvent.OutputTuple,
+      TournamentCompletedEvent.OutputObject
+    >;
+
+    "TournamentCreated(uint256,address,uint8,uint256,address)": TypedContractEvent<
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
       TournamentCreatedEvent.InputTuple,
       TournamentCreatedEvent.OutputTuple,
       TournamentCreatedEvent.OutputObject
@@ -438,6 +928,7 @@ export interface TournamentManager extends BaseContract {
       TournamentCreatedEvent.OutputObject
     >;
 
+<<<<<<< HEAD
     "TournamentEnded(uint256,address,uint256)": TypedContractEvent<
       TournamentEndedEvent.InputTuple,
       TournamentEndedEvent.OutputTuple,
@@ -449,6 +940,8 @@ export interface TournamentManager extends BaseContract {
       TournamentEndedEvent.OutputObject
     >;
 
+=======
+>>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
     "TournamentStarted(uint256)": TypedContractEvent<
       TournamentStartedEvent.InputTuple,
       TournamentStartedEvent.OutputTuple,
