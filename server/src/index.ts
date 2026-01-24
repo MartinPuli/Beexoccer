@@ -1755,6 +1755,41 @@ io.on(
     );
 
     socket.on(
+      "leaveTournament",
+      (
+        payload: { tournamentId: string; address?: string; playerId?: string },
+        ack?: (resp: { ok: boolean; error?: string }) => void
+      ) => {
+        const { tournamentId } = payload || {};
+        const lobby = tournaments.get(tournamentId);
+        if (!lobby) {
+          ack?.({ ok: false, error: "torneo no encontrado" });
+          return;
+        }
+
+        const initialLen = lobby.players.length;
+        lobby.players = lobby.players.filter((p) => {
+          if (payload.address && p.address && payload.address.toLowerCase() === p.address.toLowerCase()) return false;
+          if (payload.playerId && p.id === payload.playerId) return false;
+          return true;
+        });
+
+        if (lobby.players.length === initialLen) {
+          ack?.({ ok: false, error: "Jugador no encontrado" });
+          return;
+        }
+
+        if (lobby.players.length === 0) {
+          tournaments.delete(tournamentId);
+        }
+
+        saveTournaments(tournaments);
+        broadcastTournaments(io, tournamentSubscribers, tournaments);
+        ack?.({ ok: true });
+      }
+    );
+
+    socket.on(
       "reportTournamentResult",
       (
         payload: { tournamentId: string; matchId: string; winner: "a" | "b" },

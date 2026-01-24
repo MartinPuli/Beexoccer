@@ -81,3 +81,21 @@ export async function joinTournament(tournamentIdStr: string, entryFee: string):
     throw error;
   }
 }
+
+export async function leaveTournament(tournamentIdStr: string): Promise<void> {
+  try {
+    const tournamentId = Number(tournamentIdStr);
+    if (isNaN(tournamentId)) throw new Error("Invalid Tournament ID");
+
+    const contract = await getContract();
+    
+    // Explicitly defining the method signature just in case ABI is not updated yet 
+    // (though ethers usually fails if not in ABI, user needs to redeploy/update ABI)
+    // But we rely on the user updating the ABI file after redeploy.
+    const tx = await contract.leaveTournament(tournamentId);
+    await tx.wait();
+  } catch (error) {
+    console.error("Error leaving tournament:", error);
+    throw error;
+  }
+}

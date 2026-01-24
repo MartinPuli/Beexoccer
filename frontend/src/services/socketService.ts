@@ -145,6 +145,11 @@ type ClientToServerEvents = {
     matchId: string;
     winner: "a" | "b";
   }, callback: (resp: { ok: boolean; error?: string; lobby?: TournamentLobby }) => void) => void;
+  leaveTournament: (payload: {
+    tournamentId: string;
+    address?: string;
+    playerId?: string;
+  }, callback: (resp: { ok: boolean; error?: string }) => void) => void;
 };
 
 class SocketService {
@@ -830,6 +835,22 @@ class SocketService {
     } else {
       this.socket.emit("cancelFreeLobby", lobbyId);
     }
+  }
+  async leaveTournamentLobby(payload: {
+    tournamentId: string;
+    address?: string;
+    playerId?: string;
+  }): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.isConnected()) {
+        reject(new Error("No conectado al servidor"));
+        return;
+      }
+      this.socket?.emit("leaveTournament", payload, (resp: { ok: boolean; error?: string }) => {
+        if (resp.ok) resolve();
+        else reject(new Error(resp.error || "Error al salir del torneo"));
+      });
+    });
   }
 }
 

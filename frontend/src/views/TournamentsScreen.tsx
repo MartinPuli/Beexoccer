@@ -5,7 +5,7 @@ import { TIMED_MATCH_DURATION_MS } from "../types/game";
 import type { TournamentLobby, TournamentPlayer, TournamentSize } from "../types/tournaments";
 import { socketService } from "../services/socketService";
 import { toast } from "../components/Toast";
-import { createTournament as createTournamentOnChain, joinTournament as joinTournamentOnChain } from "../services/tournamentService";
+import { createTournament as createTournamentOnChain, joinTournament as joinTournamentOnChain, leaveTournament as leaveTournamentOnChain } from "../services/tournamentService";
 
 function prizeDistribution(size: TournamentSize) {
   if (size === 4) return [{ place: 1, pct: 100 }];
@@ -314,6 +314,43 @@ export function TournamentsScreen() {
     }
   };
 
+  const onLeave = async (t: TournamentLobby) => {
+    if (isLoading) return;
+    if (!window.confirm("¿Seguro que quieres salir del torneo? " + (!t.config.isFree ? "Se te reembolsará la entrada." : ""))) return;
+
+    setIsLoading(true);
+    try {
+      if (t.config.isFree) {
+        // Free tournament: Socket only
+        // Find my ID
+        const me = t.players.find(p => (p.address || "").toLowerCase() === myLower) || t.players.find(p => p.alias === useGameStore.getState().alias);
+        await socketService.leaveTournamentLobby({
+          tournamentId: t.id,
+          address: userAddress,
+          playerId: me?.id
+        });
+      } else {
+        // Paid tournament: Contract call
+        await leaveTournamentOnChain(t.id);
+        // Local store update will happen via socket update or explicit refresh?
+        // Store assumes we left? Socket update should handle it.
+      }
+      // Clear selection so we go back to list
+      selectTournament(undefined);
+      toast.info("Has salido del torneo");
+    } catch (e) {
+      console.error(e);
+      alert("Error al salir: " + (e as Error).message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const isJoined = (t: TournamentLobby) => {
+    if (!myLower) return false;
+    return t.players.some((p) => (p.address || "").toLowerCase() === myLower);
+  };
+
   const onSetWinner = async (matchId: string, winner: "a" | "b") => {
     if (!selectedTournament) return;
     try {
@@ -476,9 +513,15 @@ export function TournamentsScreen() {
               </div>
               <div className="tournament-detail-meta">{formatMatchType(selectedTournament)}</div>
               <div className="tournament-detail-actions">
-                <button className="lobby-join" disabled={!canJoin(selectedTournament) || isLoading} onClick={() => onJoin(selectedTournament)}>
-                  {isLoading ? "..." : "UNIRSE"}
-                </button>
+                {!isJoined(selectedTournament) ? (
+                  <button className="lobby-join" disabled={!canJoin(selectedTournament) || isLoading} onClick={() => onJoin(selectedTournament)}>
+                    {isLoading ? "..." : "UNIRSE"}
+                  </button>
+                ) : (
+                  <button className="lobby-join" style={{ background: "#ff4f64", color: "white", borderColor: "#ff4f64" }} disabled={isLoading} onClick={() => onLeave(selectedTournament)}>
+                    {isLoading ? "..." : "SALIR"}
+                  </button>
+                )}
               </div>
             </div>
 
