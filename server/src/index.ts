@@ -307,6 +307,36 @@ interface ClientToServerEvents {
     alias: string;
   }) => void;
   cancelFreeLobby: (lobbyId: string) => void;
+  // Tournament events
+  subscribeTournaments: () => void;
+  unsubscribeTournaments: () => void;
+  createTournament: (
+    payload: {
+      config: TournamentConfig;
+      creatorAddress?: string;
+      creatorAlias?: string;
+      playerAlias?: string;
+      playerId?: string;
+    },
+    ack?: (resp: { ok: boolean; error?: string; lobby?: TournamentLobby }) => void
+  ) => void;
+  joinTournament: (
+    payload: {
+      tournamentId: string;
+      address?: string;
+      alias?: string;
+      playerId?: string;
+    },
+    ack?: (resp: { ok: boolean; error?: string; lobby?: TournamentLobby }) => void
+  ) => void;
+  reportTournamentResult: (
+    payload: {
+      tournamentId: string;
+      matchId: string;
+      winner: "a" | "b";
+    },
+    ack?: (resp: { ok: boolean; error?: string; lobby?: TournamentLobby }) => void
+  ) => void;
   // Native socket.io events
   disconnect: () => void;
 }
@@ -325,6 +355,7 @@ interface ServerToClientEvents {
   lobbyCancelled: (data: { matchId: string }) => void;
   matchEnded: (data: { winner: PlayerSide; reason: string }) => void;
   playerForfeited: (data: { side: PlayerSide }) => void;
+  tournamentsUpdate: (lobbies: TournamentLobby[]) => void;
   // Rematch events
   rematchRequested: (data: {
     fromSide: PlayerSide;
