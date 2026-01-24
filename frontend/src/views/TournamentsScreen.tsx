@@ -5,6 +5,7 @@ import { TIMED_MATCH_DURATION_MS } from "../types/game";
 import type { TournamentLobby, TournamentPlayer, TournamentSize } from "../types/tournaments";
 import { socketService } from "../services/socketService";
 import { toast } from "../components/Toast";
+import { createTournament as createTournamentOnChain, joinTournament as joinTournamentOnChain } from "../services/tournamentService";
 
 function prizeDistribution(size: TournamentSize) {
   if (size === 4) return [{ place: 1, pct: 100 }];
@@ -188,8 +189,6 @@ function computeBracketLayout(size: TournamentSize) {
   return { rounds, bubbleW, bubbleH, slotGap, colGap, padX, padY, width, height, topYByRound };
 }
 
-import { createTournament as createTournamentOnChain, joinTournament as joinTournamentOnChain } from "../services/tournamentService";
-
 export function TournamentsScreen() {
   const setView = useGameStore((s) => s.setView);
   const userAddress = useGameStore((s) => s.userAddress);
@@ -222,19 +221,13 @@ export function TournamentsScreen() {
     [selectedTournament, size]
   );
 
-  const handleJoin = async (tournamentId: string) => {
-    try {
-      await joinTournament(tournamentId);
-      toast.success("Te uniste", "Esperando bracket listo");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "No se pudo unir al torneo";
-      toast.error("Error", msg);
-    }
-  };
-
   useEffect(() => {
     socketService.connectTournaments();
-    const handler = (lobbies: TournamentLobby[]) => setTournamentLobbies(lobbies);
+    // Assuming socketService has a way to get initial state or we rely on the update event
+    // For now, let's just listen
+    const handler = (lobbies: TournamentLobby[]) => {
+      if (setTournamentLobbies) setTournamentLobbies(lobbies);
+    };
     socketService.onTournamentsUpdate(handler);
 
     return () => {
@@ -264,23 +257,17 @@ export function TournamentsScreen() {
   };
 
   const onCreate = async () => {
-<<<<<<< HEAD
     if (isLoading) return;
     setIsLoading(true);
     try {
       let externalId: string | undefined = undefined;
       const config = {
-=======
-    try {
-      const id = await createTournament({
->>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
         size,
         mode,
         goals,
         durationMs: mode === "time" ? TIMED_MATCH_DURATION_MS : undefined,
         isFree: !isBet,
         entryFee: isBet ? entryFee : "0",
-<<<<<<< HEAD
       };
 
       if (isBet) {
@@ -295,6 +282,7 @@ export function TournamentsScreen() {
 
       createTournamentStore(config, externalId);
       setIsCreateOpen(false);
+      toast.success("Torneo creado", externalId ? `ID: ${externalId}` : "Local");
     } catch (e) {
       console.error(e);
       alert("Error al crear torneo: " + (e as Error).message);
@@ -316,20 +304,13 @@ export function TournamentsScreen() {
         // Need to join on chain
         await joinTournamentOnChain(t.id, t.config.entryFee);
       }
-      joinTournamentStore(t.id);
+      await joinTournamentStore(t.id);
+      toast.success("Te uniste", "Esperando bracket listo");
     } catch (e) {
       console.error(e);
       alert("Error al unirse: " + (e as Error).message);
     } finally {
       setIsLoading(false);
-=======
-      });
-      toast.success("Torneo creado", `ID ${id}`);
-      setIsCreateOpen(false);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "No se pudo crear el torneo";
-      toast.error("Error", msg);
->>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
     }
   };
 
@@ -383,13 +364,8 @@ export function TournamentsScreen() {
                     <button className="lobby-join" onClick={() => selectTournament(t.id)}>
                       VER
                     </button>
-<<<<<<< HEAD
                     <button className="lobby-join" disabled={!canJoin(t) || isLoading} onClick={() => onJoin(t)}>
                       {isLoading ? "..." : "UNIRSE"}
-=======
-                    <button className="lobby-join" disabled={!canJoin(t)} onClick={() => handleJoin(t.id)}>
-                      UNIRSE
->>>>>>> 1c074842c42dc46c79660c9f01bf39b779cc4e4c
                     </button>
                   </div>
                 </div>
@@ -481,7 +457,7 @@ export function TournamentsScreen() {
 
                 <div className="create-footer">
                   <button className="create-submit" onClick={onCreate}>
-                    CREAR
+                    {isLoading ? "Creando..." : "CREAR"}
                   </button>
                 </div>
               </div>
@@ -500,8 +476,8 @@ export function TournamentsScreen() {
               </div>
               <div className="tournament-detail-meta">{formatMatchType(selectedTournament)}</div>
               <div className="tournament-detail-actions">
-                <button className="lobby-join" disabled={!canJoin(selectedTournament)} onClick={() => handleJoin(selectedTournament.id)}>
-                  UNIRSE
+                <button className="lobby-join" disabled={!canJoin(selectedTournament) || isLoading} onClick={() => onJoin(selectedTournament)}>
+                  {isLoading ? "..." : "UNIRSE"}
                 </button>
               </div>
             </div>
