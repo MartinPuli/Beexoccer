@@ -186,7 +186,7 @@ class SocketService {
   private lobbiesHandlersReady = false;
   private tournamentsHandlersReady = false;
   private wantsTournamentSubscription = false;
-  private tournamentsHandlersReady = false;
+
 
   connect(
     matchId: string,
@@ -209,7 +209,7 @@ class SocketService {
 
     try {
       this.socket = io(REALTIME_URL, {
-        transports: ["websocket", "polling"],
+        transports: ["polling", "websocket"],
         query: {
           matchId,
           side,
@@ -357,7 +357,7 @@ class SocketService {
 
     try {
       this.socket = io(REALTIME_URL, {
-        transports: ["websocket", "polling"],
+        transports: ["polling", "websocket"],
         timeout: 10000,
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
@@ -396,7 +396,7 @@ class SocketService {
 
     try {
       this.socket = io(REALTIME_URL, {
-        transports: ["websocket", "polling"],
+        transports: ["polling", "websocket"],
         timeout: 10000,
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
@@ -748,7 +748,7 @@ class SocketService {
 
     try {
       this.socket = io(REALTIME_URL, {
-        transports: ["websocket", "polling"],
+        transports: ["polling", "websocket"],
         timeout: 10000,
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
