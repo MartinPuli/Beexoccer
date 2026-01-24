@@ -482,7 +482,7 @@ export function TournamentsScreen() {
               </div>
             </div>
 
-            <div style={{ color: "var(--text-muted)", fontWeight: 700, fontSize: 13 }}>
+            <div style={{ color: "var(--text-light)", fontWeight: 700, fontSize: 13, padding: "0 20px 10px" }}>
               Distribución: {distribution.map((d) => `${d.place}° ${d.pct}%`).join(" - ")}
             </div>
 

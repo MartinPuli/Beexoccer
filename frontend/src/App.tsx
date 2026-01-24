@@ -58,8 +58,47 @@ export default function App() {
     setAnimatedFavicon(isLoading);
     return () => setAnimatedFavicon(false);
   }, [isLoading]);
+
   const view = useGameStore((state) => state.view);
   const setView = useGameStore((state) => state.setView);
+  const tournamentLobbies = useGameStore((state) => state.tournamentLobbies);
+  const selectTournament = useGameStore((state) => state.selectTournament);
+  const selectedTournamentId = useGameStore((state) => state.selectedTournamentId);
+
+  // Auto-redirect to active tournament logic
+  useEffect(() => {
+    const userAddr = useGameStore.getState().userAddress;
+    if (!userAddr || !tournamentLobbies.length) return;
+
+    // Check if user is in an active tournament
+    const myActiveTournament = tournamentLobbies.find(t => {
+      // Is player?
+      const isPlayer = t.players.some(p => (p.address || "").toLowerCase() === userAddr.toLowerCase());
+      if (!isPlayer) return false;
+      return true;
+    });
+
+    if (myActiveTournament) {
+      // If we are in tournaments view, ensure the bracket is open
+      if (view === "tournaments" && selectedTournamentId !== myActiveTournament.id) {
+        selectTournament(myActiveTournament.id);
+      }
+      // If we launched the app (or view is home), redirect to tournament
+      // This enforces "must go to that tournament" rule
+      // We check if we are NOT in the tournament view
+      if (view !== "tournaments") {
+        // Only force if we haven't explicitly "exited" (which clears selectedTournamentId in store)
+        // But the requirements say "hasta que salga". If they exit, they shouldn't be forced back immediately?
+        // Simpler interpretation: If you are in a tournament, accessing the app puts you there.
+        // Let's force it if useGameStore view is 'home' (default)
+        if (view === "home") {
+          setView("tournaments");
+          selectTournament(myActiveTournament.id);
+        }
+      }
+    }
+  }, [view, tournamentLobbies, selectedTournamentId, selectTournament]);
+
   const setAlias = useGameStore((state) => state.setAlias);
   const setBalance = useGameStore((state) => state.setBalance);
   const userAddress = useGameStore((state) => state.userAddress);
@@ -134,7 +173,7 @@ export default function App() {
     // Leer directamente de localStorage porque zustand persist puede no haber hidratado aún
     let storedWaitingMatch = waitingMatch;
     let storedActiveMatch = activeMatch;
-    
+
     if (!storedWaitingMatch && !storedActiveMatch) {
       try {
         const stored = localStorage.getItem("beexoccer-session");
@@ -149,7 +188,7 @@ export default function App() {
         console.warn("Error parsing stored session:", e);
       }
     }
-    
+
     if (storedWaitingMatch) {
       // Verificar que la partida pertenece a este usuario
       if (storedWaitingMatch.creatorAddress?.toLowerCase() !== address.toLowerCase()) {
@@ -157,7 +196,7 @@ export default function App() {
         setWaitingMatch(undefined);
         return;
       }
-      
+
       const status = await checkMatchStatus(storedWaitingMatch.matchId);
       if (status.hasChallenger) {
         toast.info("¡Tu partida comenzó!", "Un rival se unió mientras no estabas");
@@ -189,7 +228,7 @@ export default function App() {
         setActiveMatch(undefined);
         return;
       }
-      
+
       toast.info("Partida en curso", "Volviendo a tu partida");
       setCurrentMatchId(storedActiveMatch.matchId);
       setPlayerSide(storedActiveMatch.playerSide);
@@ -213,7 +252,7 @@ export default function App() {
         e.preventDefault();
         e.returnValue =
           "Tienes una partida esperando. Si sales, se cancelará.";
-        cancelMatch(waitingMatch.matchId).catch(() => {});
+        cancelMatch(waitingMatch.matchId).catch(() => { });
       }
     };
 
@@ -288,10 +327,10 @@ export default function App() {
                   filter: "drop-shadow(0 0 25px rgba(0,255,120,0.7))"
                 }}
               >
-                <img 
-                  src={ballImg} 
-                  alt="Loading" 
-                  style={{ width: "100%", height: "100%", objectFit: "contain" }} 
+                <img
+                  src={ballImg}
+                  alt="Loading"
+                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
                 />
               </div>
             </div>

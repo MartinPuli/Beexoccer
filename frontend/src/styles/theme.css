@@ -26,7 +26,8 @@
   padding: 0;
 }
 
-html, body {
+html,
+body {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
@@ -90,7 +91,7 @@ body {
   border-right: 3px solid var(--border-green);
   padding: 40px 20px 28px;
   gap: 20px;
-  box-shadow: 
+  box-shadow:
     0 20px 60px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
@@ -156,7 +157,7 @@ body {
 .home-btn.primary {
   background: linear-gradient(180deg, var(--neon-green) 0%, var(--neon-green-dim) 60%, var(--neon-green-dark) 100%);
   color: #041a0a;
-  box-shadow: 
+  box-shadow:
     0 6px 24px rgba(0, 255, 106, 0.5),
     0 2px 8px rgba(0, 0, 0, 0.3),
     inset 0 2px 0 rgba(255, 255, 255, 0.25),
@@ -166,7 +167,7 @@ body {
 
 .home-btn.primary:hover {
   transform: translateY(-3px);
-  box-shadow: 
+  box-shadow:
     0 10px 40px rgba(0, 255, 106, 0.6),
     0 4px 12px rgba(0, 0, 0, 0.3),
     inset 0 2px 0 rgba(255, 255, 255, 0.3);
@@ -181,7 +182,7 @@ body {
   background: linear-gradient(180deg, var(--dark-panel-hover) 0%, var(--dark-panel-alt) 100%);
   color: var(--text-light);
   border: 2px solid var(--border-green);
-  box-shadow: 
+  box-shadow:
     0 4px 16px rgba(0, 0, 0, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
@@ -189,7 +190,7 @@ body {
 .home-btn.secondary:hover {
   transform: translateY(-3px);
   border-color: var(--neon-green);
-  box-shadow: 
+  box-shadow:
     0 8px 32px rgba(0, 255, 106, 0.2),
     0 4px 12px rgba(0, 0, 0, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
@@ -228,19 +229,22 @@ body {
   left: -50%;
   width: 200%;
   height: 200%;
-  background: linear-gradient(
-    45deg,
-    transparent 40%,
-    rgba(0, 255, 106, 0.05) 50%,
-    transparent 60%
-  );
+  background: linear-gradient(45deg,
+      transparent 40%,
+      rgba(0, 255, 106, 0.05) 50%,
+      transparent 60%);
   animation: shimmer 3s infinite;
   pointer-events: none;
 }
 
 @keyframes shimmer {
-  0% { transform: translateX(-100%) rotate(45deg); }
-  100% { transform: translateX(100%) rotate(45deg); }
+  0% {
+    transform: translateX(-100%) rotate(45deg);
+  }
+
+  100% {
+    transform: translateX(100%) rotate(45deg);
+  }
 }
 
 .torneos-lock {
@@ -607,7 +611,7 @@ body {
   border-color: var(--neon-green);
   background: rgba(0, 255, 106, 0.15);
   color: var(--text-white);
-  box-shadow: 
+  box-shadow:
     0 0 20px rgba(0, 255, 106, 0.3),
     inset 0 0 20px rgba(0, 255, 106, 0.1);
 }
@@ -841,8 +845,10 @@ body {
   gap: 4px;
   height: 100%;
   max-height: 100vh;
-  max-height: 100dvh; /* Dynamic viewport height for mobile */
-  max-height: -webkit-fill-available; /* iOS Safari fix */
+  max-height: 100dvh;
+  /* Dynamic viewport height for mobile */
+  max-height: -webkit-fill-available;
+  /* iOS Safari fix */
   overflow: hidden;
   padding: 4px;
   padding-top: max(4px, env(safe-area-inset-top));
@@ -971,14 +977,16 @@ body {
   background: linear-gradient(180deg, var(--dark-panel) 0%, #030505 100%);
   border: 3px solid var(--border-green);
   border-radius: 12px;
-  overflow: hidden; /* Clip content to prevent overflow */
+  overflow: hidden;
+  /* Clip content to prevent overflow */
   position: relative;
-  min-height: 0; /* Allow flex to shrink */
+  min-height: 0;
+  /* Allow flex to shrink */
   width: 100%;
   max-width: 600px;
   /* Aspect ratio to match field 600x900 */
   aspect-ratio: 600 / 900;
-  box-shadow: 
+  box-shadow:
     0 20px 60px rgba(0, 0, 0, 0.5),
     inset 0 0 80px rgba(0, 0, 0, 0.3);
   /* CRITICAL: Prevent ALL browser touch gestures */
@@ -1030,7 +1038,8 @@ body {
   width: 100%;
   height: 100%;
   display: block;
-  touch-action: none; /* CRITICAL: Prevent browser gestures to enable dragging */
+  touch-action: none;
+  /* CRITICAL: Prevent browser gestures to enable dragging */
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -1040,14 +1049,32 @@ body {
 
 /* ===== ANIMACIONES ===== */
 @keyframes goalBurst {
-  0% { transform: scale(0.5); opacity: 0; }
-  50% { transform: scale(1.2); opacity: 1; }
-  100% { transform: scale(1); opacity: 0; }
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
 }
 
 @keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 106, 0.3); }
-  50% { box-shadow: 0 0 40px rgba(0, 255, 106, 0.6); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(0, 255, 106, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 40px rgba(0, 255, 106, 0.6);
+  }
 }
 
 .event-overlay {
@@ -1086,9 +1113,26 @@ body {
 
 /* ===== TURN LOST ANIMATION ===== */
 @keyframes turnLostShake {
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-  20%, 40%, 60%, 80% { transform: translateX(5px); }
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: translateX(-5px);
+  }
+
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(5px);
+  }
 }
 
 .event-overlay.turn-lost span {
@@ -1117,14 +1161,13 @@ body {
 .momentum-bar {
   flex: 1;
   height: 8px;
-  background: linear-gradient(90deg, 
-    var(--accent-red) 0%, 
-    var(--accent-red) 40%,
-    #333 40%,
-    #333 60%,
-    var(--neon-green) 60%,
-    var(--neon-green) 100%
-  );
+  background: linear-gradient(90deg,
+      var(--accent-red) 0%,
+      var(--accent-red) 40%,
+      #333 40%,
+      #333 60%,
+      var(--neon-green) 60%,
+      var(--neon-green) 100%);
   border-radius: 4px;
   overflow: hidden;
   position: relative;
@@ -1236,8 +1279,8 @@ body {
   font-size: 64px;
   font-weight: 900;
   color: var(--neon-green);
-  text-shadow: 
-    0 0 30px var(--neon-green), 
+  text-shadow:
+    0 0 30px var(--neon-green),
     0 0 60px var(--neon-green),
     0 0 100px var(--neon-green),
     0 4px 8px rgba(0, 0, 0, 0.8);
@@ -1248,33 +1291,63 @@ body {
 
 .goal-text.rival {
   color: var(--accent-red);
-  text-shadow: 
-    0 0 30px var(--accent-red), 
+  text-shadow:
+    0 0 30px var(--accent-red),
     0 0 60px var(--accent-red),
     0 0 100px var(--accent-red),
     0 4px 8px rgba(0, 0, 0, 0.8);
 }
 
 @keyframes goalFadeIn {
-  from { opacity: 0; transform: scale(0.8); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes goalBounce {
-  0% { transform: scale(0.3) translateY(-100px); opacity: 0; }
-  50% { transform: scale(1.2) translateY(10px); }
-  70% { transform: scale(0.95) translateY(-5px); }
-  100% { transform: scale(1) translateY(0); opacity: 1; }
+  0% {
+    transform: scale(0.3) translateY(-100px);
+    opacity: 0;
+  }
+
+  50% {
+    transform: scale(1.2) translateY(10px);
+  }
+
+  70% {
+    transform: scale(0.95) translateY(-5px);
+  }
+
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes goalGlow {
-  from { filter: brightness(1) drop-shadow(0 0 20px currentColor); }
-  to { filter: brightness(1.3) drop-shadow(0 0 40px currentColor); }
+  from {
+    filter: brightness(1) drop-shadow(0 0 20px currentColor);
+  }
+
+  to {
+    filter: brightness(1.3) drop-shadow(0 0 40px currentColor);
+  }
 }
 
 @keyframes goalPulse {
-  from { transform: scale(1); }
-  to { transform: scale(1.15); }
+  from {
+    transform: scale(1);
+  }
+
+  to {
+    transform: scale(1.15);
+  }
 }
 
 /* ===== MODAL FIN DE PARTIDO ===== */
@@ -1329,7 +1402,7 @@ body {
   font-size: 42px;
   font-weight: 900;
   color: var(--accent-gold);
-  text-shadow: 
+  text-shadow:
     0 0 20px var(--accent-gold),
     0 0 40px var(--accent-gold),
     0 4px 8px rgba(0, 0, 0, 0.8);
@@ -1338,33 +1411,59 @@ body {
 }
 
 @keyframes turnLostFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes turnLostShake {
-  0%, 100% { transform: translateX(0) scale(1); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-12px) scale(1.1); }
-  20%, 40%, 60%, 80% { transform: translateX(12px) scale(1.1); }
+
+  0%,
+  100% {
+    transform: translateX(0) scale(1);
+  }
+
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: translateX(-12px) scale(1.1);
+  }
+
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(12px) scale(1.1);
+  }
 }
 
 @keyframes turnLostPulse {
-  from { filter: brightness(1); }
-  to { filter: brightness(1.2); }
+  from {
+    filter: brightness(1);
+  }
+
+  to {
+    filter: brightness(1.2);
+  }
 }
 
 /* ===== IMPROVED MOMENTUM BAR ===== */
 .momentum-bar {
   position: relative;
   height: 12px;
-  background: linear-gradient(90deg, 
-    var(--accent-red) 0%, 
-    var(--accent-red) 45%,
-    #333 45%,
-    #333 55%,
-    var(--neon-green) 55%,
-    var(--neon-green) 100%
-  );
+  background: linear-gradient(90deg,
+      var(--accent-red) 0%,
+      var(--accent-red) 45%,
+      #333 45%,
+      #333 55%,
+      var(--neon-green) 55%,
+      var(--neon-green) 100%);
   border-radius: 6px;
   margin-bottom: 12px;
   border: 1px solid var(--border-green);
@@ -1639,20 +1738,20 @@ body {
   .home-logo-img {
     width: 150px;
   }
-  
+
   .home-btn {
     padding: 18px 20px;
     font-size: 16px;
   }
-  
+
   .goal-text {
     font-size: 36px;
   }
-  
+
   .end-title {
     font-size: 26px;
   }
-  
+
   .end-score {
     font-size: 40px;
   }
@@ -1731,13 +1830,25 @@ body {
 }
 
 @keyframes bounce {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-20px) rotate(180deg); }
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-20px) rotate(180deg);
+  }
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .waiting-message {
@@ -1808,8 +1919,13 @@ body {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .modal-content {
@@ -1825,8 +1941,15 @@ body {
 }
 
 @keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .modal-icon {
@@ -1934,6 +2057,7 @@ body {
     opacity: 0;
     transform: translateX(100px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -1945,6 +2069,7 @@ body {
     opacity: 1;
     transform: translateX(0);
   }
+
   to {
     opacity: 0;
     transform: translateX(100px);
@@ -1954,7 +2079,7 @@ body {
 .toast-icon {
   font-size: 28px;
   flex-shrink: 0;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 
 .toast-content {
@@ -1967,7 +2092,7 @@ body {
   font-weight: 700;
   color: #ffffff;
   margin-bottom: 6px;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .toast-message {
@@ -2078,7 +2203,9 @@ body {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ===== STATUS BADGES ===== */
@@ -2214,8 +2341,13 @@ body {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .connect-error {
@@ -2274,19 +2406,19 @@ body {
   .connect-screen {
     padding: 16px;
   }
-  
+
   .connect-logo-img {
     width: 100px;
   }
-  
+
   .connect-title {
     font-size: 20px;
   }
-  
+
   .connect-subtitle {
     font-size: 13px;
   }
-  
+
   .connect-btn {
     padding: 12px 16px;
     font-size: 13px;
@@ -2295,210 +2427,211 @@ body {
 
 /* ===== RESPONSIVE GENERAL PARA MÓVIL ===== */
 @media (max-width: 480px) {
+
   /* Home screen */
   .home-screen {
     padding: 24px 16px 20px;
     gap: 14px;
   }
-  
+
   .home-logo-img {
     width: 120px;
   }
-  
+
   .home-btn {
     padding: 16px 18px;
     font-size: 15px;
     border-radius: 20px;
   }
-  
+
   .torneos-box {
     padding: 20px 16px;
     border-radius: 16px;
   }
-  
+
   .torneos-icon {
     font-size: 28px;
   }
-  
+
   .torneos-title {
     font-size: 16px;
   }
-  
+
   /* Create screen */
   .create-screen {
     padding: 16px;
   }
-  
+
   .create-header {
     padding: 12px 0;
   }
-  
+
   .create-title {
     font-size: 18px;
   }
-  
+
   .create-body {
     padding: 16px;
     gap: 16px;
   }
-  
+
   .section-title {
     font-size: 13px;
   }
-  
+
   .goal-option,
   .bet-toggle {
     padding: 12px 16px;
   }
-  
+
   .goal-number {
     font-size: 22px;
   }
-  
+
   /* Lobbies screen */
   .lobbies-screen {
     padding: 16px;
   }
-  
+
   .lobbies-title {
     font-size: 16px;
   }
-  
+
   .match-row {
     padding: 12px;
   }
-  
+
   .match-goals {
     font-size: 18px;
   }
-  
+
   /* Playing screen */
   .playing-screen {
     padding: 2px;
     gap: 2px;
   }
-  
+
   .playing-hud {
     padding: 6px 10px;
   }
-  
+
   .hud-header {
     margin-bottom: 4px;
   }
-  
+
   .hud-title {
     font-size: 12px;
   }
-  
+
   .hud-score-num {
     font-size: 20px;
   }
-  
+
   .hud-player {
     font-size: 10px;
   }
-  
+
   .hud-sep {
     font-size: 16px;
   }
-  
+
   .timer-label {
     font-size: 9px;
   }
-  
+
   .hud-timer {
     margin-top: 4px;
     gap: 6px;
   }
-  
+
   .timer-bar {
     height: 6px;
   }
-  
+
   .momentum-bar {
     height: 4px;
     margin-bottom: 4px;
   }
-  
+
   .score-wrapper {
     font-size: 12px;
   }
-  
+
   .score-number {
     font-size: 28px;
   }
-  
+
   /* Animaciones centradas para móvil */
   .goal-overlay,
   .turn-lost-overlay {
     padding: 20px;
   }
-  
+
   .goal-text {
     font-size: 42px;
     letter-spacing: 2px;
   }
-  
+
   .turn-lost-text {
     font-size: 28px;
   }
-  
+
   /* Turn indicator más compacto */
   .turn-indicator {
     padding: 6px 12px;
     font-size: 12px;
     margin: 2px 0;
   }
-  
+
   .timeout-warning {
     font-size: 10px;
   }
-  
+
   /* Power meter más compacto */
   .power-meter {
     height: 16px;
     margin: 2px auto;
   }
-  
+
   /* General text reduction */
   body {
     font-size: 14px;
   }
-  
+
   /* Game header para online match */
   .game-header {
     padding: 6px 10px;
   }
-  
+
   .score-section {
     gap: 8px;
   }
-  
+
   .player-score-box {
     min-width: 50px;
     padding: 4px 8px;
   }
-  
+
   .score-label {
     font-size: 9px;
   }
-  
+
   .score-value {
     font-size: 20px;
   }
-  
+
   .vs-section {
     gap: 2px;
   }
-  
+
   .vs-text {
     font-size: 12px;
   }
-  
+
   .goal-target {
     font-size: 10px;
   }
-  
+
   .exit-btn {
     width: 28px;
     height: 28px;
@@ -2511,16 +2644,16 @@ body {
   .home-logo-img {
     width: 100px;
   }
-  
+
   .home-btn {
     padding: 14px 14px;
     font-size: 14px;
   }
-  
+
   .connect-logo-img {
     width: 80px;
   }
-  
+
   .connect-title {
     font-size: 18px;
   }
@@ -2551,7 +2684,7 @@ body {
   border-radius: 24px;
   display: flex;
   flex-direction: column;
-  box-shadow: 
+  box-shadow:
     0 20px 60px rgba(0, 0, 0, 0.6),
     0 0 0 1px rgba(255, 255, 255, 0.05);
   overflow: hidden;
@@ -2559,8 +2692,15 @@ body {
 }
 
 @keyframes modal-enter {
-  from { transform: scale(0.95) translateY(20px); opacity: 0; }
-  to { transform: scale(1) translateY(0); opacity: 1; }
+  from {
+    transform: scale(0.95) translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
 }
 
 .tournament-modal-header {
@@ -2588,4 +2728,52 @@ body {
 .tournament-size-row .goal-btn {
   flex: 1;
   padding: 14px;
+}
+
+/* ===== TOURNAMENT BRACKET HEADER ===== */
+.tournament-detail-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  background: var(--dark-panel-alt);
+  border: 2px solid var(--border-green);
+  border-radius: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.tournament-detail-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-white);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 15px rgba(0, 255, 106, 0.4);
+}
+
+.tournament-detail-meta {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--neon-green);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tournament-detail-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 12px;
+}
+
+.bracket-scroll {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 20, 10, 0.3);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }

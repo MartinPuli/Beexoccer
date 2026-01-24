@@ -99,6 +99,7 @@ interface GameStore {
   resetTimeoutCounter: () => void;
   clearSession: () => void;
   setSelectedTeamId: (teamId?: string) => void;
+  setTournamentLobbies: (lobbies: TournamentLobby[]) => void;
 }
 
 const TURN_DURATION_MS = 15_000;
@@ -363,6 +364,7 @@ export const useGameStore = create<GameStore>()(
             consecutiveTimeouts: newTimeouts
           };
         }),
+      setTournamentLobbies: (tournamentLobbies) => set({ tournamentLobbies }),
       clearLastEvent: () => set({ lastEvent: undefined })
     }),
     {
